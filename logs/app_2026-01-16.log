@@ -1,0 +1,171 @@
+2026-01-16 04:29:07 | INFO     | __main__:main:50 - Starting AI Lens Workshop, DEV=False
+2026-01-16 04:29:07 | INFO     | __main__:main:51 - Base directory: /Users/wei/works/mycodes/HeTangAI
+2026-01-16 04:29:07 | INFO     | __main__:main:52 - User data directory: /Users/wei/works/mycodes/HeTangAI
+2026-01-16 04:29:07 | INFO     | api:__init__:23 - API initialized
+2026-01-16 04:29:07 | INFO     | __main__:main:61 - Production mode: loading /Users/wei/works/mycodes/HeTangAI/web/index.html
+2026-01-16 04:29:16 | INFO     | __main__:main:76 - Application closed
+2026-01-16 04:29:38 | INFO     | __main__:main:50 - Starting AI Lens Workshop, DEV=True
+2026-01-16 04:29:38 | INFO     | __main__:main:51 - Base directory: /Users/wei/works/mycodes/HeTangAI
+2026-01-16 04:29:38 | INFO     | __main__:main:52 - User data directory: /Users/wei/works/mycodes/HeTangAI
+2026-01-16 04:29:38 | INFO     | api:__init__:23 - API initialized
+2026-01-16 04:29:38 | INFO     | __main__:main:58 - Development mode: loading http://localhost:5173
+2026-01-16 04:29:43 | INFO     | __main__:main:76 - Application closed
+2026-01-16 04:30:25 | INFO     | __main__:main:50 - Starting AI Lens Workshop, DEV=True
+2026-01-16 04:30:25 | INFO     | __main__:main:51 - Base directory: /Users/wei/works/mycodes/HeTangAI
+2026-01-16 04:30:25 | INFO     | __main__:main:52 - User data directory: /Users/wei/works/mycodes/HeTangAI
+2026-01-16 04:30:25 | INFO     | api:__init__:23 - API initialized
+2026-01-16 04:30:25 | INFO     | __main__:main:58 - Development mode: loading http://localhost:5173
+2026-01-16 04:30:25 | INFO     | api:new_project:33 - Creating new project
+2026-01-16 04:30:38 | INFO     | api:import_excel:151 - Importing from: /Users/wei/Desktop/s4_output.csv
+2026-01-16 04:30:44 | INFO     | api:import_excel:151 - Importing from: /Users/wei/Desktop/工作簿1.xlsx
+2026-01-16 04:30:47 | INFO     | services.excel_parser:parse:43 - Parsing file: /Users/wei/Desktop/s4_output.csv
+2026-01-16 04:30:47 | INFO     | services.excel_parser:parse:43 - Parsing file: /Users/wei/Desktop/工作簿1.xlsx
+2026-01-16 04:30:47 | ERROR    | services.excel_parser:parse:85 - Failed to parse file: Error tokenizing data. C error: Expected 1 fields in line 4, saw 2
+
+2026-01-16 04:30:47 | ERROR    | api:import_excel:185 - Failed to import: Error tokenizing data. C error: Expected 1 fields in line 4, saw 2
+
+2026-01-16 04:30:47 | WARNING  | services.excel_parser:parse:60 - Missing columns: ['script', 'imagePrompt']
+2026-01-16 04:30:47 | INFO     | services.excel_parser:parse:81 - Parsed 426 shots, 0 characters
+2026-01-16 04:31:10 | INFO     | __main__:main:76 - Application closed
+2026-01-16 04:31:12 | INFO     | __main__:main:50 - Starting AI Lens Workshop, DEV=True
+2026-01-16 04:31:12 | INFO     | __main__:main:51 - Base directory: /Users/wei/works/mycodes/HeTangAI
+2026-01-16 04:31:12 | INFO     | __main__:main:52 - User data directory: /Users/wei/works/mycodes/HeTangAI
+2026-01-16 04:31:12 | INFO     | api:__init__:23 - API initialized
+2026-01-16 04:31:12 | INFO     | __main__:main:58 - Development mode: loading http://localhost:5173
+2026-01-16 04:31:13 | INFO     | api:new_project:33 - Creating new project
+2026-01-16 04:32:21 | INFO     | api:import_excel:151 - Importing from: /Users/wei/Desktop/result.xlsx
+2026-01-16 04:32:21 | INFO     | services.excel_parser:parse:43 - Parsing file: /Users/wei/Desktop/result.xlsx
+2026-01-16 04:32:22 | WARNING  | services.excel_parser:parse:60 - Missing columns: ['script', 'imagePrompt']
+2026-01-16 04:32:22 | INFO     | services.excel_parser:parse:81 - Parsed 451 shots, 0 characters
+2026-01-16 04:34:08 | INFO     | __main__:main:50 - Starting AI Lens Workshop, DEV=True
+2026-01-16 04:34:08 | INFO     | __main__:main:51 - Base directory: /Users/wei/works/mycodes/HeTangAI
+2026-01-16 04:34:08 | INFO     | __main__:main:52 - User data directory: /Users/wei/works/mycodes/HeTangAI
+2026-01-16 04:34:08 | INFO     | api:__init__:23 - API initialized
+2026-01-16 04:34:08 | INFO     | __main__:main:58 - Development mode: loading http://localhost:5173
+2026-01-16 04:34:09 | INFO     | api:new_project:33 - Creating new project
+2026-01-16 04:34:15 | INFO     | services.excel_parser:export_template:174 - Template exported to: /Users/wei/Desktop/template.xlsx
+2026-01-16 04:34:15 | INFO     | api:export_template:207 - Template exported to: /Users/wei/Desktop/template.xlsx
+2026-01-16 04:34:17 | INFO     | api:import_excel:151 - Importing from: /Users/wei/Desktop/template.xlsx
+2026-01-16 04:34:17 | INFO     | services.excel_parser:parse:43 - Parsing file: /Users/wei/Desktop/template.xlsx
+2026-01-16 04:34:17 | INFO     | services.excel_parser:parse:81 - Parsed 1 shots, 2 characters
+2026-01-16 04:35:59 | INFO     | services.mock_generator:generate:24 - Mock generating 4 images for prompt: A happy scene with two characters...
+2026-01-16 04:35:59 | INFO     | services.mock_generator:generate:37 - Generated 4 mock images
+2026-01-16 04:35:59 | INFO     | api:generate_images_for_shot:349 - Generated images for shot shot_148cdaba
+2026-01-16 04:36:02 | DEBUG    | api:select_image:325 - Shot shot_148cdaba selected image 1
+2026-01-16 04:36:02 | DEBUG    | api:select_image:325 - Shot shot_148cdaba selected image 2
+2026-01-16 04:36:03 | DEBUG    | api:select_image:325 - Shot shot_148cdaba selected image 3
+2026-01-16 04:36:08 | INFO     | services.mock_generator:generate:55 - Mock generating video for prompt: Camera zooms in slowly...
+2026-01-16 04:36:08 | INFO     | services.mock_generator:generate:64 - Generated mock video
+2026-01-16 04:36:08 | INFO     | api:generate_video_for_shot:387 - Generated video for shot shot_148cdaba
+2026-01-16 04:36:11 | DEBUG    | api:select_image:325 - Shot shot_148cdaba selected image 2
+2026-01-16 04:36:12 | DEBUG    | api:select_image:325 - Shot shot_148cdaba selected image 0
+2026-01-16 04:36:19 | INFO     | api:delete_shots:313 - Deleted 1 shots
+2026-01-16 04:36:25 | INFO     | api:import_excel:151 - Importing from: /Users/wei/Desktop/template.xlsx
+2026-01-16 04:36:25 | INFO     | services.excel_parser:parse:43 - Parsing file: /Users/wei/Desktop/template.xlsx
+2026-01-16 04:36:25 | INFO     | services.excel_parser:parse:81 - Parsed 1 shots, 2 characters
+2026-01-16 04:36:26 | INFO     | api:import_excel:151 - Importing from: /Users/wei/Desktop/template.xlsx
+2026-01-16 04:36:26 | INFO     | services.excel_parser:parse:43 - Parsing file: /Users/wei/Desktop/template.xlsx
+2026-01-16 04:36:26 | INFO     | services.excel_parser:parse:81 - Parsed 1 shots, 2 characters
+2026-01-16 04:36:29 | INFO     | api:import_excel:151 - Importing from: /Users/wei/Desktop/template.xlsx
+2026-01-16 04:36:29 | INFO     | services.excel_parser:parse:43 - Parsing file: /Users/wei/Desktop/template.xlsx
+2026-01-16 04:36:29 | INFO     | services.excel_parser:parse:81 - Parsed 1 shots, 2 characters
+2026-01-16 04:36:30 | INFO     | services.mock_generator:generate:24 - Mock generating 4 images for prompt: A happy scene with two characters...
+2026-01-16 04:36:30 | INFO     | services.mock_generator:generate:37 - Generated 4 mock images
+2026-01-16 04:36:30 | INFO     | api:generate_images_for_shot:349 - Generated images for shot shot_8515f23e
+2026-01-16 04:36:30 | INFO     | services.mock_generator:generate:24 - Mock generating 4 images for prompt: A happy scene with two characters...
+2026-01-16 04:36:30 | INFO     | services.mock_generator:generate:37 - Generated 4 mock images
+2026-01-16 04:36:30 | INFO     | api:generate_images_for_shot:349 - Generated images for shot shot_fd9430b6
+2026-01-16 04:36:30 | INFO     | services.mock_generator:generate:24 - Mock generating 4 images for prompt: A happy scene with two characters...
+2026-01-16 04:36:31 | INFO     | services.mock_generator:generate:37 - Generated 4 mock images
+2026-01-16 04:36:31 | INFO     | api:generate_images_for_shot:349 - Generated images for shot shot_0dc12a90
+2026-01-16 04:36:33 | INFO     | services.mock_generator:generate:24 - Mock generating 4 images for prompt: A happy scene with two characters...
+2026-01-16 04:36:34 | INFO     | services.mock_generator:generate:37 - Generated 4 mock images
+2026-01-16 04:36:34 | INFO     | api:generate_images_for_shot:349 - Generated images for shot shot_8515f23e
+2026-01-16 04:36:34 | INFO     | services.mock_generator:generate:24 - Mock generating 4 images for prompt: A happy scene with two characters...
+2026-01-16 04:36:34 | INFO     | services.mock_generator:generate:37 - Generated 4 mock images
+2026-01-16 04:36:34 | INFO     | api:generate_images_for_shot:349 - Generated images for shot shot_fd9430b6
+2026-01-16 04:36:34 | INFO     | services.mock_generator:generate:24 - Mock generating 4 images for prompt: A happy scene with two characters...
+2026-01-16 04:36:34 | INFO     | services.mock_generator:generate:37 - Generated 4 mock images
+2026-01-16 04:36:34 | INFO     | api:generate_images_for_shot:349 - Generated images for shot shot_0dc12a90
+2026-01-16 04:36:36 | INFO     | services.mock_generator:generate:24 - Mock generating 4 images for prompt: A happy scene with two characters...
+2026-01-16 04:36:36 | INFO     | services.mock_generator:generate:37 - Generated 4 mock images
+2026-01-16 04:36:36 | INFO     | api:generate_images_for_shot:349 - Generated images for shot shot_fd9430b6
+2026-01-16 04:36:37 | INFO     | services.mock_generator:generate:24 - Mock generating 4 images for prompt: A happy scene with two characters...
+2026-01-16 04:36:37 | INFO     | services.mock_generator:generate:37 - Generated 4 mock images
+2026-01-16 04:36:37 | INFO     | api:generate_images_for_shot:349 - Generated images for shot shot_8515f23e
+2026-01-16 04:36:39 | DEBUG    | api:select_image:325 - Shot shot_8515f23e selected image 1
+2026-01-16 04:36:48 | DEBUG    | api:select_image:325 - Shot shot_8515f23e selected image 2
+2026-01-16 04:36:48 | DEBUG    | api:select_image:325 - Shot shot_8515f23e selected image 3
+2026-01-16 04:36:48 | DEBUG    | api:select_image:325 - Shot shot_8515f23e selected image 0
+2026-01-16 04:36:49 | DEBUG    | api:select_image:325 - Shot shot_8515f23e selected image 2
+2026-01-16 04:37:10 | INFO     | __main__:main:50 - Starting AI Lens Workshop, DEV=True
+2026-01-16 04:37:10 | INFO     | __main__:main:51 - Base directory: /Users/wei/works/mycodes/HeTangAI
+2026-01-16 04:37:10 | INFO     | __main__:main:52 - User data directory: /Users/wei/works/mycodes/HeTangAI
+2026-01-16 04:37:10 | INFO     | api:__init__:23 - API initialized
+2026-01-16 04:37:10 | INFO     | __main__:main:58 - Development mode: loading http://localhost:5173
+2026-01-16 04:37:11 | INFO     | api:new_project:33 - Creating new project
+2026-01-16 04:37:34 | INFO     | __main__:main:50 - Starting AI Lens Workshop, DEV=True
+2026-01-16 04:37:34 | INFO     | __main__:main:51 - Base directory: /Users/wei/works/mycodes/HeTangAI
+2026-01-16 04:37:34 | INFO     | __main__:main:52 - User data directory: /Users/wei/works/mycodes/HeTangAI
+2026-01-16 04:37:34 | INFO     | api:__init__:23 - API initialized
+2026-01-16 04:37:34 | INFO     | __main__:main:58 - Development mode: loading http://localhost:5173
+2026-01-16 04:37:35 | INFO     | api:new_project:33 - Creating new project
+2026-01-16 04:37:43 | INFO     | api:import_excel:151 - Importing from: /Users/wei/Desktop/template.xlsx
+2026-01-16 04:37:44 | INFO     | services.excel_parser:parse:43 - Parsing file: /Users/wei/Desktop/template.xlsx
+2026-01-16 04:37:44 | INFO     | services.excel_parser:parse:81 - Parsed 1 shots, 2 characters
+2026-01-16 04:37:45 | INFO     | services.mock_generator:generate:24 - Mock generating 4 images for prompt: A happy scene with two characters...
+2026-01-16 04:37:45 | INFO     | services.mock_generator:generate:37 - Generated 4 mock images
+2026-01-16 04:37:45 | INFO     | api:generate_images_for_shot:349 - Generated images for shot shot_e7944fbc
+2026-01-16 04:37:47 | DEBUG    | api:select_image:325 - Shot shot_e7944fbc selected image 1
+2026-01-16 04:37:47 | DEBUG    | api:select_image:325 - Shot shot_e7944fbc selected image 2
+2026-01-16 04:38:30 | INFO     | services.mock_generator:generate:55 - Mock generating video for prompt: Camera zooms in slowly...
+2026-01-16 04:38:30 | INFO     | services.mock_generator:generate:64 - Generated mock video
+2026-01-16 04:38:30 | INFO     | api:generate_video_for_shot:387 - Generated video for shot shot_e7944fbc
+2026-01-16 04:40:13 | INFO     | api:import_excel:151 - Importing from: /Users/wei/Desktop/template.xlsx
+2026-01-16 04:40:13 | INFO     | services.excel_parser:parse:43 - Parsing file: /Users/wei/Desktop/template.xlsx
+2026-01-16 04:40:13 | INFO     | services.excel_parser:parse:81 - Parsed 1 shots, 2 characters
+2026-01-16 04:40:20 | INFO     | api:new_project:33 - Creating new project
+2026-01-16 04:40:22 | INFO     | api:new_project:33 - Creating new project
+2026-01-16 04:40:25 | INFO     | api:import_excel:151 - Importing from: /Users/wei/Desktop/template.xlsx
+2026-01-16 04:40:25 | INFO     | services.excel_parser:parse:43 - Parsing file: /Users/wei/Desktop/template.xlsx
+2026-01-16 04:40:25 | INFO     | services.excel_parser:parse:81 - Parsed 1 shots, 2 characters
+2026-01-16 04:44:33 | INFO     | api:new_project:33 - Creating new project
+2026-01-16 04:45:04 | INFO     | api:new_project:33 - Creating new project
+2026-01-16 04:46:17 | INFO     | api:import_excel:151 - Importing from: /Users/wei/Desktop/template.xlsx
+2026-01-16 04:46:17 | INFO     | services.excel_parser:parse:43 - Parsing file: /Users/wei/Desktop/template.xlsx
+2026-01-16 04:46:17 | INFO     | services.excel_parser:parse:81 - Parsed 1 shots, 2 characters
+2026-01-16 04:52:16 | INFO     | api:new_project:33 - Creating new project
+2026-01-16 04:52:22 | INFO     | api:import_excel:151 - Importing from: /Users/wei/Desktop/template.xlsx
+2026-01-16 04:52:22 | INFO     | services.excel_parser:parse:43 - Parsing file: /Users/wei/Desktop/template.xlsx
+2026-01-16 04:52:22 | INFO     | services.excel_parser:parse:81 - Parsed 1 shots, 2 characters
+2026-01-16 04:52:25 | INFO     | api:import_excel:151 - Importing from: /Users/wei/Desktop/template.xlsx
+2026-01-16 04:52:25 | INFO     | services.excel_parser:parse:43 - Parsing file: /Users/wei/Desktop/template.xlsx
+2026-01-16 04:52:25 | INFO     | services.excel_parser:parse:81 - Parsed 1 shots, 2 characters
+2026-01-16 04:52:28 | INFO     | api:import_excel:151 - Importing from: /Users/wei/Desktop/template.xlsx
+2026-01-16 04:52:28 | INFO     | services.excel_parser:parse:43 - Parsing file: /Users/wei/Desktop/template.xlsx
+2026-01-16 04:52:28 | INFO     | services.excel_parser:parse:81 - Parsed 1 shots, 2 characters
+2026-01-16 04:52:30 | INFO     | services.mock_generator:generate:24 - Mock generating 4 images for prompt: A happy scene with two characters...
+2026-01-16 04:52:31 | INFO     | services.mock_generator:generate:37 - Generated 4 mock images
+2026-01-16 04:52:31 | INFO     | api:generate_images_for_shot:349 - Generated images for shot shot_246e3661
+2026-01-16 04:52:31 | INFO     | services.mock_generator:generate:24 - Mock generating 4 images for prompt: A happy scene with two characters...
+2026-01-16 04:52:31 | INFO     | services.mock_generator:generate:37 - Generated 4 mock images
+2026-01-16 04:52:31 | INFO     | api:generate_images_for_shot:349 - Generated images for shot shot_2e1d5ad5
+2026-01-16 04:52:31 | INFO     | services.mock_generator:generate:24 - Mock generating 4 images for prompt: A happy scene with two characters...
+2026-01-16 04:52:31 | INFO     | services.mock_generator:generate:37 - Generated 4 mock images
+2026-01-16 04:52:31 | INFO     | api:generate_images_for_shot:349 - Generated images for shot shot_8a90e283
+2026-01-16 04:52:35 | INFO     | services.mock_generator:generate:24 - Mock generating 4 images for prompt: A happy scene with two characters...
+2026-01-16 04:52:35 | INFO     | services.mock_generator:generate:37 - Generated 4 mock images
+2026-01-16 04:52:35 | INFO     | api:generate_images_for_shot:349 - Generated images for shot shot_2e1d5ad5
+2026-01-16 04:52:36 | INFO     | services.mock_generator:generate:24 - Mock generating 4 images for prompt: A happy scene with two characters...
+2026-01-16 04:52:36 | INFO     | services.mock_generator:generate:37 - Generated 4 mock images
+2026-01-16 04:52:36 | INFO     | api:generate_images_for_shot:349 - Generated images for shot shot_246e3661
+2026-01-16 04:52:37 | DEBUG    | api:select_image:325 - Shot shot_246e3661 selected image 1
+2026-01-16 04:52:38 | DEBUG    | api:select_image:325 - Shot shot_246e3661 selected image 3
+2026-01-16 04:52:38 | DEBUG    | api:select_image:325 - Shot shot_246e3661 selected image 2
+2026-01-16 04:52:52 | DEBUG    | api:select_image:325 - Shot shot_2e1d5ad5 selected image 1
+2026-01-16 04:52:53 | DEBUG    | api:select_image:325 - Shot shot_2e1d5ad5 selected image 2
+2026-01-16 04:52:53 | DEBUG    | api:select_image:325 - Shot shot_2e1d5ad5 selected image 3
+2026-01-16 04:52:54 | DEBUG    | api:select_image:325 - Shot shot_2e1d5ad5 selected image 2
+2026-01-16 04:52:55 | DEBUG    | api:select_image:325 - Shot shot_2e1d5ad5 selected image 1
+2026-01-16 04:52:55 | DEBUG    | api:select_image:325 - Shot shot_2e1d5ad5 selected image 0
+2026-01-16 04:54:58 | INFO     | api:delete_shots:313 - Deleted 1 shots

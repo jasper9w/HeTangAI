@@ -1,0 +1,12 @@
+[project]
+name = "hetangai"
+version = "0.1.0"
+description = "AI Lens Creation Workshop - Desktop application for shot script management and AI image/video generation"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "pywebview>=5.3",
+    "loguru>=0.7",
+    "openpyxl>=3.1",
+    "pandas>=2.2",
+]
