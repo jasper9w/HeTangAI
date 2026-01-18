@@ -30,4 +30,4 @@ main.py通过DEV=1环境变量区分开发模式（使用vite dev server）和�
 ## 绝对不可逾越的规则
 - 前端设计图标时一律使用lucide-react
 - python代码，任何时候都不适用emoji符号！！！
-- 对于使用pywebview方案的项目，严谨在js_api=Api()的那个API类里存放window对象，因为这将导致win操作系统假死
+- 对于使用pywebview方案的项目，严禁在js_api=Api()的那个API类里存放window对象，因为这将导致win操作系统假死

@@ -202,18 +202,21 @@ export function CharacterPanel({
                           </button>
                           <button
                             onClick={() => handleStartEdit(char)}
-                            className="p-1 hover:bg-slate-600 rounded transition-colors"
-                            title="编辑"
+                            disabled={char.isNarrator}
+                            className="p-1 hover:bg-slate-600 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            title={char.isNarrator ? "旁白角色不可编辑" : "编辑"}
                           >
                             <Pencil className="w-3.5 h-3.5 text-slate-400" />
                           </button>
-                          <button
-                            onClick={() => onDeleteCharacter(char.id)}
-                            className="p-1 hover:bg-red-600/20 rounded transition-colors"
-                            title="删除"
-                          >
-                            <Trash2 className="w-3.5 h-3.5 text-red-400" />
-                          </button>
+                          {!char.isNarrator && (
+                            <button
+                              onClick={() => onDeleteCharacter(char.id)}
+                              className="p-1 hover:bg-red-600/20 rounded transition-colors"
+                              title="删除"
+                            >
+                              <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>

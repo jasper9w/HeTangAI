@@ -3,24 +3,27 @@
  */
 import { useState, useEffect, useCallback } from 'react';
 import {
-  FileSpreadsheet,
-  Download,
   Save,
   FolderOpen,
-  Image,
   Film,
   Plus,
   Loader2,
-  FileUp,
 } from 'lucide-react';
-import { motion } from 'framer-motion';
 import { useApi } from './hooks/useApi';
-import { CharacterPanel } from './components/character/CharacterPanel';
-import { ShotTable } from './components/shot/ShotTable';
-import type { ProjectData, Shot, Character } from './types';
+import { Sidebar } from './components/layout/Sidebar';
+import { HomePage } from './pages/HomePage';
+import { ShotsPage } from './pages/ShotsPage';
+import { CharactersPage } from './pages/CharactersPage';
+import { DubbingPage } from './pages/DubbingPage';
+import { SettingsPage } from './pages/SettingsPage';
+import { Toast, type ToastMessage } from './components/ui/Toast';
+import type { ProjectData, Shot, PageType } from './types';
 
 function App() {
   const { api, ready } = useApi();
+
+  // Page state
+  const [currentPage, setCurrentPage] = useState<PageType>('shots');
 
   // Project state
   const [project, setProject] = useState<ProjectData | null>(null);
@@ -36,8 +39,20 @@ function App() {
   const [generationProgress, setGenerationProgress] = useState<{
     current: number;
     total: number;
-    type: 'image' | 'video';
+    type: 'image' | 'video' | 'audio';
   } | null>(null);
+
+  // Toast notifications
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+  const showToast = useCallback((type: ToastMessage['type'], message: string, duration?: number) => {
+    const id = `toast-${Date.now()}-${Math.random()}`;
+    setToasts((prev) => [...prev, { id, type, message, duration }]);
+  }, []);
+
+  const removeToast = useCallback((id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
 
   // Initialize with empty project
   useEffect(() => {
@@ -101,6 +116,11 @@ function App() {
     await api.export_template();
   };
 
+  const handleOpenOutputDir = async () => {
+    if (!api) return;
+    await api.open_output_dir();
+  };
+
   // ========== Character Operations ==========
 
   const handleAddCharacter = async (name: string, description: string) => {
@@ -153,7 +173,8 @@ function App() {
     });
 
     const result = await api.generate_character_image(id);
-    if (result.character) {
+
+    if (result.success && result.character) {
       setProject((prev) => {
         if (!prev) return prev;
         return {
@@ -164,6 +185,19 @@ function App() {
         };
       });
       setIsDirty(true);
+      showToast('success', '角色图片生成成功');
+    } else {
+      // Revert status on error
+      setProject((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          characters: prev.characters.map((c) =>
+            c.id === id ? { ...c, status: 'error' as const, errorMessage: result.error } : c
+          ),
+        };
+      });
+      showToast('error', `角色图片生成失败: ${result.error || '未知错误'}`);
     }
   };
 
@@ -183,6 +217,51 @@ function App() {
     }
 
     setIsGeneratingCharacters(false);
+  };
+
+  const handleUploadCharacterImage = async (id: string) => {
+    if (!api || !project) return;
+
+    const result = await api.upload_character_image(id);
+    if (result.success && result.character) {
+      setProject({
+        ...project,
+        characters: project.characters.map((c) =>
+          c.id === id ? result.character! : c
+        ),
+      });
+      setIsDirty(true);
+    }
+  };
+
+  const handleSetCharacterReferenceAudio = async (id: string, audioPath: string) => {
+    if (!api || !project) return;
+
+    const result = await api.set_character_reference_audio(id, audioPath);
+    if (result.success && result.character) {
+      setProject({
+        ...project,
+        characters: project.characters.map((c) =>
+          c.id === id ? result.character! : c
+        ),
+      });
+      setIsDirty(true);
+    }
+  };
+
+  const handleUpdateCharacterSpeed = async (id: string, speed: number) => {
+    if (!api || !project) return;
+
+    const result = await api.update_character_speed(id, speed);
+    if (result.success && result.character) {
+      setProject({
+        ...project,
+        characters: project.characters.map((c) =>
+          c.id === id ? result.character! : c
+        ),
+      });
+      setIsDirty(true);
+    }
   };
 
   // ========== Shot Operations ==========
@@ -230,7 +309,7 @@ function App() {
     }
   };
 
-  const handleUpdateShot = async (shotId: string, field: string, value: string) => {
+  const handleUpdateShot = async (shotId: string, field: string, value: string | string[]) => {
     if (!api || !project) return;
     // Update locally first for responsiveness
     setProject({
@@ -268,9 +347,23 @@ function App() {
     });
 
     const result = await api.generate_images_for_shot(shotId);
-    if (result.shot) {
+
+    if (result.success && result.shot) {
       updateShotInProject(result.shot);
       setIsDirty(true);
+      showToast('success', '图片生成成功');
+    } else {
+      // Revert status on error
+      setProject((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          shots: prev.shots.map((s) =>
+            s.id === shotId ? { ...s, status: 'error' as const, errorMessage: result.error } : s
+          ),
+        };
+      });
+      showToast('error', `图片生成失败: ${result.error || '未知错误'}`);
     }
   };
 
@@ -286,9 +379,55 @@ function App() {
     });
 
     const result = await api.generate_video_for_shot(shotId);
-    if (result.shot) {
+
+    if (result.success && result.shot) {
       updateShotInProject(result.shot);
       setIsDirty(true);
+      showToast('success', '视频生成成功');
+    } else {
+      // Revert status on error
+      setProject((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          shots: prev.shots.map((s) =>
+            s.id === shotId ? { ...s, status: 'error' as const, errorMessage: result.error } : s
+          ),
+        };
+      });
+      showToast('error', `视频生成失败: ${result.error || '未知错误'}`);
+    }
+  };
+
+  const handleGenerateAudio = async (shotId: string) => {
+    if (!api || !project) return;
+
+    // Update status locally first
+    setProject({
+      ...project,
+      shots: project.shots.map((s) =>
+        s.id === shotId ? { ...s, status: 'generating_audio' as const } : s
+      ),
+    });
+
+    const result = await api.generate_audio_for_shot(shotId);
+
+    if (result.success && result.shot) {
+      updateShotInProject(result.shot);
+      setIsDirty(true);
+      showToast('success', '配音生成成功');
+    } else {
+      // Revert status on error
+      setProject((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          shots: prev.shots.map((s) =>
+            s.id === shotId ? { ...s, status: 'error' as const, errorMessage: result.error } : s
+          ),
+        };
+      });
+      showToast('error', `配音生成失败: ${result.error || '未知错误'}`);
     }
   };
 
@@ -337,6 +476,88 @@ function App() {
     setGenerationProgress(null);
   };
 
+  const handleBatchGenerateAudios = async () => {
+    if (!api || !project) return;
+
+    const targetIds = selectedShotIds.length > 0
+      ? selectedShotIds.filter(id => {
+          const shot = project.shots.find(s => s.id === id);
+          return shot && shot.script.trim();
+        })
+      : project.shots.filter(s => s.script.trim()).map(s => s.id);
+
+    if (targetIds.length === 0) return;
+
+    setIsGenerating(true);
+    setGenerationProgress({ current: 0, total: targetIds.length, type: 'audio' });
+
+    for (let i = 0; i < targetIds.length; i++) {
+      setGenerationProgress({ current: i + 1, total: targetIds.length, type: 'audio' });
+      await handleGenerateAudio(targetIds[i]);
+    }
+
+    setIsGenerating(false);
+    setGenerationProgress(null);
+  };
+
+  // ========== Render Page Content ==========
+
+  const renderPageContent = () => {
+    switch (currentPage) {
+      case 'home':
+        return <HomePage project={project} />;
+      case 'shots':
+        return (
+          <ShotsPage
+            shots={project?.shots || []}
+            characters={project?.characters || []}
+            selectedIds={selectedShotIds}
+            onSelectShot={handleSelectShot}
+            onSelectAll={handleSelectAllShots}
+            onDeleteShots={handleDeleteShots}
+            onGenerateImages={handleGenerateImages}
+            onGenerateVideo={handleGenerateVideo}
+            onGenerateAudio={handleGenerateAudio}
+            onSelectImage={handleSelectImage}
+            onUpdateShot={handleUpdateShot}
+            onImportExcel={handleImportExcel}
+            onExportTemplate={handleExportTemplate}
+            onBatchGenerateImages={handleBatchGenerateImages}
+            onBatchGenerateVideos={handleBatchGenerateVideos}
+            onBatchGenerateAudios={handleBatchGenerateAudios}
+            isGenerating={isGenerating}
+            generationProgress={generationProgress}
+          />
+        );
+      case 'characters':
+        return (
+          <CharactersPage
+            characters={project?.characters || []}
+            onAddCharacter={handleAddCharacter}
+            onUpdateCharacter={handleUpdateCharacter}
+            onUpdateCharacterSpeed={handleUpdateCharacterSpeed}
+            onDeleteCharacter={handleDeleteCharacter}
+            onGenerateImage={handleGenerateCharacterImage}
+            onGenerateAllImages={handleGenerateAllCharacterImages}
+            onUploadImage={handleUploadCharacterImage}
+            onSetReferenceAudio={handleSetCharacterReferenceAudio}
+            isGenerating={isGeneratingCharacters}
+          />
+        );
+      case 'dubbing':
+        return (
+          <DubbingPage
+            shots={project?.shots || []}
+            characters={project?.characters || []}
+          />
+        );
+      case 'settings':
+        return <SettingsPage onOpenOutputDir={handleOpenOutputDir} />;
+      default:
+        return null;
+    }
+  };
+
   // ========== Render ==========
 
   if (!ready) {
@@ -349,6 +570,9 @@ function App() {
 
   return (
     <div className="min-h-screen bg-slate-900 flex flex-col">
+      {/* Toast Notifications */}
+      <Toast toasts={toasts} onRemove={removeToast} />
+
       {/* Header */}
       <header className="bg-slate-800 border-b border-slate-700 px-4 py-3">
         <div className="flex items-center justify-between">
@@ -368,59 +592,6 @@ function App() {
                 </p>
               </div>
             </div>
-          </div>
-
-          {/* Center: Main actions */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleImportExcel}
-              className="flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-200 transition-colors"
-            >
-              <FileUp className="w-4 h-4" />
-              导入
-            </button>
-            <button
-              onClick={handleExportTemplate}
-              className="flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-200 transition-colors"
-            >
-              <Download className="w-4 h-4" />
-              模板
-            </button>
-            <div className="w-px h-6 bg-slate-700 mx-2" />
-            <button
-              onClick={handleBatchGenerateImages}
-              disabled={isGenerating || !project?.shots.length}
-              className="flex items-center gap-2 px-3 py-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm text-white transition-colors"
-            >
-              {isGenerating && generationProgress?.type === 'image' ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  {generationProgress.current}/{generationProgress.total}
-                </>
-              ) : (
-                <>
-                  <Image className="w-4 h-4" />
-                  批量生图
-                </>
-              )}
-            </button>
-            <button
-              onClick={handleBatchGenerateVideos}
-              disabled={isGenerating || !project?.shots.some(s => s.images.length > 0)}
-              className="flex items-center gap-2 px-3 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm text-white transition-colors"
-            >
-              {isGenerating && generationProgress?.type === 'video' ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  {generationProgress.current}/{generationProgress.total}
-                </>
-              ) : (
-                <>
-                  <Film className="w-4 h-4" />
-                  批量生视频
-                </>
-              )}
-            </button>
           </div>
 
           {/* Right: Project actions */}
@@ -449,62 +620,16 @@ function App() {
             </button>
           </div>
         </div>
-
-        {/* Progress bar */}
-        {generationProgress && (
-          <div className="mt-3">
-            <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
-              <span>
-                正在生成{generationProgress.type === 'image' ? '图片' : '视频'}...
-              </span>
-              <span>
-                {generationProgress.current} / {generationProgress.total}
-              </span>
-            </div>
-            <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
-              <motion.div
-                className={`h-full rounded-full ${
-                  generationProgress.type === 'image' ? 'bg-violet-500' : 'bg-emerald-500'
-                }`}
-                initial={{ width: 0 }}
-                animate={{
-                  width: `${(generationProgress.current / generationProgress.total) * 100}%`,
-                }}
-                transition={{ duration: 0.3 }}
-              />
-            </div>
-          </div>
-        )}
       </header>
 
       {/* Main Content */}
       <main className="flex-1 flex overflow-hidden">
-        {/* Left Panel: Characters (1/5 width) */}
-        <div className="w-1/5 min-w-[240px] max-w-[320px]">
-          <CharacterPanel
-            characters={project?.characters || []}
-            onAddCharacter={handleAddCharacter}
-            onUpdateCharacter={handleUpdateCharacter}
-            onDeleteCharacter={handleDeleteCharacter}
-            onGenerateImage={handleGenerateCharacterImage}
-            onGenerateAllImages={handleGenerateAllCharacterImages}
-            isGenerating={isGeneratingCharacters}
-          />
-        </div>
+        {/* Left Sidebar Navigation */}
+        <Sidebar currentPage={currentPage} onPageChange={setCurrentPage} />
 
-        {/* Right Panel: Shots (4/5 width) */}
-        <div className="flex-1 bg-slate-900">
-          <ShotTable
-            shots={project?.shots || []}
-            selectedIds={selectedShotIds}
-            onSelectShot={handleSelectShot}
-            onSelectAll={handleSelectAllShots}
-            onDeleteShots={handleDeleteShots}
-            onGenerateImages={handleGenerateImages}
-            onGenerateVideo={handleGenerateVideo}
-            onSelectImage={handleSelectImage}
-            onUpdateShot={handleUpdateShot}
-          />
+        {/* Page Content */}
+        <div className="flex-1 bg-slate-900 overflow-hidden">
+          {renderPageContent()}
         </div>
       </main>
     </div>

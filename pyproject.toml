@@ -9,4 +9,5 @@ dependencies = [
     "loguru>=0.7",
     "openpyxl>=3.1",
     "pandas>=2.2",
+    "httpx>=0.28.1",
 ]

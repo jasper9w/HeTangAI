@@ -169,3 +169,426 @@
 2026-01-16 04:52:55 | DEBUG    | api:select_image:325 - Shot shot_2e1d5ad5 selected image 1
 2026-01-16 04:52:55 | DEBUG    | api:select_image:325 - Shot shot_2e1d5ad5 selected image 0
 2026-01-16 04:54:58 | INFO     | api:delete_shots:313 - Deleted 1 shots
+2026-01-16 18:44:13 | INFO     | __main__:main:50 - Starting AI Lens Workshop, DEV=True
+2026-01-16 18:44:13 | INFO     | __main__:main:51 - Base directory: /Users/wei/works/mycodes/HeTangAI
+2026-01-16 18:44:13 | INFO     | __main__:main:52 - User data directory: /Users/wei/works/mycodes/HeTangAI
+2026-01-16 18:44:13 | INFO     | api:__init__:23 - API initialized
+2026-01-16 18:44:13 | INFO     | __main__:main:58 - Development mode: loading http://localhost:5173
+2026-01-16 18:44:16 | INFO     | api:new_project:33 - Creating new project
+2026-01-16 18:45:55 | INFO     | api:import_excel:151 - Importing from: /Users/wei/Desktop/template.xlsx
+2026-01-16 18:45:55 | INFO     | services.excel_parser:parse:43 - Parsing file: /Users/wei/Desktop/template.xlsx
+2026-01-16 18:45:55 | INFO     | services.excel_parser:parse:81 - Parsed 1 shots, 2 characters
+2026-01-16 18:51:59 | INFO     | __main__:main:76 - Application closed
+2026-01-16 18:52:04 | INFO     | __main__:main:50 - Starting AI Lens Workshop, DEV=True
+2026-01-16 18:52:04 | INFO     | __main__:main:51 - Base directory: /Users/wei/works/mycodes/HeTangAI
+2026-01-16 18:52:04 | INFO     | __main__:main:52 - User data directory: /Users/wei/works/mycodes/HeTangAI
+2026-01-16 18:52:04 | INFO     | api:__init__:23 - API initialized
+2026-01-16 18:52:04 | INFO     | __main__:main:58 - Development mode: loading http://localhost:5173
+2026-01-16 18:52:06 | INFO     | api:new_project:33 - Creating new project
+2026-01-16 18:57:54 | INFO     | api:new_project:33 - Creating new project
+2026-01-16 19:01:37 | INFO     | __main__:main:50 - Starting AI Lens Workshop, DEV=True
+2026-01-16 19:01:37 | INFO     | __main__:main:51 - Base directory: /Users/wei/works/mycodes/HeTangAI
+2026-01-16 19:01:37 | INFO     | __main__:main:52 - User data directory: /Users/wei/works/mycodes/HeTangAI
+2026-01-16 19:01:37 | INFO     | api:__init__:23 - API initialized
+2026-01-16 19:01:37 | INFO     | __main__:main:58 - Development mode: loading http://localhost:5173
+2026-01-16 19:01:40 | INFO     | api:new_project:33 - Creating new project
+2026-01-16 19:01:46 | INFO     | __main__:main:76 - Application closed
+2026-01-16 19:01:48 | INFO     | __main__:main:50 - Starting AI Lens Workshop, DEV=True
+2026-01-16 19:01:48 | INFO     | __main__:main:51 - Base directory: /Users/wei/works/mycodes/HeTangAI
+2026-01-16 19:01:48 | INFO     | __main__:main:52 - User data directory: /Users/wei/works/mycodes/HeTangAI
+2026-01-16 19:01:48 | INFO     | api:__init__:23 - API initialized
+2026-01-16 19:01:48 | INFO     | __main__:main:58 - Development mode: loading http://localhost:5173
+2026-01-16 19:01:49 | INFO     | api:new_project:33 - Creating new project
+2026-01-16 19:12:52 | INFO     | api:import_excel:151 - Importing from: /Users/wei/Desktop/template.xlsx
+2026-01-16 19:12:53 | INFO     | services.excel_parser:parse:43 - Parsing file: /Users/wei/Desktop/template.xlsx
+2026-01-16 19:12:53 | INFO     | services.excel_parser:parse:81 - Parsed 1 shots, 2 characters
+2026-01-16 19:18:49 | INFO     | __main__:main:50 - Starting AI Lens Workshop, DEV=True
+2026-01-16 19:18:49 | INFO     | __main__:main:51 - Base directory: /Users/wei/works/mycodes/HeTangAI
+2026-01-16 19:18:49 | INFO     | __main__:main:52 - User data directory: /Users/wei/works/mycodes/HeTangAI
+2026-01-16 19:18:49 | INFO     | api:__init__:23 - API initialized
+2026-01-16 19:18:49 | INFO     | __main__:main:58 - Development mode: loading http://localhost:5173
+2026-01-16 19:18:51 | INFO     | api:new_project:33 - Creating new project
+2026-01-16 19:18:52 | INFO     | api:scan_reference_audios:454 - Scanning audio files in: /Users/wei/Downloads/800+音色/逗哥音色整理合集
+2026-01-16 19:18:52 | INFO     | api:scan_reference_audios:454 - Scanning audio files in: /Users/wei/Downloads/800+音色/逗哥音色整理合集
+2026-01-16 19:18:52 | INFO     | api:scan_reference_audios:467 - Found 249 audio files
+2026-01-16 19:18:52 | INFO     | api:scan_reference_audios:467 - Found 249 audio files
+2026-01-16 19:19:39 | INFO     | api:scan_reference_audios:454 - Scanning audio files in: /Users/wei/Downloads/800+音色/逗哥音色整理合集
+2026-01-16 19:19:39 | INFO     | api:scan_reference_audios:454 - Scanning audio files in: /Users/wei/Downloads/800+音色/逗哥音色整理合集
+2026-01-16 19:19:39 | INFO     | api:scan_reference_audios:467 - Found 249 audio files
+2026-01-16 19:19:39 | INFO     | api:scan_reference_audios:467 - Found 249 audio files
+2026-01-16 19:19:41 | INFO     | api:scan_reference_audios:454 - Scanning audio files in: /Users/wei/Downloads/800+音色/逗哥音色整理合集
+2026-01-16 19:19:41 | INFO     | api:scan_reference_audios:454 - Scanning audio files in: /Users/wei/Downloads/800+音色/逗哥音色整理合集
+2026-01-16 19:19:41 | INFO     | api:scan_reference_audios:467 - Found 249 audio files
+2026-01-16 19:19:41 | INFO     | api:scan_reference_audios:467 - Found 249 audio files
+2026-01-16 19:19:54 | INFO     | api:import_excel:151 - Importing from: /Users/wei/Desktop/template.xlsx
+2026-01-16 19:19:54 | INFO     | services.excel_parser:parse:43 - Parsing file: /Users/wei/Desktop/template.xlsx
+2026-01-16 19:19:55 | INFO     | services.excel_parser:parse:81 - Parsed 1 shots, 2 characters
+2026-01-16 19:20:04 | INFO     | api:scan_reference_audios:454 - Scanning audio files in: /Users/wei/Downloads/800+音色/逗哥音色整理合集
+2026-01-16 19:20:04 | INFO     | api:scan_reference_audios:454 - Scanning audio files in: /Users/wei/Downloads/800+音色/逗哥音色整理合集
+2026-01-16 19:20:04 | INFO     | api:scan_reference_audios:467 - Found 249 audio files
+2026-01-16 19:20:04 | INFO     | api:scan_reference_audios:467 - Found 249 audio files
+2026-01-16 19:20:59 | INFO     | services.mock_generator:generate:24 - Mock generating 4 images for prompt: A happy scene with two characters...
+2026-01-16 19:20:59 | INFO     | services.mock_generator:generate:37 - Generated 4 mock images
+2026-01-16 19:20:59 | INFO     | api:generate_images_for_shot:360 - Generated images for shot shot_3020d911
+2026-01-16 19:21:00 | INFO     | services.mock_generator:generate:24 - Mock generating 4 images for prompt: A happy scene with two characters...
+2026-01-16 19:21:00 | INFO     | services.mock_generator:generate:37 - Generated 4 mock images
+2026-01-16 19:21:00 | INFO     | api:generate_images_for_shot:360 - Generated images for shot shot_3020d911
+2026-01-16 19:21:01 | DEBUG    | api:select_image:336 - Shot shot_3020d911 selected image 1
+2026-01-16 19:21:02 | DEBUG    | api:select_image:336 - Shot shot_3020d911 selected image 0
+2026-01-16 19:21:03 | DEBUG    | api:select_image:336 - Shot shot_3020d911 selected image 2
+2026-01-16 19:21:04 | DEBUG    | api:select_image:336 - Shot shot_3020d911 selected image 3
+2026-01-16 19:21:11 | DEBUG    | api:select_image:336 - Shot shot_3020d911 selected image 0
+2026-01-16 19:21:11 | DEBUG    | api:select_image:336 - Shot shot_3020d911 selected image 1
+2026-01-16 19:21:12 | DEBUG    | api:select_image:336 - Shot shot_3020d911 selected image 0
+2026-01-16 19:21:13 | DEBUG    | api:select_image:336 - Shot shot_3020d911 selected image 1
+2026-01-16 19:21:15 | DEBUG    | api:select_image:336 - Shot shot_3020d911 selected image 0
+2026-01-16 19:21:15 | DEBUG    | api:select_image:336 - Shot shot_3020d911 selected image 1
+2026-01-16 19:21:21 | DEBUG    | api:select_image:336 - Shot shot_3020d911 selected image 0
+2026-01-16 19:21:22 | DEBUG    | api:update_shot:307 - Updated shot shot_3020d911.characters
+2026-01-16 19:21:23 | DEBUG    | api:update_shot:307 - Updated shot shot_3020d911.characters
+2026-01-16 19:21:23 | DEBUG    | api:update_shot:307 - Updated shot shot_3020d911.characters
+2026-01-16 19:21:24 | DEBUG    | api:update_shot:307 - Updated shot shot_3020d911.characters
+2026-01-16 19:21:50 | INFO     | __main__:main:50 - Starting AI Lens Workshop, DEV=True
+2026-01-16 19:21:50 | INFO     | __main__:main:51 - Base directory: /Users/wei/works/mycodes/HeTangAI
+2026-01-16 19:21:50 | INFO     | __main__:main:52 - User data directory: /Users/wei/works/mycodes/HeTangAI
+2026-01-16 19:21:50 | INFO     | api:__init__:23 - API initialized
+2026-01-16 19:21:50 | INFO     | __main__:main:58 - Development mode: loading http://localhost:5173
+2026-01-16 19:21:52 | INFO     | api:new_project:33 - Creating new project
+2026-01-16 19:21:57 | INFO     | api:scan_reference_audios:454 - Scanning audio files in: /Users/wei/Downloads/800+音色/逗哥音色整理合集
+2026-01-16 19:21:57 | INFO     | api:scan_reference_audios:454 - Scanning audio files in: /Users/wei/Downloads/800+音色/逗哥音色整理合集
+2026-01-16 19:21:57 | INFO     | api:scan_reference_audios:467 - Found 249 audio files
+2026-01-16 19:21:57 | INFO     | api:scan_reference_audios:467 - Found 249 audio files
+2026-01-16 19:21:58 | INFO     | api:get_reference_audio_data:525 - Read audio file: /Users/wei/Downloads/800+音色/逗哥音色整理合集/逗哥热门音色/逗思雨.wav (752476 bytes)
+2026-01-16 19:22:24 | INFO     | api:import_excel:151 - Importing from: /Users/wei/Desktop/template.xlsx
+2026-01-16 19:22:24 | INFO     | services.excel_parser:parse:43 - Parsing file: /Users/wei/Desktop/template.xlsx
+2026-01-16 19:22:24 | INFO     | services.excel_parser:parse:81 - Parsed 1 shots, 2 characters
+2026-01-16 19:23:59 | INFO     | api:scan_reference_audios:454 - Scanning audio files in: /Users/wei/Downloads/800+音色/逗哥音色整理合集
+2026-01-16 19:23:59 | INFO     | api:scan_reference_audios:454 - Scanning audio files in: /Users/wei/Downloads/800+音色/逗哥音色整理合集
+2026-01-16 19:23:59 | INFO     | api:scan_reference_audios:467 - Found 249 audio files
+2026-01-16 19:23:59 | INFO     | api:scan_reference_audios:467 - Found 249 audio files
+2026-01-16 19:30:48 | INFO     | api:scan_reference_audios:454 - Scanning audio files in: /Users/wei/Downloads/800+音色/逗哥音色整理合集
+2026-01-16 19:30:48 | INFO     | api:scan_reference_audios:467 - Found 249 audio files
+2026-01-16 19:30:53 | INFO     | api:scan_reference_audios:454 - Scanning audio files in: /Users/wei/Downloads/800+音色/逗哥音色整理合集
+2026-01-16 19:30:53 | INFO     | api:scan_reference_audios:467 - Found 249 audio files
+2026-01-16 19:40:51 | INFO     | services.mock_generator:generate:54 - Mock generating character 3-view for: Character B: ...
+2026-01-16 19:40:52 | INFO     | services.mock_generator:generate:63 - Generated mock character 3-view image
+2026-01-16 19:40:52 | INFO     | api:generate_character_image:279 - Generated character image for char_dd6f3f87
+2026-01-16 19:40:55 | INFO     | services.mock_generator:generate:54 - Mock generating character 3-view for: Character A: ...
+2026-01-16 19:40:56 | INFO     | services.mock_generator:generate:63 - Generated mock character 3-view image
+2026-01-16 19:40:56 | INFO     | api:generate_character_image:279 - Generated character image for char_440f9ca6
+2026-01-16 19:41:24 | INFO     | api:import_excel:151 - Importing from: /Users/wei/Desktop/result.xlsx
+2026-01-16 19:41:24 | INFO     | services.excel_parser:parse:43 - Parsing file: /Users/wei/Desktop/result.xlsx
+2026-01-16 19:41:24 | WARNING  | services.excel_parser:parse:60 - Missing columns: ['script', 'imagePrompt']
+2026-01-16 19:41:24 | INFO     | services.excel_parser:parse:81 - Parsed 451 shots, 0 characters
+2026-01-16 19:44:28 | INFO     | __main__:main:76 - Application closed
+2026-01-16 19:44:32 | INFO     | __main__:main:50 - Starting AI Lens Workshop, DEV=True
+2026-01-16 19:44:32 | INFO     | __main__:main:51 - Base directory: /Users/wei/works/mycodes/HeTangAI
+2026-01-16 19:44:32 | INFO     | __main__:main:52 - User data directory: /Users/wei/works/mycodes/HeTangAI
+2026-01-16 19:44:32 | INFO     | api:__init__:23 - API initialized
+2026-01-16 19:44:32 | INFO     | __main__:main:58 - Development mode: loading http://localhost:5173
+2026-01-16 19:44:33 | INFO     | api:new_project:33 - Creating new project
+2026-01-16 19:44:39 | INFO     | api:import_excel:151 - Importing from: /Users/wei/Desktop/result.xlsx
+2026-01-16 19:44:39 | INFO     | services.excel_parser:parse:43 - Parsing file: /Users/wei/Desktop/result.xlsx
+2026-01-16 19:44:39 | INFO     | services.excel_parser:parse:81 - Parsed 451 shots, 3 characters
+2026-01-16 19:46:36 | INFO     | api:delete_shots:379 - Deleted 451 shots
+2026-01-16 19:46:43 | INFO     | api:import_excel:151 - Importing from: /Users/wei/Desktop/result.xlsx
+2026-01-16 19:46:43 | INFO     | services.excel_parser:parse:43 - Parsing file: /Users/wei/Desktop/result.xlsx
+2026-01-16 19:46:43 | INFO     | services.excel_parser:parse:81 - Parsed 451 shots, 3 characters
+2026-01-16 19:47:06 | INFO     | services.mock_generator:generate:24 - Mock generating 4 images for prompt: 全景，古风宫殿寝宫内，夜晚烛光昏黄。沈晚晚（25岁，柳眉凤眼肤若凝脂，女，淡紫色绣花宫装）[独坐窗前...
+2026-01-16 19:47:06 | INFO     | services.mock_generator:generate:37 - Generated 4 mock images
+2026-01-16 19:47:06 | INFO     | api:generate_images_for_shot:415 - Generated images for shot shot_6e3f4c99
+2026-01-16 19:47:18 | INFO     | services.mock_generator:generate:24 - Mock generating 4 images for prompt: 中景，古风宫殿寝宫内，夜晚烛光昏黄。沈晚晚（25岁，柳眉凤眼肤若凝脂，女，淡紫色绣花宫装）[轻叹摇头...
+2026-01-16 19:47:18 | INFO     | services.mock_generator:generate:37 - Generated 4 mock images
+2026-01-16 19:47:18 | INFO     | api:generate_images_for_shot:415 - Generated images for shot shot_003b891a
+2026-01-16 19:50:20 | DEBUG    | api:update_shot:362 - Updated shot shot_b09c4513.characters
+2026-01-16 19:50:46 | INFO     | api:scan_reference_audios:509 - Scanning audio files in: /Users/wei/Downloads/800+音色/逗哥音色整理合集
+2026-01-16 19:50:46 | INFO     | api:scan_reference_audios:509 - Scanning audio files in: /Users/wei/Downloads/800+音色/逗哥音色整理合集
+2026-01-16 19:50:46 | INFO     | api:scan_reference_audios:522 - Found 249 audio files
+2026-01-16 19:50:46 | INFO     | api:scan_reference_audios:522 - Found 249 audio files
+2026-01-16 19:51:57 | DEBUG    | api:select_image:391 - Shot shot_003b891a selected image 1
+2026-01-16 19:51:58 | DEBUG    | api:select_image:391 - Shot shot_003b891a selected image 2
+2026-01-16 19:51:59 | DEBUG    | api:select_image:391 - Shot shot_003b891a selected image 3
+2026-01-16 19:52:19 | INFO     | api:delete_shots:379 - Deleted 1 shots
+2026-01-16 19:52:19 | INFO     | api:delete_shots:379 - Deleted 1 shots
+2026-01-16 19:52:20 | INFO     | api:delete_shots:379 - Deleted 1 shots
+2026-01-16 19:52:21 | INFO     | api:delete_shots:379 - Deleted 1 shots
+2026-01-16 19:52:21 | INFO     | api:delete_shots:379 - Deleted 1 shots
+2026-01-16 19:52:21 | INFO     | api:delete_shots:379 - Deleted 1 shots
+2026-01-16 19:52:22 | INFO     | api:delete_shots:379 - Deleted 1 shots
+2026-01-16 19:52:22 | INFO     | api:delete_shots:379 - Deleted 1 shots
+2026-01-16 19:52:31 | DEBUG    | api:select_image:391 - Shot shot_6e3f4c99 selected image 1
+2026-01-16 19:52:32 | DEBUG    | api:select_image:391 - Shot shot_6e3f4c99 selected image 0
+2026-01-16 19:52:33 | DEBUG    | api:select_image:391 - Shot shot_6e3f4c99 selected image 1
+2026-01-16 19:52:34 | DEBUG    | api:select_image:391 - Shot shot_6e3f4c99 selected image 2
+2026-01-16 19:52:36 | DEBUG    | api:select_image:391 - Shot shot_6e3f4c99 selected image 3
+2026-01-16 19:55:13 | DEBUG    | api:select_image:391 - Shot shot_003b891a selected image 1
+2026-01-16 19:55:14 | DEBUG    | api:select_image:391 - Shot shot_003b891a selected image 0
+2026-01-16 19:55:15 | DEBUG    | api:select_image:391 - Shot shot_003b891a selected image 2
+2026-01-16 19:55:15 | DEBUG    | api:select_image:391 - Shot shot_003b891a selected image 1
+2026-01-16 19:55:18 | DEBUG    | api:select_image:391 - Shot shot_6e3f4c99 selected image 1
+2026-01-16 19:55:19 | DEBUG    | api:select_image:391 - Shot shot_6e3f4c99 selected image 0
+2026-01-16 19:55:23 | DEBUG    | api:select_image:391 - Shot shot_003b891a selected image 0
+2026-01-16 20:00:18 | INFO     | __main__:main:50 - Starting AI Lens Workshop, DEV=True
+2026-01-16 20:00:18 | INFO     | __main__:main:51 - Base directory: /Users/wei/works/mycodes/HeTangAI
+2026-01-16 20:00:18 | INFO     | __main__:main:52 - User data directory: /Users/wei/works/mycodes/HeTangAI
+2026-01-16 20:00:18 | INFO     | api:__init__:23 - API initialized
+2026-01-16 20:00:18 | INFO     | __main__:main:58 - Development mode: loading http://localhost:5173
+2026-01-16 20:00:21 | INFO     | api:new_project:33 - Creating new project
+2026-01-16 20:00:29 | INFO     | api:scan_reference_audios:539 - Scanning audio files in: /Users/wei/Downloads/800+音色/逗哥音色整理合集
+2026-01-16 20:00:29 | INFO     | api:scan_reference_audios:552 - Found 249 audio files
+2026-01-16 20:00:31 | INFO     | api:set_character_reference_audio:377 - Set reference audio for narrator: /Users/wei/Downloads/800+音色/逗哥音色整理合集/逗哥热门音色/逗思雨.wav
+2026-01-16 20:00:40 | INFO     | api:import_excel:161 - Importing from: /Users/wei/Desktop/result.xlsx
+2026-01-16 20:00:40 | INFO     | services.excel_parser:parse:43 - Parsing file: /Users/wei/Desktop/result.xlsx
+2026-01-16 20:00:40 | INFO     | services.excel_parser:parse:81 - Parsed 451 shots, 3 characters
+2026-01-16 20:12:11 | INFO     | __main__:main:50 - Starting AI Lens Workshop, DEV=True
+2026-01-16 20:12:11 | INFO     | __main__:main:51 - Base directory: /Users/wei/works/mycodes/HeTangAI
+2026-01-16 20:12:11 | INFO     | __main__:main:52 - User data directory: /Users/wei/works/mycodes/HeTangAI
+2026-01-16 20:12:11 | INFO     | api:_ensure_settings_file:57 - Created default settings file: /Users/wei/works/mycodes/HeTangAI/settings.json
+2026-01-16 20:12:11 | INFO     | api:__init__:25 - API initialized
+2026-01-16 20:12:11 | INFO     | __main__:main:58 - Development mode: loading http://localhost:5173
+2026-01-16 20:12:14 | INFO     | api:new_project:63 - Creating new project
+2026-01-16 20:12:15 | INFO     | api:get_settings:656 - Loaded settings
+2026-01-16 20:12:15 | INFO     | api:get_settings:656 - Loaded settings
+2026-01-16 20:12:32 | INFO     | api:scan_reference_audios:569 - Scanning audio files in: /Users/wei/Downloads/800+音色/逗哥音色整理合集
+2026-01-16 20:12:32 | INFO     | api:scan_reference_audios:569 - Scanning audio files in: /Users/wei/Downloads/800+音色/逗哥音色整理合集
+2026-01-16 20:12:32 | INFO     | api:scan_reference_audios:582 - Found 249 audio files
+2026-01-16 20:12:32 | INFO     | api:scan_reference_audios:582 - Found 249 audio files
+2026-01-16 20:12:54 | INFO     | api:import_excel:191 - Importing from: /Users/wei/Desktop/result.xlsx
+2026-01-16 20:12:55 | INFO     | services.excel_parser:parse:43 - Parsing file: /Users/wei/Desktop/result.xlsx
+2026-01-16 20:12:55 | INFO     | services.excel_parser:parse:81 - Parsed 451 shots, 3 characters
+2026-01-16 20:13:18 | INFO     | api:update_character_speed:296 - Updated character speed: char_0ed66825 -> 1x
+2026-01-16 20:13:20 | INFO     | api:scan_reference_audios:569 - Scanning audio files in: /Users/wei/Downloads/800+音色/逗哥音色整理合集
+2026-01-16 20:13:20 | INFO     | api:scan_reference_audios:582 - Found 249 audio files
+2026-01-16 20:13:22 | INFO     | api:set_character_reference_audio:407 - Set reference audio for char_0ed66825: /Users/wei/Downloads/800+音色/逗哥音色整理合集/逗哥热门音色/逗梦梦.wav
+2026-01-16 21:22:57 | INFO     | api:get_settings:656 - Loaded settings
+2026-01-16 21:22:57 | INFO     | api:get_settings:656 - Loaded settings
+2026-01-16 21:30:37 | INFO     | services.mock_generator:generate:24 - Mock generating 4 images for prompt: 全景，古风宫殿寝宫内，夜晚烛光昏黄。沈晚晚（25岁，柳眉凤眼肤若凝脂，女，淡紫色绣花宫装）[独坐窗前...
+2026-01-16 21:30:37 | INFO     | services.mock_generator:generate:37 - Generated 4 mock images
+2026-01-16 21:30:37 | INFO     | api:generate_images_for_shot:475 - Generated images for shot shot_fda6fd9d
+2026-01-16 21:30:40 | DEBUG    | api:select_image:451 - Shot shot_fda6fd9d selected image 1
+2026-01-16 21:30:41 | DEBUG    | api:select_image:451 - Shot shot_fda6fd9d selected image 2
+2026-01-16 22:13:57 | INFO     | api:_save_to_path:152 - Project saved to: /Users/wei/Desktop/untitled folder/Untitled Project.htai
+2026-01-16 22:14:02 | INFO     | api:open_project:101 - Opening project: /Users/wei/Desktop/untitled folder/Untitled Project.htai
+2026-01-16 22:14:21 | INFO     | api:update_character_speed:296 - Updated character speed: narrator -> 1.25x
+2026-01-16 22:14:21 | INFO     | api:update_character_speed:296 - Updated character speed: narrator -> 1.5x
+2026-01-16 22:23:51 | INFO     | __main__:main:50 - Starting AI Lens Workshop, DEV=True
+2026-01-16 22:23:51 | INFO     | __main__:main:51 - Base directory: /Users/wei/works/mycodes/HeTangAI
+2026-01-16 22:23:51 | INFO     | __main__:main:52 - User data directory: /Users/wei/works/mycodes/HeTangAI
+2026-01-16 22:23:51 | INFO     | api:__init__:32 - API initialized
+2026-01-16 22:23:51 | INFO     | __main__:main:58 - Development mode: loading http://localhost:5173
+2026-01-16 22:23:52 | INFO     | api:new_project:84 - Creating new project
+2026-01-16 22:23:55 | INFO     | api:get_settings:725 - Loaded settings
+2026-01-16 22:23:55 | INFO     | api:get_settings:725 - Loaded settings
+2026-01-16 22:24:06 | INFO     | api:new_project:84 - Creating new project
+2026-01-16 22:24:16 | INFO     | api:import_excel:260 - Importing from: /Users/wei/Desktop/result.xlsx
+2026-01-16 22:24:16 | INFO     | services.excel_parser:parse:43 - Parsing file: /Users/wei/Desktop/result.xlsx
+2026-01-16 22:24:16 | INFO     | services.excel_parser:parse:81 - Parsed 451 shots, 3 characters
+2026-01-16 22:24:19 | INFO     | services.mock_generator:generate:24 - Mock generating 4 images for prompt: 全景，古风宫殿寝宫内，夜晚烛光昏黄。沈晚晚（25岁，柳眉凤眼肤若凝脂，女，淡紫色绣花宫装）[独坐窗前...
+2026-01-16 22:24:20 | INFO     | services.mock_generator:generate:37 - Generated 4 mock images
+2026-01-16 22:24:20 | INFO     | api:generate_images_for_shot:544 - Generated images for shot shot_4a33b117
+2026-01-16 22:24:26 | INFO     | api:scan_reference_audios:638 - Scanning audio files in: /Users/wei/Downloads/800+音色/逗哥音色整理合集
+2026-01-16 22:24:26 | INFO     | api:scan_reference_audios:638 - Scanning audio files in: /Users/wei/Downloads/800+音色/逗哥音色整理合集
+2026-01-16 22:24:26 | INFO     | api:scan_reference_audios:651 - Found 249 audio files
+2026-01-16 22:24:26 | INFO     | api:scan_reference_audios:651 - Found 249 audio files
+2026-01-16 22:24:37 | INFO     | api:update_character:352 - Updated character: char_eab71955
+2026-01-16 22:24:39 | INFO     | services.mock_generator:generate:54 - Mock generating character 3-view for: 沈晚晚: a boy...
+2026-01-16 22:24:40 | INFO     | services.mock_generator:generate:63 - Generated mock character 3-view image
+2026-01-16 22:24:40 | INFO     | api:generate_character_image:408 - Generated character image for char_eab71955
+2026-01-16 22:31:07 | INFO     | __main__:main:50 - Starting AI Lens Workshop, DEV=True
+2026-01-16 22:31:07 | INFO     | __main__:main:51 - Base directory: /Users/wei/works/mycodes/HeTangAI
+2026-01-16 22:31:07 | INFO     | __main__:main:52 - User data directory: /Users/wei/works/mycodes/HeTangAI
+2026-01-16 22:31:07 | INFO     | api:__init__:33 - API initialized
+2026-01-16 22:31:07 | INFO     | __main__:main:58 - Development mode: loading http://localhost:5173
+2026-01-16 22:31:10 | INFO     | api:new_project:85 - Creating new project
+2026-01-16 22:31:17 | INFO     | api:get_settings:862 - Loaded settings
+2026-01-16 22:31:17 | INFO     | api:get_settings:862 - Loaded settings
+2026-01-16 22:31:17 | INFO     | api:scan_reference_audios:775 - Scanning audio files in: /Users/wei/Downloads/800+音色/逗哥音色整理合集
+2026-01-16 22:31:17 | INFO     | api:scan_reference_audios:775 - Scanning audio files in: /Users/wei/Downloads/800+音色/逗哥音色整理合集
+2026-01-16 22:31:17 | INFO     | api:scan_reference_audios:788 - Found 249 audio files
+2026-01-16 22:31:17 | INFO     | api:scan_reference_audios:788 - Found 249 audio files
+2026-01-16 22:31:20 | INFO     | api:scan_reference_audios:775 - Scanning audio files in: /Users/wei/Downloads/800+音色/逗哥音色整理合集
+2026-01-16 22:31:20 | INFO     | api:scan_reference_audios:788 - Found 249 audio files
+2026-01-16 22:31:24 | INFO     | api:set_character_reference_audio:511 - Set reference audio for narrator: /Users/wei/Downloads/800+音色/逗哥音色整理合集/逗哥热门音色/音色-逗激石.wav
+2026-01-16 22:31:32 | INFO     | api:import_excel:261 - Importing from: /Users/wei/Desktop/result.xlsx
+2026-01-16 22:31:32 | INFO     | services.excel_parser:parse:43 - Parsing file: /Users/wei/Desktop/result.xlsx
+2026-01-16 22:31:32 | INFO     | services.excel_parser:parse:81 - Parsed 451 shots, 3 characters
+2026-01-16 22:31:39 | ERROR    | api:generate_images_for_shot:633 - Failed to generate images: No module named 'httpx'
+2026-01-16 22:31:56 | INFO     | __main__:main:50 - Starting AI Lens Workshop, DEV=True
+2026-01-16 22:31:56 | INFO     | __main__:main:51 - Base directory: /Users/wei/works/mycodes/HeTangAI
+2026-01-16 22:31:56 | INFO     | __main__:main:52 - User data directory: /Users/wei/works/mycodes/HeTangAI
+2026-01-16 22:31:56 | INFO     | api:__init__:33 - API initialized
+2026-01-16 22:31:56 | INFO     | __main__:main:58 - Development mode: loading http://localhost:5173
+2026-01-16 22:31:57 | INFO     | api:new_project:85 - Creating new project
+2026-01-16 22:32:03 | INFO     | api:import_excel:261 - Importing from: /Users/wei/Desktop/result.xlsx
+2026-01-16 22:32:04 | INFO     | services.excel_parser:parse:43 - Parsing file: /Users/wei/Desktop/result.xlsx
+2026-01-16 22:32:04 | INFO     | services.excel_parser:parse:81 - Parsed 451 shots, 3 characters
+2026-01-16 22:32:06 | ERROR    | api:generate_images_for_shot:633 - Failed to generate images: TTI API not configured in settings
+2026-01-16 22:32:38 | ERROR    | api:generate_images_for_shot:633 - Failed to generate images: TTI API not configured in settings
+2026-01-16 22:32:39 | ERROR    | api:generate_images_for_shot:633 - Failed to generate images: TTI API not configured in settings
+2026-01-16 22:42:56 | INFO     | __main__:main:50 - Starting AI Lens Workshop, DEV=True
+2026-01-16 22:42:56 | INFO     | __main__:main:51 - Base directory: /Users/wei/works/mycodes/HeTangAI
+2026-01-16 22:42:56 | INFO     | __main__:main:52 - User data directory: /Users/wei/works/mycodes/HeTangAI
+2026-01-16 22:42:56 | INFO     | api:__init__:33 - API initialized
+2026-01-16 22:42:56 | INFO     | __main__:main:58 - Development mode: loading http://localhost:5173
+2026-01-16 22:43:30 | INFO     | __main__:main:50 - Starting AI Lens Workshop, DEV=True
+2026-01-16 22:43:30 | INFO     | __main__:main:51 - Base directory: /Users/wei/works/mycodes/HeTangAI
+2026-01-16 22:43:30 | INFO     | __main__:main:52 - User data directory: /Users/wei/works/mycodes/HeTangAI
+2026-01-16 22:43:30 | INFO     | api:__init__:33 - API initialized
+2026-01-16 22:43:30 | INFO     | __main__:main:58 - Development mode: loading http://localhost:5173
+2026-01-16 22:51:51 | INFO     | __main__:main:50 - Starting AI Lens Workshop, DEV=True
+2026-01-16 22:51:51 | INFO     | __main__:main:51 - Base directory: /Users/wei/works/mycodes/HeTangAI
+2026-01-16 22:51:51 | INFO     | __main__:main:52 - User data directory: /Users/wei/works/mycodes/HeTangAI
+2026-01-16 22:51:51 | INFO     | api:__init__:34 - API initialized
+2026-01-16 22:51:51 | INFO     | __main__:main:58 - Development mode: loading http://localhost:5173
+2026-01-16 22:51:58 | INFO     | __main__:main:76 - Application closed
+2026-01-16 22:52:03 | INFO     | __main__:main:50 - Starting AI Lens Workshop, DEV=True
+2026-01-16 22:52:03 | INFO     | __main__:main:51 - Base directory: /Users/wei/works/mycodes/HeTangAI
+2026-01-16 22:52:03 | INFO     | __main__:main:52 - User data directory: /Users/wei/works/mycodes/HeTangAI
+2026-01-16 22:52:03 | INFO     | api:__init__:34 - API initialized
+2026-01-16 22:52:03 | INFO     | __main__:main:58 - Development mode: loading http://localhost:5173
+2026-01-16 22:59:36 | INFO     | __main__:main:50 - Starting AI Lens Workshop, DEV=True
+2026-01-16 22:59:36 | INFO     | __main__:main:51 - Base directory: /Users/wei/works/mycodes/HeTangAI
+2026-01-16 22:59:36 | INFO     | __main__:main:52 - User data directory: /Users/wei/works/mycodes/HeTangAI
+2026-01-16 22:59:36 | INFO     | api:__init__:34 - API initialized
+2026-01-16 22:59:36 | INFO     | __main__:main:58 - Development mode: loading http://localhost:5173
+2026-01-16 22:59:37 | INFO     | api:new_project:102 - Creating new project
+2026-01-16 22:59:44 | INFO     | api:import_excel:278 - Importing from: /Users/wei/Desktop/result.xlsx
+2026-01-16 22:59:44 | INFO     | services.excel_parser:parse:43 - Parsing file: /Users/wei/Desktop/result.xlsx
+2026-01-16 22:59:44 | INFO     | services.excel_parser:parse:81 - Parsed 451 shots, 3 characters
+2026-01-16 22:59:46 | ERROR    | api:generate_images_for_shot:650 - Failed to generate images: TTI API not configured in settings
+2026-01-16 22:59:50 | INFO     | api:get_settings:879 - Loaded settings
+2026-01-16 22:59:50 | INFO     | api:get_settings:879 - Loaded settings
+2026-01-16 23:00:50 | INFO     | api:save_settings:899 - Saved settings
+2026-01-16 23:00:56 | INFO     | services.generator:generate_image:60 - Generating 4 images with model: veo_3_1_t2v_fast_landscape
+2026-01-16 23:00:56 | ERROR    | services.generator:generate_image:113 - Failed to generate image: Client error '401 Unauthorized' for url 'http://localhost:8000/v1/chat/completions'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/401
+2026-01-16 23:00:56 | ERROR    | api:generate_images_for_shot:650 - Failed to generate images: Client error '401 Unauthorized' for url 'http://localhost:8000/v1/chat/completions'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/401
+2026-01-16 23:02:17 | INFO     | api:get_settings:879 - Loaded settings
+2026-01-16 23:02:17 | INFO     | api:get_settings:879 - Loaded settings
+2026-01-16 23:02:22 | INFO     | api:save_settings:899 - Saved settings
+2026-01-16 23:02:25 | INFO     | services.generator:generate_image:60 - Generating 4 images with model: veo_3_1_t2v_fast_landscape
+2026-01-16 23:02:34 | INFO     | services.generator:generate_image:60 - Generating 4 images with model: veo_3_1_t2v_fast_landscape
+2026-01-16 23:02:35 | INFO     | services.generator:generate_image:60 - Generating 4 images with model: veo_3_1_t2v_fast_landscape
+2026-01-16 23:03:01 | INFO     | services.generator:generate_image:109 - Generated 0 images
+2026-01-16 23:03:01 | ERROR    | api:generate_images_for_shot:650 - Failed to generate images: No images generated
+2026-01-16 23:03:01 | INFO     | services.generator:generate_image:109 - Generated 0 images
+2026-01-16 23:03:01 | ERROR    | api:generate_images_for_shot:650 - Failed to generate images: No images generated
+2026-01-16 23:03:02 | INFO     | services.generator:generate_image:109 - Generated 0 images
+2026-01-16 23:03:02 | ERROR    | api:generate_images_for_shot:650 - Failed to generate images: No images generated
+2026-01-16 23:05:52 | INFO     | api:get_settings:879 - Loaded settings
+2026-01-16 23:05:52 | INFO     | api:get_settings:879 - Loaded settings
+2026-01-16 23:06:24 | INFO     | services.generator:generate_image:60 - Generating 4 images with model: veo_3_1_t2v_fast_landscape
+2026-01-16 23:06:24 | INFO     | services.generator:generate_image:109 - Generated 0 images
+2026-01-16 23:06:24 | ERROR    | api:generate_images_for_shot:650 - Failed to generate images: No images generated
+2026-01-16 23:06:30 | INFO     | services.generator:generate_image:60 - Generating 4 images with model: veo_3_1_t2v_fast_landscape
+2026-01-16 23:06:30 | INFO     | services.generator:generate_image:109 - Generated 0 images
+2026-01-16 23:06:30 | ERROR    | api:generate_images_for_shot:650 - Failed to generate images: No images generated
+2026-01-16 23:06:37 | INFO     | services.generator:generate_image:60 - Generating 4 images with model: veo_3_1_t2v_fast_landscape
+2026-01-16 23:06:37 | INFO     | services.generator:generate_image:109 - Generated 0 images
+2026-01-16 23:06:37 | ERROR    | api:generate_images_for_shot:650 - Failed to generate images: No images generated
+2026-01-16 23:06:42 | INFO     | services.generator:generate_image:60 - Generating 4 images with model: veo_3_1_t2v_fast_landscape
+2026-01-16 23:06:42 | INFO     | services.generator:generate_image:109 - Generated 0 images
+2026-01-16 23:06:42 | ERROR    | api:generate_images_for_shot:650 - Failed to generate images: No images generated
+2026-01-16 23:06:52 | INFO     | api:get_settings:879 - Loaded settings
+2026-01-16 23:06:52 | INFO     | api:get_settings:879 - Loaded settings
+2026-01-16 23:07:05 | INFO     | services.generator:generate_image:60 - Generating 4 images with model: veo_3_1_t2v_fast_landscape
+2026-01-16 23:07:05 | INFO     | services.generator:generate_image:109 - Generated 0 images
+2026-01-16 23:07:05 | ERROR    | api:generate_images_for_shot:650 - Failed to generate images: No images generated
+2026-01-16 23:08:52 | INFO     | __main__:main:50 - Starting AI Lens Workshop, DEV=True
+2026-01-16 23:08:52 | INFO     | __main__:main:51 - Base directory: /Users/wei/works/mycodes/HeTangAI
+2026-01-16 23:08:52 | INFO     | __main__:main:52 - User data directory: /Users/wei/works/mycodes/HeTangAI
+2026-01-16 23:08:52 | INFO     | api:__init__:34 - API initialized
+2026-01-16 23:08:52 | INFO     | __main__:main:58 - Development mode: loading http://localhost:5173
+2026-01-16 23:08:53 | INFO     | api:new_project:102 - Creating new project
+2026-01-16 23:09:06 | INFO     | api:import_excel:278 - Importing from: /Users/wei/Desktop/result.xlsx
+2026-01-16 23:09:06 | INFO     | services.excel_parser:parse:43 - Parsing file: /Users/wei/Desktop/result.xlsx
+2026-01-16 23:09:06 | INFO     | services.excel_parser:parse:81 - Parsed 451 shots, 3 characters
+2026-01-16 23:09:08 | INFO     | services.generator:generate_image:60 - Generating 4 images with model: veo_3_1_t2v_fast_landscape
+2026-01-16 23:09:09 | INFO     | services.generator:generate_image:109 - Generated 0 images
+2026-01-16 23:09:09 | ERROR    | api:generate_images_for_shot:650 - Failed to generate images: No images generated
+2026-01-16 23:09:25 | INFO     | services.generator:generate_image:60 - Generating 4 images with model: veo_3_1_t2v_fast_landscape
+2026-01-16 23:09:25 | INFO     | services.generator:generate_image:109 - Generated 0 images
+2026-01-16 23:09:25 | ERROR    | api:generate_images_for_shot:650 - Failed to generate images: No images generated
+2026-01-16 23:09:42 | INFO     | services.generator:generate_image:60 - Generating 4 images with model: veo_3_1_t2v_fast_landscape
+2026-01-16 23:11:05 | INFO     | services.generator:generate_image:109 - Generated 0 images
+2026-01-16 23:11:05 | ERROR    | api:generate_images_for_shot:650 - Failed to generate images: No images generated
+2026-01-16 23:11:13 | INFO     | services.generator:generate_image:60 - Generating 4 images with model: veo_3_1_t2v_fast_landscape
+2026-01-16 23:11:24 | INFO     | services.generator:generate_image:60 - Generating 4 images with model: veo_3_1_t2v_fast_landscape
+2026-01-16 23:11:38 | INFO     | services.generator:generate_image:109 - Generated 0 images
+2026-01-16 23:11:38 | ERROR    | api:generate_images_for_shot:650 - Failed to generate images: No images generated
+2026-01-16 23:11:43 | INFO     | services.generator:generate_image:109 - Generated 0 images
+2026-01-16 23:11:43 | ERROR    | api:generate_images_for_shot:650 - Failed to generate images: No images generated
+2026-01-16 23:12:38 | INFO     | services.generator:generate_image:60 - Generating 4 images with model: veo_3_1_t2v_fast_landscape
+2026-01-16 23:12:54 | INFO     | services.generator:generate_image:109 - Generated 0 images
+2026-01-16 23:12:54 | ERROR    | api:generate_images_for_shot:650 - Failed to generate images: No images generated
+2026-01-16 23:19:55 | INFO     | __main__:main:50 - Starting AI Lens Workshop, DEV=True
+2026-01-16 23:19:55 | INFO     | __main__:main:51 - Base directory: /Users/wei/works/mycodes/HeTangAI
+2026-01-16 23:19:55 | INFO     | __main__:main:52 - User data directory: /Users/wei/works/mycodes/HeTangAI
+2026-01-16 23:19:55 | INFO     | api:__init__:34 - API initialized
+2026-01-16 23:19:55 | INFO     | __main__:main:58 - Development mode: loading http://localhost:5173
+2026-01-16 23:19:57 | INFO     | api:new_project:102 - Creating new project
+2026-01-16 23:20:03 | INFO     | api:import_excel:278 - Importing from: /Users/wei/Desktop/result.xlsx
+2026-01-16 23:20:03 | INFO     | services.excel_parser:parse:43 - Parsing file: /Users/wei/Desktop/result.xlsx
+2026-01-16 23:20:03 | INFO     | services.excel_parser:parse:81 - Parsed 451 shots, 3 characters
+2026-01-16 23:20:06 | INFO     | services.generator:generate_image:60 - Generating 4 images with model: veo_3_1_t2v_fast_landscape
+2026-01-16 23:20:16 | INFO     | services.generator:generate_image:60 - Generating 4 images with model: veo_3_1_t2v_fast_landscape
+2026-01-16 23:20:17 | INFO     | services.generator:generate_image:60 - Generating 4 images with model: veo_3_1_t2v_fast_landscape
+2026-01-16 23:20:18 | INFO     | services.generator:generate_image:109 - Generated 0 images
+2026-01-16 23:20:18 | ERROR    | api:generate_images_for_shot:650 - Failed to generate images: No images generated
+2026-01-16 23:20:39 | INFO     | services.generator:generate_image:109 - Generated 0 images
+2026-01-16 23:20:39 | ERROR    | api:generate_images_for_shot:650 - Failed to generate images: No images generated
+2026-01-16 23:20:40 | INFO     | services.generator:generate_image:109 - Generated 0 images
+2026-01-16 23:20:40 | ERROR    | api:generate_images_for_shot:650 - Failed to generate images: No images generated
+2026-01-16 23:20:51 | INFO     | services.generator:generate_image:60 - Generating 4 images with model: veo_3_1_t2v_fast_landscape
+2026-01-16 23:21:14 | INFO     | services.generator:generate_image:109 - Generated 0 images
+2026-01-16 23:21:14 | ERROR    | api:generate_images_for_shot:650 - Failed to generate images: No images generated
+2026-01-16 23:21:47 | INFO     | __main__:main:50 - Starting AI Lens Workshop, DEV=True
+2026-01-16 23:21:47 | INFO     | __main__:main:51 - Base directory: /Users/wei/works/mycodes/HeTangAI
+2026-01-16 23:21:47 | INFO     | __main__:main:52 - User data directory: /Users/wei/works/mycodes/HeTangAI
+2026-01-16 23:21:47 | INFO     | api:__init__:34 - API initialized
+2026-01-16 23:21:47 | INFO     | __main__:main:58 - Development mode: loading http://localhost:5173
+2026-01-16 23:21:48 | INFO     | api:new_project:102 - Creating new project
+2026-01-16 23:22:15 | INFO     | api:import_excel:278 - Importing from: /Users/wei/Desktop/result.xlsx
+2026-01-16 23:22:15 | INFO     | services.excel_parser:parse:43 - Parsing file: /Users/wei/Desktop/result.xlsx
+2026-01-16 23:22:15 | INFO     | services.excel_parser:parse:81 - Parsed 451 shots, 3 characters
+2026-01-16 23:22:19 | INFO     | services.generator:generate_image:60 - Generating 4 images with model: veo_3_1_t2v_fast_landscape
+2026-01-16 23:23:17 | INFO     | api:get_settings:879 - Loaded settings
+2026-01-16 23:23:17 | INFO     | api:get_settings:879 - Loaded settings
+2026-01-16 23:23:26 | INFO     | api:save_settings:899 - Saved settings
+2026-01-16 23:23:32 | INFO     | services.generator:generate_image:60 - Generating 4 images with model: gemini-2.5-flash-image-landscape
+2026-01-16 23:23:39 | INFO     | services.generator:generate_image:60 - Generating 4 images with model: gemini-2.5-flash-image-landscape
+2026-01-16 23:23:45 | INFO     | services.generator:generate_image:109 - Generated 0 images
+2026-01-16 23:23:45 | ERROR    | api:generate_images_for_shot:650 - Failed to generate images: No images generated
+2026-01-16 23:24:21 | INFO     | services.generator:generate_image:109 - Generated 1 images
+2026-01-16 23:24:21 | INFO     | services.generator:save_base64_image:229 - Saved image to: /Users/wei/works/mycodes/HeTangAI/output/shots/shot_shot_22896b69_0.jpg
+2026-01-16 23:24:21 | INFO     | api:generate_images_for_shot:644 - Generated 1 images for shot shot_22896b69
+2026-01-16 23:24:26 | INFO     | services.generator:generate_image:109 - Generated 1 images
+2026-01-16 23:24:26 | INFO     | services.generator:save_base64_image:229 - Saved image to: /Users/wei/works/mycodes/HeTangAI/output/shots/shot_shot_aea6eaa1_0.jpg
+2026-01-16 23:24:26 | INFO     | api:generate_images_for_shot:644 - Generated 1 images for shot shot_aea6eaa1
+2026-01-16 23:46:18 | INFO     | __main__:main:50 - Starting AI Lens Workshop, DEV=True
+2026-01-16 23:46:18 | INFO     | __main__:main:51 - Base directory: /Users/wei/works/mycodes/HeTangAI
+2026-01-16 23:46:18 | INFO     | __main__:main:52 - User data directory: /Users/wei/works/mycodes/HeTangAI
+2026-01-16 23:46:18 | INFO     | api:__init__:34 - API initialized
+2026-01-16 23:46:18 | INFO     | __main__:main:58 - Development mode: loading http://localhost:5173
+2026-01-16 23:46:18 | INFO     | api:new_project:102 - Creating new project
+2026-01-16 23:46:25 | INFO     | api:import_excel:278 - Importing from: /Users/wei/Desktop/result.xlsx
+2026-01-16 23:46:25 | INFO     | services.excel_parser:parse:43 - Parsing file: /Users/wei/Desktop/result.xlsx
+2026-01-16 23:46:25 | INFO     | services.excel_parser:parse:81 - Parsed 451 shots, 3 characters
+2026-01-16 23:46:28 | INFO     | services.generator:generate_image:88 - Generating 4 images with model: gemini-2.5-flash-image-landscape
+2026-01-16 23:47:05 | INFO     | services.generator:generate_image:143 - Generated 1 image URLs
+2026-01-16 23:47:07 | INFO     | services.generator:download_file:305 - Downloaded file to: /Users/wei/works/mycodes/HeTangAI/output/shots/shot_shot_a9ab9858_0.jpg
+2026-01-16 23:47:07 | INFO     | api:generate_images_for_shot:644 - Generated 1 images for shot shot_a9ab9858
+2026-01-16 23:49:42 | INFO     | __main__:main:50 - Starting AI Lens Workshop, DEV=True
+2026-01-16 23:49:42 | INFO     | __main__:main:51 - Base directory: /Users/wei/works/mycodes/HeTangAI
+2026-01-16 23:49:42 | INFO     | __main__:main:52 - User data directory: /Users/wei/works/mycodes/HeTangAI
+2026-01-16 23:49:42 | INFO     | api:__init__:34 - API initialized
+2026-01-16 23:49:42 | INFO     | __main__:main:58 - Development mode: loading http://localhost:5173
+2026-01-16 23:49:43 | INFO     | api:new_project:102 - Creating new project
+2026-01-16 23:49:48 | INFO     | api:import_excel:278 - Importing from: /Users/wei/Desktop/result.xlsx
+2026-01-16 23:49:48 | INFO     | services.excel_parser:parse:43 - Parsing file: /Users/wei/Desktop/result.xlsx
+2026-01-16 23:49:48 | INFO     | services.excel_parser:parse:81 - Parsed 451 shots, 3 characters
+2026-01-16 23:49:52 | INFO     | services.generator:generate_image:88 - Generating 4 images with model: gemini-2.5-flash-image-landscape
+2026-01-16 23:50:31 | INFO     | services.generator:generate_image:143 - Generated 1 image URLs
+2026-01-16 23:50:33 | INFO     | services.generator:download_file:305 - Downloaded file to: /Users/wei/works/mycodes/HeTangAI/output/shots/shot_shot_e45af4e2_0.jpg
+2026-01-16 23:50:33 | INFO     | api:generate_images_for_shot:644 - Generated 1 images for shot shot_e45af4e2

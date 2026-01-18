@@ -90,34 +90,28 @@ class ExcelParser:
         normalized = []
         for col in columns:
             col_lower = str(col).lower().strip()
-            # Try to match Chinese column names
-            if col_lower in CHINESE_COLUMNS:
-                idx = CHINESE_COLUMNS.index(col_lower)
-                normalized.append(EXPECTED_COLUMNS[idx])
-            elif col_lower in EXPECTED_COLUMNS:
+
+            # Try common variations and Chinese names
+            mapping = {
+                "sequence": ["序号", "sequence", "xuhao", "id", "no", "num"],
+                "voiceActor": ["配音角色", "voiceactor", "peiyin_juese", "voice", "peiyinjuese", "peiyin", "配音"],
+                "characters": ["出场角色", "characters", "chuchang_juese", "juese", "chuchangjuese", "chuchang", "角色"],
+                "emotion": ["情感", "emotion", "qinggan", "mood"],
+                "intensity": ["强度", "intensity", "qiangdu", "level"],
+                "script": ["文案", "script", "wenan", "text", "content"],
+                "imagePrompt": ["图片提示词", "imageprompt", "tupian_tishici", "image", "tupiantishici", "image_prompt", "图片"],
+                "videoPrompt": ["视频提示词", "videoprompt", "shipin_tishici", "video", "shipintishici", "video_prompt", "视频"],
+            }
+
+            found = False
+            for key, variants in mapping.items():
+                if col_lower in [v.lower() for v in variants] or col in variants:
+                    normalized.append(key)
+                    found = True
+                    break
+
+            if not found:
                 normalized.append(col_lower)
-            else:
-                # Try common variations
-                mapping = {
-                    "sequence": ["sequence", "xuhao", "id", "no", "num"],
-                    "voiceActor": ["voiceactor", "peiyin_juese", "voice", "peiyinjuese", "peiyin"],
-                    "characters": ["characters", "chuchang_juese", "juese", "chuchanmgjuese", "chuchang"],
-                    "emotion": ["emotion", "qinggan", "mood"],
-                    "intensity": ["intensity", "qiangdu", "level"],
-                    "script": ["script", "wenan", "text", "content"],
-                    "imagePrompt": ["imageprompt", "tupian_tishici", "image", "tupiantishici", "image_prompt"],
-                    "videoPrompt": ["videoprompt", "shipin_tishici", "video", "shipintishici", "video_prompt"],
-                }
-
-                found = False
-                for key, variants in mapping.items():
-                    if col_lower in variants:
-                        normalized.append(key)
-                        found = True
-                        break
-
-                if not found:
-                    normalized.append(col_lower)
 
         return normalized
 
@@ -141,6 +135,7 @@ class ExcelParser:
             "images": [],
             "selectedImageIndex": 0,
             "videoUrl": "",
+            "audioUrl": "",
             "status": "pending",
         }
 
@@ -158,15 +153,15 @@ class ExcelParser:
         """Export an empty Excel template"""
         wb = Workbook()
         ws = wb.active
-        ws.title = "Shots"
+        ws.title = "镜头列表"
 
-        # Headers
-        headers = ["sequence", "voiceActor", "characters", "emotion", "intensity", "script", "imagePrompt", "videoPrompt"]
+        # Headers (Chinese)
+        headers = ["序号", "配音角色", "出场角色", "情感", "强度", "文案", "图片提示词", "视频提示词"]
         for col, header in enumerate(headers, 1):
             ws.cell(row=1, column=col, value=header)
 
         # Example row
-        example = [1, "Narrator", "Character A, Character B", "Happy", "Medium", "This is the script content.", "A happy scene with two characters", "Camera zooms in slowly"]
+        example = [1, "旁白", "角色A, 角色B", "开心", "中等", "这是文案内容。", "两个角色开心的场景", "镜头缓慢推进"]
         for col, value in enumerate(example, 1):
             ws.cell(row=2, column=col, value=value)
 

@@ -9,6 +9,7 @@ import webview
 from loguru import logger
 
 from api import Api
+from services.file_server import LocalFileServer
 
 # Environment
 DEV = os.environ.get("DEV") == "1"
@@ -51,6 +52,10 @@ def main():
     logger.info(f"Base directory: {BASE_DIR}")
     logger.info(f"User data directory: {USER_DATA_DIR}")
 
+    # Start local file server
+    file_server = LocalFileServer(port=8765, base_dir=str(BASE_DIR))
+    file_server.start()
+
     api = Api(user_data_dir=USER_DATA_DIR, output_dir=OUTPUT_DIR)
 
     if DEV:
@@ -73,6 +78,9 @@ def main():
     api.set_window(window)
 
     webview.start(debug=DEV)
+
+    # Cleanup
+    file_server.stop()
     logger.info("Application closed")
 
 
