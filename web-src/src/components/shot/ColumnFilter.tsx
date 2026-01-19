@@ -151,7 +151,7 @@ export function useColumnFilter({ shots, characters }: UseColumnFilterProps) {
     }
 
     return filtered;
-  }, [shots, filters, getImageStatus, getVideoStatus]);
+  }, [shots, filters]);
 
   // 更新筛选条件
   const updateFilter = <K extends keyof FilterState>(key: K, value: FilterState[K]) => {

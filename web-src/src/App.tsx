@@ -430,11 +430,14 @@ function App() {
     if (!api || !project) return;
 
     // Update status locally first
-    setProject({
-      ...project,
-      shots: project.shots.map((s) =>
-        s.id === shotId ? { ...s, status: 'generating_images' as const } : s
-      ),
+    setProject((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        shots: prev.shots.map((s) =>
+          s.id === shotId ? { ...s, status: 'generating_images' as const } : s
+        ),
+      };
     });
 
     const result = await api.generate_images_for_shot(shotId);
@@ -462,11 +465,14 @@ function App() {
     if (!api || !project) return;
 
     // Update status locally first
-    setProject({
-      ...project,
-      shots: project.shots.map((s) =>
-        s.id === shotId ? { ...s, status: 'generating_video' as const } : s
-      ),
+    setProject((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        shots: prev.shots.map((s) =>
+          s.id === shotId ? { ...s, status: 'generating_video' as const } : s
+        ),
+      };
     });
 
     const result = await api.generate_video_for_shot(shotId);
@@ -494,11 +500,14 @@ function App() {
     if (!api || !project) return;
 
     // Update status locally first
-    setProject({
-      ...project,
-      shots: project.shots.map((s) =>
-        s.id === shotId ? { ...s, status: 'generating_audio' as const } : s
-      ),
+    setProject((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        shots: prev.shots.map((s) =>
+          s.id === shotId ? { ...s, status: 'generating_audio' as const } : s
+        ),
+      };
     });
 
     const result = await api.generate_audio_for_shot(shotId);

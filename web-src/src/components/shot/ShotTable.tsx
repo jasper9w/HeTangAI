@@ -66,6 +66,11 @@ export function ShotTable({
     overscan: 5, // 预渲染5个额外的行
   });
 
+  // 当 filteredShots 数据变化时，触发虚拟列表重新测量
+  useEffect(() => {
+    rowVirtualizer.measure();
+  }, [filteredShots, rowVirtualizer]);
+
   // 通知父组件筛选结果变化
   useEffect(() => {
     onFilterChange(filteredShots);
@@ -389,7 +394,7 @@ export function ShotTable({
 
               return (
                 <div
-                  key={virtualRow.key}
+                  key={shot.id}
                   data-index={virtualRow.index}
                   ref={rowVirtualizer.measureElement}
                   style={{

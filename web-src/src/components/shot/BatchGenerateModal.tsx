@@ -76,10 +76,10 @@ export function BatchGenerateModal({
 
   const targetShots = getTargetShots();
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     if (targetShots.length === 0) return;
-    onConfirm(targetShots.map(s => s.id), forceRegenerate);
-    onClose();
+    onClose(); // 先关闭modal，让用户看到列表
+    await onConfirm(targetShots.map(s => s.id), forceRegenerate);
   };
 
   return (
