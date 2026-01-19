@@ -877,14 +877,21 @@ class Api:
                     shot_characters = shot.get("characters", [])
                     reference_images = []
                     character_references = []  # Store character name and image data pairs
+                    missing_characters = []  # Track characters without reference images
 
                     if shot_characters:
                         logger.info(f"Shot involves characters: {shot_characters}")
 
                         # Find characters with images
                         for char_name in shot_characters:
+                            char_found = False
                             for char in self.project_data["characters"]:
-                                if char["name"] == char_name and char.get("imageUrl"):
+                                if char["name"] == char_name:
+                                    char_found = True
+                                    if not char.get("imageUrl"):
+                                        missing_characters.append(char_name)
+                                        break
+
                                     # Get local path from imageUrl
                                     image_url = char["imageUrl"]
                                     # Remove cache-busting timestamp
@@ -905,8 +912,16 @@ class Api:
                                             character_references.append(char_name)
                                             logger.info(f"Added character reference: {char_name} -> {local_path}")
                                         else:
-                                            logger.warning(f"Character image not found: {local_path}")
+                                            missing_characters.append(char_name)
+                                            logger.warning(f"Character image file not found: {local_path}")
                                     break
+
+                            if not char_found:
+                                missing_characters.append(char_name)
+
+                        # Check if any character is missing reference image
+                        if missing_characters:
+                            raise ValueError(f"Missing reference images for characters: {', '.join(missing_characters)}")
 
                     # Create client
                     client = GenerationClient(
