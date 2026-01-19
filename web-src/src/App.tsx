@@ -4,7 +4,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   Save,
-  FolderOpen,
   Film,
   Plus,
   Loader2,
@@ -13,7 +12,7 @@ import {
   Download,
   Image,
   Video,
-  Volume2,
+  Mic,
   Sparkles,
 } from 'lucide-react';
 import { useApi } from './hooks/useApi';
@@ -73,19 +72,7 @@ function App() {
 
   // ========== Project Operations ==========
 
-  const handleNewProject = async (projectName?: string) => {
-    if (!api) return;
-    const result = await api.new_project();
-    if (result.success && result.data) {
-      setProject(result.data);
-      setProjectPath(null);
-      setProjectName(projectName || null);
-      setIsDirty(false);
-      setSelectedShotIds([]);
-      setCurrentPage('shots');
-    }
-  };
-
+  
   const handleNewProjectWithName = async (projectName: string) => {
     if (!api) return;
 
@@ -100,7 +87,7 @@ function App() {
       if (saveResult.success) {
         setProject(result.data);
         setProjectPath(saveResult.path || null);
-        setProjectName(projectName);
+        setProjectName(saveResult.name || result.data.name || projectName);
         setIsDirty(false);
         setSelectedShotIds([]);
         setCurrentPage('shots');
@@ -121,18 +108,8 @@ function App() {
     }
   };
 
-  const handleOpenProject = async () => {
-    if (!api) return;
-    const result = await api.open_project();
-    if (result.success && result.data) {
-      setProject(result.data);
-      setProjectPath(result.path || null);
-      setIsDirty(false);
-      setSelectedShotIds([]);
-    }
-  };
-
-  const handleSaveProject = async () => {
+  
+  const handleSaveProject = useCallback(async () => {
     if (!api || !project) return;
     const result = await api.save_project();
     if (result.success) {
@@ -143,7 +120,35 @@ function App() {
     } else {
       showToast('error', `保存失败: ${result.error || '未知错误'}`);
     }
-  };
+  }, [api, project, projectPath, projectName, showToast]);
+
+  // Auto-save every 60 seconds
+  useEffect(() => {
+    if (!api || !project || !isDirty) return;
+
+    const autoSaveInterval = setInterval(() => {
+      if (isDirty) {
+        handleSaveProject();
+      }
+    }, 60000); // 60 seconds
+
+    return () => clearInterval(autoSaveInterval);
+  }, [api, project, isDirty, handleSaveProject]);
+
+  // Keyboard shortcut: Cmd+S / Ctrl+S
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+        e.preventDefault();
+        if (api && project) {
+          handleSaveProject();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [api, project, handleSaveProject]);
 
   // ========== Import/Export ==========
 
@@ -165,11 +170,6 @@ function App() {
   const handleExportTemplate = async () => {
     if (!api) return;
     await api.export_template();
-  };
-
-  const handleOpenOutputDir = async () => {
-    if (!api) return;
-    await api.open_output_dir();
   };
 
   // ========== Character Operations ==========
@@ -270,21 +270,7 @@ function App() {
     setIsGeneratingCharacters(false);
   };
 
-  const handleUploadCharacterImage = async (id: string) => {
-    if (!api || !project) return;
-
-    const result = await api.upload_character_image(id);
-    if (result.success && result.character) {
-      setProject({
-        ...project,
-        characters: project.characters.map((c) =>
-          c.id === id ? result.character! : c
-        ),
-      });
-      setIsDirty(true);
-    }
-  };
-
+  
   const handleSetCharacterReferenceAudio = async (id: string, audioPath: string) => {
     if (!api || !project) return;
 
@@ -546,7 +532,23 @@ function App() {
     setBatchModalOpen(true);
   };
 
-  const handleBatchGenerate = async (shotIds: string[], forceRegenerate: boolean) => {
+  const handleExportJianyingDraft = async () => {
+    if (!api) return;
+
+    try {
+      const result = await api.export_jianying_draft();
+      if (result.success) {
+        alert(`导出成功！\n草稿位置: ${result.path}`);
+      } else {
+        alert(`导出失败: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Failed to export JianYing draft:', error);
+      alert('导出失败');
+    }
+  };
+
+  const handleBatchGenerate = async (shotIds: string[], _forceRegenerate: boolean) => {
     if (!api || shotIds.length === 0) return;
 
     setIsGenerating(true);
@@ -597,6 +599,23 @@ function App() {
               模板
             </button>
             <div className="w-px h-6 bg-slate-700 mx-2" />
+                        <button
+              onClick={handleBatchGenerateAudios}
+              disabled={isGenerating || !hasSelection}
+              className="flex items-center gap-2 px-3 py-2 bg-orange-600 hover:bg-orange-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm text-white transition-colors"
+            >
+              {isGenerating && generationProgress?.type === 'audio' ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  {generationProgress.current}/{generationProgress.total}
+                </>
+              ) : (
+                <>
+                  <Mic className="w-4 h-4" />
+                  批量配音 ({selectedShots.length})
+                </>
+              )}
+            </button>
             <button
               onClick={handleBatchGenerateImages}
               disabled={isGenerating || !hasSelection}
@@ -631,22 +650,14 @@ function App() {
                 </>
               )}
             </button>
+            <div className="w-px h-6 bg-slate-700 mx-2" />
             <button
-              onClick={handleBatchGenerateAudios}
-              disabled={isGenerating || !hasSelection}
-              className="flex items-center gap-2 px-3 py-2 bg-orange-600 hover:bg-orange-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm text-white transition-colors"
+              onClick={handleExportJianyingDraft}
+              disabled={!project}
+              className="flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm text-white transition-colors"
             >
-              {isGenerating && generationProgress?.type === 'audio' ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  {generationProgress.current}/{generationProgress.total}
-                </>
-              ) : (
-                <>
-                  <Volume2 className="w-4 h-4" />
-                  批量配音 ({selectedShots.length})
-                </>
-              )}
+              <Film className="w-4 h-4" />
+              导出剪映草稿
             </button>
           </div>
         );
@@ -741,7 +752,6 @@ function App() {
             onUpdateCharacterSpeed={handleUpdateCharacterSpeed}
             onDeleteCharacter={handleDeleteCharacter}
             onGenerateImage={handleGenerateCharacterImage}
-            onUploadImage={handleUploadCharacterImage}
             onSetReferenceAudio={handleSetCharacterReferenceAudio}
             addModalOpen={addCharacterModalOpen}
             onAddModalOpenChange={setAddCharacterModalOpen}
@@ -755,7 +765,7 @@ function App() {
           />
         );
       case 'settings':
-        return <SettingsPage onOpenOutputDir={handleOpenOutputDir} />;
+        return <SettingsPage />;
       default:
         return null;
     }

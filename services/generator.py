@@ -360,20 +360,133 @@ class GenerationClient:
             raise
 
     async def generate_audio(
-        self, text: str, reference_audio: Optional[str] = None, speed: float = 1.0
+        self,
+        text: str,
+        reference_audio: Optional[str] = None,
+        speed: float = 1.0,
+        emotion: str = "",
+        intensity: str = "",
     ) -> bytes:
         """
-        Generate audio using TTS API
+        Generate audio using TTS API with emotion control
         Returns audio bytes
 
         Args:
             text: Text to convert to speech
             reference_audio: Optional reference audio file path
             speed: Speech speed multiplier (default 1.0)
+            emotion: Emotion type (e.g., "happy", "sad", "angry")
+            intensity: Emotion intensity (e.g., "weak", "medium", "strong")
         """
-        # TODO: Implement TTS API call based on actual API spec
-        logger.info(f"Generating audio with speed: {speed}x")
-        raise NotImplementedError("TTS API not yet implemented")
+        if not reference_audio:
+            raise ValueError("Reference audio is required for TTS generation")
+
+        logger.info(f"Generating audio with speed: {speed}x, emotion: {emotion}, intensity: {intensity}")
+
+        # Read and encode reference audio
+        try:
+            with open(reference_audio, "rb") as f:
+                spk_audio_base64 = base64.b64encode(f.read()).decode("utf-8")
+        except Exception as e:
+            logger.error(f"Failed to read reference audio: {e}")
+            raise ValueError(f"Failed to read reference audio: {e}")
+
+        # Build emotion vector based on emotion and intensity
+        emo_vec = self._build_emotion_vector(emotion, intensity)
+
+        # Build request payload
+        payload = {
+            "text": text,
+            "spk_audio_base64": spk_audio_base64,
+            "emo_control_method": 2,  # Use emotion vector
+            "emo_weight": 1.0,
+            "emo_random": False,
+            "emo_vec": emo_vec,
+        }
+
+        headers = {
+            "Content-Type": "application/json",
+        }
+
+        logger.info(f"Calling TTS API: {self.api_url}")
+        logger.info(f"Emotion vector: {emo_vec}")
+
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.post(
+                    self.api_url, headers=headers, json=payload
+                )
+                response.raise_for_status()
+
+                audio_bytes = response.content
+                logger.info(f"Generated audio: {len(audio_bytes)} bytes")
+                return audio_bytes
+
+        except Exception as e:
+            logger.error(f"Failed to generate audio: {e}")
+            raise
+
+    def _build_emotion_vector(self, emotion: str, intensity: str) -> list:
+        """
+        Build 8-dimensional emotion vector based on emotion type and intensity
+
+        Emotion dimensions: [happy, sad, angry, surprised, fearful, disgusted, calm, other]
+        Intensity levels: weak=0.2, medium=0.3, strong=0.5
+
+        Args:
+            emotion: Emotion type
+            intensity: Emotion intensity
+
+        Returns:
+            8-dimensional emotion vector
+        """
+        # Map emotion names to vector indices
+        emotion_map = {
+            "开心": 0,
+            "快乐": 0,
+            "高兴": 0,
+            "悲伤": 1,
+            "难过": 1,
+            "伤心": 1,
+            "愤怒": 2,
+            "生气": 2,
+            "惊讶": 3,
+            "吃惊": 3,
+            "恐惧": 4,
+            "害怕": 4,
+            "厌恶": 5,
+            "平静": 6,
+            "冷静": 6,
+        }
+
+        # Map intensity to values
+        intensity_map = {
+            "轻微": 0.2,
+            "弱": 0.2,
+            "中等": 0.3,
+            "中": 0.3,
+            "强烈": 0.5,
+            "强": 0.5,
+        }
+
+        # Initialize zero vector
+        emo_vec = [0.0] * 8
+
+        # If no emotion specified, return neutral vector
+        if not emotion:
+            return emo_vec
+
+        # Get emotion index
+        emotion_idx = emotion_map.get(emotion, 7)  # Default to "other"
+
+        # Get intensity value
+        intensity_value = intensity_map.get(intensity, 0.3)  # Default to medium
+
+        # Set emotion value
+        emo_vec[emotion_idx] = intensity_value
+
+        logger.debug(f"Built emotion vector for {emotion}/{intensity}: {emo_vec}")
+        return emo_vec
 
 
 def save_base64_image(base64_data: str, output_path: Path):

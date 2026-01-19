@@ -2,7 +2,7 @@
  * Shot Table - Main content area for displaying shots with Excel-style column filters
  */
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { Image, Film, Trash2, Loader2, Check, X, ZoomIn, Volume2, Plus, Play } from 'lucide-react';
+import { Image, Film, Trash2, Loader2, Check, X, ZoomIn, Plus, Play, Pause, Mic } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { VideoModal } from '../ui/VideoModal';
@@ -46,7 +46,9 @@ export function ShotTable({
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [previewVideo, setPreviewVideo] = useState<{ url: string; title: string } | null>(null);
   const [hoveredShotId, setHoveredShotId] = useState<string | null>(null);
+  const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
   const parentRef = useRef<HTMLDivElement>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // 使用列筛选钩子
   const {
@@ -58,23 +60,66 @@ export function ShotTable({
     filteredCount,
   } = useColumnFilter({ shots, characters });
 
-  // 设置虚拟列表
+  // 设置虚拟列表 - 使用固定高度避免重叠
   const rowVirtualizer = useVirtualizer({
     count: filteredShots.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 150, // 估计每行高度约150px
+    estimateSize: () => 180, // 固定高度：内容区域150px + 错误消息区域30px
     overscan: 5, // 预渲染5个额外的行
   });
-
-  // 当 filteredShots 数据变化时，触发虚拟列表重新测量
-  useEffect(() => {
-    rowVirtualizer.measure();
-  }, [filteredShots, rowVirtualizer]);
 
   // 通知父组件筛选结果变化
   useEffect(() => {
     onFilterChange(filteredShots);
   }, [filteredShots, onFilterChange]);
+
+  // 音频播放控制
+  const handleAudioPlay = (shotId: string, audioUrl: string) => {
+    // 如果点击的是正在播放的音频，则停止播放
+    if (playingAudioId === shotId) {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+      setPlayingAudioId(null);
+      return;
+    }
+
+    // 停止当前播放的音频
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+
+    // 播放新的音频
+    const audio = new Audio(audioUrl);
+    audioRef.current = audio;
+    setPlayingAudioId(shotId);
+
+    audio.play();
+
+    // 监听播放结束事件
+    audio.addEventListener('ended', () => {
+      setPlayingAudioId(null);
+      audioRef.current = null;
+    });
+
+    // 监听错误事件
+    audio.addEventListener('error', () => {
+      setPlayingAudioId(null);
+      audioRef.current = null;
+    });
+  };
+
+  // 清理音频资源
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+    };
+  }, []);
 
   // 获取图片状态
   const getImageStatus = (shot: Shot): string => {
@@ -432,6 +477,7 @@ export function ShotTable({
                       shot={shot}
                       characters={characters}
                       isSelected={selectedIds.includes(shot.id)}
+                      isPlayingAudio={playingAudioId === shot.id}
                       onSelect={(selected) => onSelectShot(shot.id, selected)}
                       onGenerateImages={() => onGenerateImages(shot.id)}
                       onGenerateVideo={() => onGenerateVideo(shot.id)}
@@ -442,6 +488,7 @@ export function ShotTable({
                       onPreviewImage={setPreviewImage}
                       onPreviewVideo={(url, title) => setPreviewVideo({ url, title })}
                       onUpdateField={(field, value) => onUpdateShot(shot.id, field, value)}
+                      onPlayAudio={(audioUrl) => handleAudioPlay(shot.id, audioUrl)}
                     />
                   </div>
 
@@ -520,6 +567,7 @@ interface ShotRowProps {
   shot: Shot;
   characters: Character[];
   isSelected: boolean;
+  isPlayingAudio: boolean;
   onSelect: (selected: boolean) => void;
   onGenerateImages: () => void;
   onGenerateVideo: () => void;
@@ -530,12 +578,14 @@ interface ShotRowProps {
   onPreviewImage: (url: string) => void;
   onPreviewVideo: (url: string, title: string) => void;
   onUpdateField: (field: string, value: string | string[]) => void;
+  onPlayAudio: (audioUrl: string) => void;
 }
 
 function ShotRow({
   shot,
   characters,
   isSelected,
+  isPlayingAudio,
   onSelect,
   onGenerateImages,
   onGenerateVideo,
@@ -546,6 +596,7 @@ function ShotRow({
   onPreviewImage,
   onPreviewVideo,
   onUpdateField,
+  onPlayAudio,
 }: ShotRowProps) {
   const hasImages = shot.images.length > 0;
   const hasVideo = shot.videos && shot.videos.length > 0;
@@ -567,7 +618,7 @@ function ShotRow({
 
   return (
     <div className={`px-4 py-3 hover:bg-slate-800/50 transition-colors ${isSelected ? 'bg-slate-800/70' : ''}`}>
-      <div className="flex items-start gap-4">
+      <div className="flex items-start gap-4 h-[150px]">
         {/* Checkbox */}
         <input
           type="checkbox"
@@ -623,16 +674,19 @@ function ShotRow({
           <div className="absolute bottom-1 right-1 flex items-center gap-1">
             {hasAudio && (
               <button
-                onClick={() => {
-                  if (shot.audioUrl) {
-                    const audio = new Audio(shot.audioUrl);
-                    audio.play();
-                  }
-                }}
-                className="p-1.5 bg-slate-800/80 hover:bg-emerald-600/20 rounded transition-colors backdrop-blur-sm"
-                title="试听配音"
+                onClick={() => onPlayAudio(shot.audioUrl)}
+                className={`p-1.5 rounded transition-colors backdrop-blur-sm ${
+                  isPlayingAudio
+                    ? 'bg-emerald-600/30 hover:bg-emerald-600/40'
+                    : 'bg-slate-800/80 hover:bg-emerald-600/20'
+                }`}
+                title={isPlayingAudio ? '停止播放' : '试听配音'}
               >
-                <Play className="w-4 h-4 text-emerald-400" />
+                {isPlayingAudio ? (
+                  <Pause className="w-4 h-4 text-emerald-400" />
+                ) : (
+                  <Play className="w-4 h-4 text-emerald-400" />
+                )}
               </button>
             )}
             <button
@@ -644,7 +698,7 @@ function ShotRow({
               {isGeneratingAudio ? (
                 <Loader2 className="w-4 h-4 text-orange-400 animate-spin" />
               ) : (
-                <Volume2 className="w-4 h-4 text-orange-400" />
+                <Mic className="w-4 h-4 text-orange-400" />
               )}
             </button>
           </div>
@@ -910,12 +964,14 @@ function ShotRow({
         </div>
       </div>
 
-      {/* Error message */}
-      {shot.status === 'error' && shot.errorMessage && (
-        <div className="mt-2 ml-16 text-xs text-red-400 bg-red-400/10 px-2 py-1 rounded">
-          {shot.errorMessage}
-        </div>
-      )}
+      {/* Error message - 固定高度区域避免布局变化 */}
+      <div className="h-[30px] mt-2 ml-16">
+        {shot.status === 'error' && shot.errorMessage && (
+          <div className="text-xs text-red-400 bg-red-400/10 px-2 py-1 rounded truncate">
+            {shot.errorMessage}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

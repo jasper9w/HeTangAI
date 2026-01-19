@@ -3,7 +3,7 @@
  */
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { Filter, Search, X, Check } from 'lucide-react';
-import type { Shot, Character } from '../../types';
+import type { Shot } from '../../types';
 
 interface FilterDropdownProps {
   isOpen: boolean;
@@ -130,14 +130,7 @@ function MultiSelectFilter({
     );
   }, [options, searchValue]);
 
-  const handleToggleAll = () => {
-    if (selectedValues.length === options.length) {
-      onChange([]);
-    } else {
-      onChange(options.map(opt => opt.value));
-    }
-  };
-
+  
   const handleToggleOption = (value: string) => {
     if (selectedValues.includes(value)) {
       onChange(selectedValues.filter(v => v !== value));
@@ -145,9 +138,6 @@ function MultiSelectFilter({
       onChange([...selectedValues, value]);
     }
   };
-
-  const allSelected = selectedValues.length === options.length;
-  const someSelected = selectedValues.length > 0 && selectedValues.length < options.length;
 
   return (
     <div>

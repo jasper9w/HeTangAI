@@ -2,7 +2,7 @@
  * ShotFilter - 镜头筛选组件（横向并列布局）
  */
 import { useState, useMemo } from 'react';
-import { Search, X, ChevronDown } from 'lucide-react';
+import { Search, X } from 'lucide-react';
 import type { Shot, Character, ShotStatus } from '../../types';
 
 interface FilterOptions {

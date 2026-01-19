@@ -23,16 +23,33 @@ class Api:
         # Store as private attributes to avoid pywebview serialization warnings
         self._user_data_dir = Path(user_data_dir)
         self._output_dir = Path(output_dir)
-        self._settings_file = self._user_data_dir / "settings.json"
         self._window: Optional[webview.Window] = None
         self.project_path: Optional[Path] = None
         self.project_data: Optional[dict] = None
         self.project_name: Optional[str] = None
         self._file_server_port = 8765  # Must match port in main.py
+
+        # Initialize work directory and settings file location
+        default_work_dir = Path.home() / "Desktop" / "荷塘AI"
+        # Try to load existing settings to get work_dir, or use default
+        temp_settings_file = default_work_dir / "settings.json"
+        if temp_settings_file.exists():
+            try:
+                with open(temp_settings_file, "r", encoding="utf-8") as f:
+                    settings = json.load(f)
+                    work_dir = Path(settings.get("workDir", str(default_work_dir)))
+            except Exception:
+                work_dir = default_work_dir
+        else:
+            work_dir = default_work_dir
+
+        # Settings file is now in work directory
+        self._settings_file = work_dir / "settings.json"
         self._ensure_settings_file()
+
         # Initialize project manager with work directory from settings
         settings = self._load_settings()
-        work_dir = Path(settings.get("workDir", str(Path.home() / "Desktop" / "荷塘AI")))
+        work_dir = Path(settings.get("workDir", str(default_work_dir)))
         self._project_manager = ProjectManager(work_dir)
         logger.info("API initialized")
 
@@ -62,6 +79,26 @@ class Api:
             logger.warning(f"Failed to convert path to URL: {e}")
             return filepath
 
+    def _url_to_path(self, url: str) -> str:
+        """Convert HTTP URL back to local file path"""
+        try:
+            # Remove the HTTP URL prefix
+            prefix = f"http://127.0.0.1:{self._file_server_port}/"
+            if url.startswith(prefix):
+                path_str = url[len(prefix):]
+                # If it's a relative path, resolve it relative to cwd
+                path = Path(path_str)
+                if not path.is_absolute():
+                    path = Path.cwd() / path
+                return str(path)
+            else:
+                # If URL doesn't match expected format, assume it's already a path
+                return url
+        except Exception as e:
+            logger.warning(f"Failed to convert URL to path: {e}")
+            return url
+
+
     @property
     def user_data_dir(self) -> Path:
         return self._user_data_dir
@@ -88,8 +125,12 @@ class Api:
             desktop = Path.home() / "Desktop"
             default_work_dir = str(desktop / "荷塘AI")
 
+            # Default JianYing draft directory (macOS)
+            default_jianying_dir = str(Path.home() / "Movies" / "JianyingPro Drafts")
+
             default_settings = {
                 "workDir": default_work_dir,
+                "jianyingDraftDir": default_jianying_dir,
                 "tts": {
                     "apiUrl": "",
                     "model": "tts-1",
@@ -1155,6 +1196,110 @@ class Api:
             results.append({"shot_id": shot_id, **result})
         return {"success": True, "results": results}
 
+    # ========== Audio Generation ==========
+
+    def generate_audio_for_shot(self, shot_id: str) -> dict:
+        """Generate audio for a single shot"""
+        if not self.project_data:
+            return {"success": False, "error": "No project data"}
+
+        for shot in self.project_data["shots"]:
+            if shot["id"] == shot_id:
+                try:
+                    import asyncio
+                    from services.generator import GenerationClient
+
+                    shot["status"] = "generating_audio"
+
+                    # Get settings
+                    settings = self._load_settings()
+                    tts_config = settings.get("tts", {})
+
+                    if not tts_config.get("apiUrl"):
+                        raise ValueError("TTS API not configured in settings")
+
+                    # Require project to be saved before generating audio
+                    if not self.project_name:
+                        raise ValueError("Please save the project first before generating audio")
+
+                    # Get voice actor and reference audio
+                    voice_actor = shot.get("voiceActor", "")
+                    if not voice_actor:
+                        raise ValueError("No voice actor specified for this shot")
+
+                    # Find character with matching name
+                    reference_audio = None
+                    character_speed = 1.0
+                    for char in self.project_data["characters"]:
+                        if char["name"] == voice_actor:
+                            reference_audio = char.get("referenceAudioPath")
+                            character_speed = char.get("speed", 1.0)
+                            break
+
+                    if not reference_audio:
+                        raise ValueError(f"No reference audio found for character: {voice_actor}")
+
+                    # Create client
+                    client = GenerationClient(
+                        api_url=tts_config["apiUrl"],
+                        api_key=tts_config.get("apiKey", ""),
+                        model=tts_config.get("model", "tts-1"),
+                    )
+
+                    # Get script text
+                    script = shot.get("script", "")
+                    if not script:
+                        raise ValueError("No script text for this shot")
+
+                    # Get emotion and intensity
+                    emotion = shot.get("emotion", "")
+                    intensity = shot.get("intensity", "")
+
+                    # Generate audio
+                    audio_bytes = asyncio.run(
+                        client.generate_audio(
+                            text=script,
+                            reference_audio=reference_audio,
+                            speed=character_speed,
+                            emotion=emotion,
+                            intensity=intensity,
+                        )
+                    )
+
+                    if not audio_bytes:
+                        raise ValueError("No audio generated")
+
+                    # Save audio to project directory
+                    audio_path = self.project_manager.get_shot_audio_path(
+                        self.project_name, shot_id
+                    )
+                    audio_path.parent.mkdir(parents=True, exist_ok=True)
+                    with open(audio_path, "wb") as f:
+                        f.write(audio_bytes)
+
+                    # Update shot with audio URL
+                    shot["audioUrl"] = self._path_to_url(str(audio_path))
+                    shot["status"] = "audio_ready"
+
+                    logger.info(f"Generated audio for shot {shot_id}")
+                    return {"success": True, "audioUrl": shot["audioUrl"], "shot": shot}
+
+                except Exception as e:
+                    shot["status"] = "error"
+                    shot["errorMessage"] = str(e)
+                    logger.error(f"Failed to generate audio: {e}")
+                    return {"success": False, "error": str(e)}
+
+        return {"success": False, "error": "Shot not found"}
+
+    def generate_audios_batch(self, shot_ids: list) -> dict:
+        """Generate audio for multiple shots"""
+        results = []
+        for shot_id in shot_ids:
+            result = self.generate_audio_for_shot(shot_id)
+            results.append({"shot_id": shot_id, **result})
+        return {"success": True, "results": results}
+
     # ========== File Operations ==========
 
     def open_output_dir(self) -> dict:
@@ -1292,9 +1437,43 @@ class Api:
     def save_settings(self, settings: dict) -> dict:
         """Save application settings"""
         try:
-            self.settings_file.parent.mkdir(parents=True, exist_ok=True)
-            with open(self.settings_file, "w", encoding="utf-8") as f:
-                json.dump(settings, f, indent=2, ensure_ascii=False)
+            # Check if work directory changed
+            old_work_dir = None
+            if self.settings_file.exists():
+                try:
+                    with open(self.settings_file, "r", encoding="utf-8") as f:
+                        old_settings = json.load(f)
+                        old_work_dir = old_settings.get("workDir")
+                except Exception:
+                    pass
+
+            new_work_dir = settings.get("workDir")
+
+            # If work directory changed, move settings file to new location
+            if old_work_dir and new_work_dir and old_work_dir != new_work_dir:
+                new_settings_file = Path(new_work_dir) / "settings.json"
+                new_settings_file.parent.mkdir(parents=True, exist_ok=True)
+
+                # Save to new location
+                with open(new_settings_file, "w", encoding="utf-8") as f:
+                    json.dump(settings, f, indent=2, ensure_ascii=False)
+
+                # Remove old settings file
+                try:
+                    if self.settings_file.exists():
+                        self.settings_file.unlink()
+                        logger.info(f"Removed old settings file: {self.settings_file}")
+                except Exception as e:
+                    logger.warning(f"Failed to remove old settings file: {e}")
+
+                # Update settings file path
+                self._settings_file = new_settings_file
+                logger.info(f"Moved settings file to: {new_settings_file}")
+            else:
+                # Save to current location
+                self.settings_file.parent.mkdir(parents=True, exist_ok=True)
+                with open(self.settings_file, "w", encoding="utf-8") as f:
+                    json.dump(settings, f, indent=2, ensure_ascii=False)
 
             # Update project manager work directory if changed
             if "workDir" in settings:
@@ -1323,3 +1502,179 @@ class Api:
         logger.info(f"Selected work directory: {dir_path}")
 
         return {"success": True, "path": str(dir_path)}
+
+    def select_jianying_draft_dir(self) -> dict:
+        """Select JianYing draft directory"""
+        if not self._window:
+            return {"success": False, "error": "Window not initialized"}
+
+        result = self._window.create_file_dialog(
+            webview.FOLDER_DIALOG,
+            allow_multiple=False,
+        )
+
+        if not result or len(result) == 0:
+            return {"success": False, "error": "No directory selected"}
+
+        dir_path = Path(result[0])
+        logger.info(f"Selected JianYing draft directory: {dir_path}")
+
+        return {"success": True, "path": str(dir_path)}
+
+    def export_jianying_draft(self) -> dict:
+        """Export current project to JianYing draft"""
+        try:
+            if not self.project_data or not self.project_name:
+                return {"success": False, "error": "No project loaded"}
+
+            # Load settings to get JianYing draft directory
+            settings = self._load_settings()
+            jianying_dir = settings.get("jianyingDraftDir", "")
+            if not jianying_dir:
+                return {"success": False, "error": "JianYing draft directory not configured"}
+
+            jianying_path = Path(jianying_dir)
+            if not jianying_path.exists():
+                return {"success": False, "error": f"JianYing draft directory does not exist: {jianying_dir}"}
+
+            # Import pycapcut
+            try:
+                import pycapcut as cc
+                from pycapcut import trange, tim
+            except ImportError:
+                return {"success": False, "error": "pycapcut not installed"}
+
+            # Create draft folder
+            draft_folder = cc.DraftFolder(str(jianying_path))
+
+            # Create draft with project name
+            draft_name = self.project_name
+            script = draft_folder.create_draft(draft_name, 1920, 1080, allow_replace=True)
+
+            # Add tracks
+            script.add_track(cc.TrackType.audio).add_track(cc.TrackType.video).add_track(cc.TrackType.text)
+
+            # Process shots
+            current_time = 0.0
+            shots = self.project_data.get("shots", [])
+
+            for shot in shots:
+                shot_id = shot.get("id")
+                if not shot_id:
+                    continue
+
+                # Get selected video path
+                selected_video_index = shot.get("selectedVideoIndex", 0)
+                videos = shot.get("videos", [])
+                if not videos or selected_video_index >= len(videos):
+                    logger.warning(f"Shot {shot_id} has no video, skipping")
+                    continue
+
+                video_url = videos[selected_video_index]
+                video_path = self._url_to_path(video_url)
+                if not video_path or not Path(video_path).exists():
+                    logger.warning(f"Video file not found for shot {shot_id}: {video_path}")
+                    continue
+
+                # Get audio path
+                audio_url = shot.get("audioUrl", "")
+                audio_path = None
+                if audio_url:
+                    audio_path = self._url_to_path(audio_url)
+                    if not audio_path or not Path(audio_path).exists():
+                        logger.warning(f"Audio file not found for shot {shot_id}: {audio_path}")
+                        audio_path = None
+
+                # Get video duration using pycapcut
+                try:
+                    video_material = cc.VideoMaterial(video_path)
+                    video_duration = video_material.duration
+
+                    # Get audio duration if available
+                    audio_duration = None
+                    if audio_path:
+                        try:
+                            audio_material = cc.AudioMaterial(audio_path)
+                            audio_duration = audio_material.duration
+                        except Exception as e:
+                            logger.warning(f"Failed to load audio for shot {shot_id}: {e}")
+                            audio_path = None
+
+                    # Determine segment duration and video settings
+                    if audio_duration is not None:
+                        # Use audio duration as the segment duration
+                        segment_duration = audio_duration
+
+                        if video_duration > audio_duration:
+                            # Video is longer than audio: use first N seconds of video
+                            video_segment = cc.VideoSegment(
+                                video_material,
+                                trange(tim(current_time), audio_duration),
+                                source_timerange=trange(0, audio_duration),
+                                volume=0.0  # Mute video audio track
+                            )
+                            logger.info(f"Shot {shot_id}: video {video_duration:.2f}s > audio {audio_duration:.2f}s, using first {audio_duration:.2f}s of video")
+                        else:
+                            # Audio is longer than video: slow down video to match audio duration
+                            speed = video_duration / audio_duration
+                            video_segment = cc.VideoSegment(
+                                video_material,
+                                trange(tim(current_time), audio_duration),
+                                speed=speed,
+                                volume=0.0  # Mute video audio track
+                            )
+                            logger.info(f"Shot {shot_id}: audio {audio_duration:.2f}s > video {video_duration:.2f}s, slowing video to {speed:.2f}x speed")
+                    else:
+                        # No audio: use video duration
+                        segment_duration = video_duration
+                        video_segment = cc.VideoSegment(
+                            video_material,
+                            trange(tim(current_time), video_duration),
+                            volume=0.0  # Mute video audio track
+                        )
+                        logger.info(f"Shot {shot_id}: no audio, using video duration {video_duration:.2f}s")
+
+                    script.add_segment(video_segment)
+
+                    # Add audio segment if available
+                    if audio_path and audio_duration is not None:
+                        try:
+                            audio_segment = cc.AudioSegment(
+                                audio_material,
+                                trange(tim(current_time), audio_duration)
+                            )
+                            script.add_segment(audio_segment)
+                        except Exception as e:
+                            logger.warning(f"Failed to add audio for shot {shot_id}: {e}")
+
+                    # Add text segment with script
+                    script_text = shot.get("script", "")
+                    if script_text:
+                        try:
+                            text_segment = cc.TextSegment(
+                                script_text,
+                                trange(tim(current_time), segment_duration),
+                                clip_settings=cc.ClipSettings(transform_y=-0.8)
+                            )
+                            script.add_segment(text_segment)
+                        except Exception as e:
+                            logger.warning(f"Failed to add text for shot {shot_id}: {e}")
+
+                    current_time += segment_duration
+
+                except Exception as e:
+                    logger.error(f"Failed to process shot {shot_id}: {e}")
+                    continue
+
+            # Save draft
+            script.save()
+
+            draft_path = jianying_path / draft_name
+            logger.info(f"Exported JianYing draft to: {draft_path}")
+
+            return {"success": True, "path": str(draft_path)}
+
+        except Exception as e:
+            logger.error(f"Failed to export JianYing draft: {e}")
+            return {"success": False, "error": str(e)}
+

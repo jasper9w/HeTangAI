@@ -31,6 +31,7 @@ export interface Shot {
   selectedImageIndex: number;  // 选中的备选图索引
   videos: string[];  // 备选视频URL数组，最多4个
   selectedVideoIndex: number;  // 选中的备选视频索引
+  videoUrl: string;     // 视频文件URL
   audioUrl: string;     // 配音文件URL
   status: ShotStatus;
   errorMessage?: string;
@@ -78,6 +79,8 @@ export interface ApiResponse<T = unknown> {
   success: boolean;
   error?: string;
   data?: T;
+  name?: string;
+  path?: string;
 }
 
 export interface ImportResult {
@@ -143,6 +146,7 @@ export interface PyWebViewApi {
   delete_shots: (shotIds: string[]) => Promise<ApiResponse & { deletedCount?: number }>;
   select_image: (shotId: string, imageIndex: number) => Promise<ApiResponse>;
   select_video: (shotId: string, videoIndex: number) => Promise<ApiResponse>;
+  insert_shot: (afterShotId: string | null) => Promise<ApiResponse & { shots?: Shot[] }>;
 
   // Generation
   generate_images_for_shot: (shotId: string) => Promise<GenerateResult>;
@@ -158,6 +162,8 @@ export interface PyWebViewApi {
   get_settings: () => Promise<ApiResponse & { settings?: AppSettings }>;
   save_settings: (settings: AppSettings) => Promise<ApiResponse>;
   select_work_dir: () => Promise<ApiResponse & { path?: string }>;
+  select_jianying_draft_dir: () => Promise<ApiResponse & { path?: string }>;
+  export_jianying_draft: () => Promise<ApiResponse & { path?: string }>;
 
   // Reference Audio
   scan_reference_audios: (directory: string) => Promise<ApiResponse & { audios?: Array<{ path: string; name: string; relativePath: string }> }>;
@@ -169,6 +175,7 @@ export interface PyWebViewApi {
 
 export interface AppSettings {
   workDir: string;
+  jianyingDraftDir: string;
   tts: {
     apiUrl: string;
     model: string;

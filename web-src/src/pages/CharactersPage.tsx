@@ -3,14 +3,11 @@
  */
 import { useState } from 'react';
 import {
-  Upload,
   Mic,
   Image as ImageIcon,
-  Gauge,
   Plus,
   Edit3,
   Trash2,
-  Check,
   X,
   Loader2,
   Sparkles,
@@ -28,7 +25,6 @@ interface CharactersPageProps {
   onUpdateCharacterSpeed: (id: string, speed: number) => void;
   onDeleteCharacter: (id: string) => void;
   onGenerateImage: (id: string) => void;
-  onUploadImage: (id: string) => void;
   onSetReferenceAudio: (id: string, audioPath: string) => void;
   addModalOpen: boolean;
   onAddModalOpenChange: (open: boolean) => void;
@@ -41,7 +37,6 @@ export function CharactersPage({
   onUpdateCharacterSpeed,
   onDeleteCharacter,
   onGenerateImage,
-  onUploadImage,
   onSetReferenceAudio,
   addModalOpen,
   onAddModalOpenChange,
@@ -150,15 +145,8 @@ export function CharactersPage({
     setImageScale(1);
   };
 
+  
   const selectedCharacter = characters.find((c) => c.id === selectedCharacterId);
-  // 只计算普通角色中需要生成三视图的数量（旁白角色不需要生成三视图）
-  const pendingCount = characters.filter(c => !c.isNarrator && (c.status === 'pending' || !c.imageUrl)).length;
-  // 计算有描述且需要生成的角色数量
-  const pendingWithDescriptionCount = characters.filter(c =>
-    !c.isNarrator &&
-    c.description?.trim() &&
-    (c.status === 'pending' || !c.imageUrl)
-  ).length;
 
   return (
     <div className="h-full p-6 overflow-y-auto">
