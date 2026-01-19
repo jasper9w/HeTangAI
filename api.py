@@ -87,20 +87,13 @@ class Api:
 
 
     @property
-    def user_data_dir(self) -> Path:
-        return self._user_data_dir
+    def user_data_dir(self) -> str:
+        return str(self._user_data_dir)
 
     @property
-    def output_dir(self) -> Path:
-        return self._output_dir
+    def output_dir(self) -> str:
+        return str(self._output_dir)
 
-    @property
-    def settings_file(self) -> Path:
-        return self._settings_file
-
-    @property
-    def project_manager(self) -> ProjectManager:
-        return self._project_manager
 
     def set_window(self, window: webview.Window):
         """Set window reference (called from main.py, not stored in __init__)"""
@@ -108,7 +101,7 @@ class Api:
 
     def _ensure_settings_file(self):
         """Ensure settings file exists with default values"""
-        if not self.settings_file.exists():
+        if not self._settings_file.exists():
             desktop = Path.home() / "Desktop"
             default_work_dir = str(desktop / "荷塘AI")
 
@@ -134,16 +127,16 @@ class Api:
                     "concurrency": 1,
                 },
             }
-            self.settings_file.parent.mkdir(parents=True, exist_ok=True)
-            with open(self.settings_file, "w", encoding="utf-8") as f:
+            self._settings_file.parent.mkdir(parents=True, exist_ok=True)
+            with open(self._settings_file, "w", encoding="utf-8") as f:
                 json.dump(default_settings, f, indent=2, ensure_ascii=False)
-            logger.info(f"Created default settings file: {self.settings_file}")
+            logger.info(f"Created default settings file: {self._settings_file}")
 
     def _load_settings(self) -> dict:
         """Load settings from file"""
-        if self.settings_file.exists():
+        if self._settings_file.exists():
             try:
-                with open(self.settings_file, "r", encoding="utf-8") as f:
+                with open(self._settings_file, "r", encoding="utf-8") as f:
                     return json.load(f)
             except Exception as e:
                 logger.error(f"Failed to load settings: {e}")
@@ -179,16 +172,16 @@ class Api:
     def list_projects(self) -> dict:
         """List all projects in work directory with metadata"""
         try:
-            project_names = self.project_manager.list_projects()
+            project_names = self._project_manager.list_projects()
             projects = []
 
             for name in project_names:
                 try:
-                    project_data = self.project_manager.load_project(name)
+                    project_data = self._project_manager.load_project(name)
                     if project_data:
                         projects.append({
                             "name": name,
-                            "path": str(self.project_manager.get_project_file(name)),
+                            "path": str(self._project_manager.get_project_file(name)),
                             "createdAt": project_data.get("createdAt", ""),
                             "updatedAt": project_data.get("updatedAt", ""),
                             "shotCount": len(project_data.get("shots", [])),
@@ -206,11 +199,11 @@ class Api:
     def open_project_from_workdir(self, project_name: str) -> dict:
         """Open a project from work directory by name"""
         try:
-            project_data = self.project_manager.load_project(project_name)
+            project_data = self._project_manager.load_project(project_name)
             if project_data:
                 self.project_data = project_data
                 self.project_name = project_name
-                self.project_path = self.project_manager.get_project_file(project_name)
+                self.project_path = self._project_manager.get_project_file(project_name)
 
                 # Clear all "generating" statuses on startup
                 for shot in self.project_data.get("shots", []):
@@ -230,7 +223,7 @@ class Api:
                     all_local_paths = []
 
                     for slot in range(1, 5):
-                        slot_path = self.project_manager.get_shot_image_path(project_name, shot_id, slot)
+                        slot_path = self._project_manager.get_shot_image_path(project_name, shot_id, slot)
                         if slot_path.exists():
                             all_image_paths.append(self._path_to_url(str(slot_path)))
                             all_local_paths.append(str(slot_path))
@@ -243,7 +236,7 @@ class Api:
                     # Load all alternative videos for each shot (slots 1-4)
                     all_video_paths = []
                     for slot in range(1, 5):
-                        slot_path = self.project_manager.get_shot_video_path(project_name, shot_id, slot)
+                        slot_path = self._project_manager.get_shot_video_path(project_name, shot_id, slot)
                         if slot_path.exists():
                             all_video_paths.append(self._path_to_url(str(slot_path)))
 
@@ -252,7 +245,7 @@ class Api:
                         shot["selectedVideoIndex"] = 0
 
                     # Load audio
-                    audio_path = self.project_manager.get_shot_audio_path(project_name, shot_id)
+                    audio_path = self._project_manager.get_shot_audio_path(project_name, shot_id)
                     if audio_path.exists():
                         shot["audioUrl"] = self._path_to_url(str(audio_path))
                     else:
@@ -277,7 +270,7 @@ class Api:
             self.project_data["updatedAt"] = datetime.now().isoformat()
             self.project_data["name"] = name
 
-            project_file = self.project_manager.save_project(name, self.project_data)
+            project_file = self._project_manager.save_project(name, self.project_data)
             self.project_name = name
             self.project_path = project_file
 
@@ -290,7 +283,7 @@ class Api:
     def delete_project_from_workdir(self, project_name: str) -> dict:
         """Delete a project from work directory"""
         try:
-            project_dir = self.project_manager.get_project_dir(project_name)
+            project_dir = self._project_manager.get_project_dir(project_name)
             if not project_dir.exists():
                 return {"success": False, "error": "Project not found"}
 
@@ -305,8 +298,8 @@ class Api:
     def rename_project_in_workdir(self, old_name: str, new_name: str) -> dict:
         """Rename a project in work directory"""
         try:
-            old_dir = self.project_manager.get_project_dir(old_name)
-            new_dir = self.project_manager.get_project_dir(new_name)
+            old_dir = self._project_manager.get_project_dir(old_name)
+            new_dir = self._project_manager.get_project_dir(new_name)
 
             if not old_dir.exists():
                 return {"success": False, "error": "Project not found"}
@@ -315,7 +308,7 @@ class Api:
                 return {"success": False, "error": "A project with this name already exists"}
 
             # Load project data and update name
-            project_data = self.project_manager.load_project(old_name)
+            project_data = self._project_manager.load_project(old_name)
             if not project_data:
                 return {"success": False, "error": "Failed to load project data"}
 
@@ -326,13 +319,13 @@ class Api:
             old_dir.rename(new_dir)
 
             # Update project.json with new name
-            self.project_manager.save_project(new_name, project_data)
+            self._project_manager.save_project(new_name, project_data)
 
             # Update current project if it's the one being renamed
             if self.project_name == old_name:
                 self.project_name = new_name
                 self.project_data = project_data
-                self.project_path = self.project_manager.get_project_file(new_name)
+                self.project_path = self._project_manager.get_project_file(new_name)
 
             logger.info(f"Renamed project: {old_name} -> {new_name}")
             return {"success": True, "name": new_name}
@@ -649,7 +642,7 @@ class Api:
                         raise ValueError("Please save the project first before generating character images")
 
                     # Download and save to project directory
-                    image_path = self.project_manager.get_character_image_path(
+                    image_path = self._project_manager.get_character_image_path(
                         self.project_name, character_id
                     )
                     asyncio.run(download_file(image_url, image_path))
@@ -706,7 +699,7 @@ class Api:
 
             source_path = Path(result[0])
             # Copy to project directory
-            output_path = self.project_manager.get_character_image_path(
+            output_path = self._project_manager.get_character_image_path(
                 self.project_name, character_id
             )
             output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -972,7 +965,7 @@ class Api:
                     # Check which slots (1-4) are already occupied
                     existing_slots = []
                     for slot in range(1, 5):
-                        slot_path = self.project_manager.get_shot_image_path(self.project_name, shot_id, slot)
+                        slot_path = self._project_manager.get_shot_image_path(self.project_name, shot_id, slot)
                         if slot_path.exists():
                             existing_slots.append((slot, slot_path.stat().st_mtime))
 
@@ -999,7 +992,7 @@ class Api:
                         slot = slots_to_use[idx]
                         if first_new_slot is None:
                             first_new_slot = slot
-                        image_path = self.project_manager.get_shot_image_path(self.project_name, shot_id, slot)
+                        image_path = self._project_manager.get_shot_image_path(self.project_name, shot_id, slot)
                         asyncio.run(download_file(img_url, image_path))
                         image_local_paths.append(str(image_path))
                         image_paths.append(self._path_to_url(str(image_path)))
@@ -1008,7 +1001,7 @@ class Api:
                     all_image_paths = []
                     all_local_paths = []
                     for slot in range(1, 5):
-                        slot_path = self.project_manager.get_shot_image_path(self.project_name, shot_id, slot)
+                        slot_path = self._project_manager.get_shot_image_path(self.project_name, shot_id, slot)
                         if slot_path.exists():
                             all_image_paths.append(self._path_to_url(str(slot_path)))
                             all_local_paths.append(str(slot_path))
@@ -1114,7 +1107,7 @@ class Api:
                     # Check which slots (1-4) are already occupied
                     existing_slots = []
                     for slot in range(1, 5):
-                        slot_path = self.project_manager.get_shot_video_path(self.project_name, shot_id_str, slot)
+                        slot_path = self._project_manager.get_shot_video_path(self.project_name, shot_id_str, slot)
                         if slot_path.exists():
                             existing_slots.append((slot, slot_path.stat().st_mtime))
 
@@ -1135,13 +1128,13 @@ class Api:
                         target_slot = existing_slots[0][0]
 
                     # Download and save new video
-                    video_path = self.project_manager.get_shot_video_path(self.project_name, shot_id_str, target_slot)
+                    video_path = self._project_manager.get_shot_video_path(self.project_name, shot_id_str, target_slot)
                     asyncio.run(download_file(video_url, video_path))
 
                     # Load all 4 slots for frontend display (in order 1-4)
                     all_video_paths = []
                     for slot in range(1, 5):
-                        slot_path = self.project_manager.get_shot_video_path(self.project_name, shot_id_str, slot)
+                        slot_path = self._project_manager.get_shot_video_path(self.project_name, shot_id_str, slot)
                         if slot_path.exists():
                             all_video_paths.append(self._path_to_url(str(slot_path)))
 
@@ -1254,7 +1247,7 @@ class Api:
                         raise ValueError("No audio generated")
 
                     # Save audio to project directory
-                    audio_path = self.project_manager.get_shot_audio_path(
+                    audio_path = self._project_manager.get_shot_audio_path(
                         self.project_name, shot_id
                     )
                     audio_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1406,8 +1399,8 @@ class Api:
     def get_settings(self) -> dict:
         """Get application settings"""
         try:
-            if self.settings_file.exists():
-                with open(self.settings_file, "r", encoding="utf-8") as f:
+            if self._settings_file.exists():
+                with open(self._settings_file, "r", encoding="utf-8") as f:
                     settings = json.load(f)
                 logger.info("Loaded settings")
                 return {"success": True, "settings": settings}
@@ -1422,13 +1415,13 @@ class Api:
         """Save application settings"""
         try:
             # Save to settings file (always in ~/.hetangai/settings.json)
-            self.settings_file.parent.mkdir(parents=True, exist_ok=True)
-            with open(self.settings_file, "w", encoding="utf-8") as f:
+            self._settings_file.parent.mkdir(parents=True, exist_ok=True)
+            with open(self._settings_file, "w", encoding="utf-8") as f:
                 json.dump(settings, f, indent=2, ensure_ascii=False)
 
             # Update project manager work directory if changed
             if "workDir" in settings:
-                self.project_manager.set_work_dir(Path(settings["workDir"]))
+                self._project_manager.set_work_dir(Path(settings["workDir"]))
 
             logger.info("Saved settings")
             return {"success": True}
