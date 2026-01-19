@@ -14,7 +14,7 @@ type TabType = 'tts' | 'tti' | 'ttv';
 const defaultSettings: AppSettings = {
   workDir: '',
   jianyingDraftDir: '',
-  tts: { apiUrl: '', model: '', apiKey: '', concurrency: 1 },
+  tts: { apiUrl: 'https://9u7acouw9j7q8f5o-6006.container.x-gpu.com/tts_url', model: 'indextts2', apiKey: '', concurrency: 1 },
   tti: { apiUrl: '', model: '', apiKey: '', concurrency: 1 },
   ttv: { apiUrl: '', model: '', apiKey: '', concurrency: 1 },
 };
@@ -139,6 +139,28 @@ export function SettingsPage({}: SettingsPageProps) {
 
     return (
       <div className="space-y-4">
+        {activeTab === 'tts' && (
+          <div className="bg-blue-600/10 border border-blue-600/20 rounded-lg p-4">
+            <h4 className="font-medium text-blue-300 mb-2 flex items-center gap-2">
+              <Mic className="w-4 h-4" />
+              配音接口接入说明
+            </h4>
+            <p className="text-sm text-slate-300 mb-2">
+              本项目已为您配置好配音接口，您也可以根据需要自行更换。
+            </p>
+            <p className="text-sm text-slate-300">
+              如需获取更多接口信息，请访问：
+              <a
+                href="https://www.xiangongyun.com/image/detail/2b41d3b1-2674-420b-864e-d9eb44adf636"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-400 hover:text-blue-300 underline ml-1"
+              >
+                https://www.xiangongyun.com/image/detail/2b41d3b1-2674-420b-864e-d9eb44adf636
+              </a>
+            </p>
+          </div>
+        )}
         <div>
           <label className="block text-sm text-slate-400 mb-2">API 地址</label>
           <input
