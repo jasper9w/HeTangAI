@@ -433,7 +433,6 @@ class Api:
         """Import shots from Excel/CSV file"""
         if not self._window:
             return {"success": False, "error": "Window not initialized"}
-
         file_types = ("Excel Files (*.xlsx;*.xls;*.csv)",)
         result = self._window.create_file_dialog(
             webview.FileDialog.OPEN,
@@ -734,6 +733,307 @@ class Api:
                 return {"success": True, "character": char}
 
         return {"success": False, "error": "Character not found"}
+
+    def import_characters_from_text(self, text: str) -> dict:
+        """Import characters from pasted text (tab or comma separated)
+
+        Supports two formats:
+        - 2 columns: character_name, description
+        - 3 columns: character_name, reference_audio_path, description
+        """
+        if not self.project_data:
+            return {"success": False, "error": "No project data", "characters": [], "errors": []}
+
+        characters = []
+        errors = []
+        lines = text.strip().split("\n")
+
+        for line_num, line in enumerate(lines, 1):
+            line = line.strip()
+            if not line:
+                continue
+
+            # Try tab separator first, then comma
+            if "\t" in line:
+                parts = [p.strip() for p in line.split("\t")]
+            else:
+                parts = [p.strip() for p in line.split(",")]
+
+            # Remove empty parts
+            parts = [p for p in parts if p]
+
+            if len(parts) < 2:
+                errors.append(f"Line {line_num}: insufficient columns (need at least 2)")
+                continue
+
+            if len(parts) == 2:
+                # Format: name, description
+                name, description = parts[0], parts[1]
+                reference_audio = ""
+            elif len(parts) >= 3:
+                # Format: name, reference_audio, description
+                name, reference_audio, description = parts[0], parts[1], parts[2]
+            else:
+                errors.append(f"Line {line_num}: invalid format")
+                continue
+
+            if not name:
+                errors.append(f"Line {line_num}: character name is empty")
+                continue
+
+            # Check for duplicate names in existing characters
+            existing_names = {c["name"] for c in self.project_data["characters"]}
+            if name in existing_names:
+                errors.append(f"Line {line_num}: character '{name}' already exists")
+                continue
+
+            # Check for duplicate names in current import batch
+            if any(c["name"] == name for c in characters):
+                errors.append(f"Line {line_num}: duplicate character name '{name}' in import")
+                continue
+
+            character = {
+                "id": f"char_{uuid.uuid4().hex[:8]}",
+                "name": name,
+                "description": description,
+                "imageUrl": "",
+                "referenceAudioPath": reference_audio,
+                "speed": 1.0,
+                "isNarrator": False,
+                "status": "pending",
+            }
+            characters.append(character)
+
+        logger.info(f"Parsed {len(characters)} characters from text, {len(errors)} errors")
+        return {
+            "success": True,
+            "characters": characters,
+            "errors": errors,
+        }
+
+    def import_characters_from_file(self) -> dict:
+        """Import characters from CSV/Excel file via file dialog
+
+        Recognizes columns: character name, reference audio, description
+        For Excel with multiple sheets, finds the sheet with matching columns
+        """
+        if not self._window:
+            return {"success": False, "error": "Window not initialized", "characters": [], "errors": []}
+
+        if not self.project_data:
+            return {"success": False, "error": "No project data", "characters": [], "errors": []}
+
+        file_types = ("Excel Files (*.xlsx)", "Excel Files (*.xls)", "CSV Files (*.csv)")
+        result = self._window.create_file_dialog(
+            webview.FileDialog.OPEN,
+            allow_multiple=False,
+            file_types=file_types,
+        )
+
+        if not result or len(result) == 0:
+            return {"success": False, "error": "No file selected", "characters": [], "errors": []}
+
+        file_path = Path(result[0])
+        logger.info(f"Importing characters from: {file_path}")
+
+        try:
+            import pandas as pd
+
+            characters = []
+            errors = []
+
+            # Read file based on extension
+            if file_path.suffix.lower() == ".csv":
+                df = pd.read_csv(file_path, encoding="utf-8")
+            else:
+                # Excel file - try to find the right sheet
+                excel_file = pd.ExcelFile(file_path)
+                df = None
+
+                # Column name patterns to match (English and Chinese)
+                name_patterns = ["name", "character", "role", "actor", "角色", "名称", "名字", "人物"]
+                desc_patterns = ["desc", "description", "prompt", "detail", "描述", "提示词", "说明", "详情"]
+                audio_patterns = ["audio", "voice", "reference", "sound", "音频", "参考音", "声音", "配音"]
+
+                def find_matching_columns(dataframe):
+                    """Find columns matching our patterns"""
+                    name_col = None
+                    desc_col = None
+                    audio_col = None
+
+                    for i, col in enumerate(dataframe.columns):
+                        col_lower = str(col).lower()
+                        col_str = str(col)
+                        # Check both lowercase (for English) and original (for Chinese)
+                        if any(p in col_lower or p in col_str for p in name_patterns) and name_col is None:
+                            name_col = col
+                        elif any(p in col_lower or p in col_str for p in desc_patterns) and desc_col is None:
+                            desc_col = col
+                        elif any(p in col_lower or p in col_str for p in audio_patterns) and audio_col is None:
+                            audio_col = col
+
+                    return name_col, desc_col, audio_col
+
+                # Try to find sheet named "角色" first
+                if "角色" in excel_file.sheet_names:
+                    df = pd.read_excel(excel_file, sheet_name="角色")
+                    logger.info("Found sheet named '角色'")
+                else:
+                    # Try each sheet to find one with matching columns
+                    for sheet_name in excel_file.sheet_names:
+                        sheet_df = pd.read_excel(excel_file, sheet_name=sheet_name)
+                        name_col, desc_col, audio_col = find_matching_columns(sheet_df)
+
+                        if name_col and desc_col:
+                            df = sheet_df
+                            logger.info(f"Found matching sheet: {sheet_name}")
+                            break
+
+                if df is None:
+                    # Use first sheet if no matching columns found
+                    df = pd.read_excel(excel_file, sheet_name=0)
+                    logger.info("Using first sheet (no matching columns found)")
+
+            # Find column mappings
+            name_col = None
+            desc_col = None
+            audio_col = None
+
+            name_patterns = ["name", "character", "role", "actor", "角色", "名称", "名字", "人物"]
+            desc_patterns = ["desc", "description", "prompt", "detail", "描述", "提示词", "说明", "详情"]
+            audio_patterns = ["audio", "voice", "reference", "sound", "音频", "参考音", "声音", "配音"]
+
+            for col in df.columns:
+                col_lower = str(col).lower()
+                col_str = str(col)
+                # Check both lowercase (for English) and original (for Chinese)
+                if any(p in col_lower or p in col_str for p in name_patterns) and name_col is None:
+                    name_col = col
+                elif any(p in col_lower or p in col_str for p in desc_patterns) and desc_col is None:
+                    desc_col = col
+                elif any(p in col_lower or p in col_str for p in audio_patterns) and audio_col is None:
+                    audio_col = col
+
+            # Fallback to positional columns if no matches
+            if name_col is None and len(df.columns) >= 1:
+                name_col = df.columns[0]
+            if desc_col is None and len(df.columns) >= 2:
+                desc_col = df.columns[1]
+
+            if name_col is None:
+                return {"success": False, "error": "Cannot find character name column", "characters": [], "errors": []}
+
+            logger.info(f"Column mapping - name: {name_col}, desc: {desc_col}, audio: {audio_col}")
+
+            # Get existing character names
+            existing_names = {c["name"] for c in self.project_data["characters"]}
+
+            # Process rows
+            for idx, row in df.iterrows():
+                row_num = idx + 2  # Excel row number (1-indexed + header)
+
+                name = str(row.get(name_col, "")).strip() if pd.notna(row.get(name_col)) else ""
+                description = str(row.get(desc_col, "")).strip() if desc_col and pd.notna(row.get(desc_col)) else ""
+                reference_audio = str(row.get(audio_col, "")).strip() if audio_col and pd.notna(row.get(audio_col)) else ""
+
+                if not name:
+                    continue  # Skip empty rows
+
+                if name in existing_names:
+                    errors.append(f"Row {row_num}: character '{name}' already exists")
+                    continue
+
+                if any(c["name"] == name for c in characters):
+                    errors.append(f"Row {row_num}: duplicate character name '{name}' in import")
+                    continue
+
+                character = {
+                    "id": f"char_{uuid.uuid4().hex[:8]}",
+                    "name": name,
+                    "description": description,
+                    "imageUrl": "",
+                    "referenceAudioPath": reference_audio,
+                    "speed": 1.0,
+                    "isNarrator": False,
+                    "status": "pending",
+                }
+                characters.append(character)
+
+            logger.info(f"Parsed {len(characters)} characters from file, {len(errors)} errors")
+            return {
+                "success": True,
+                "characters": characters,
+                "errors": errors,
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to import characters from file: {e}")
+            return {"success": False, "error": str(e), "characters": [], "errors": []}
+
+    def confirm_import_characters(self, characters: list) -> dict:
+        """Confirm and add imported characters to project"""
+        if not self.project_data:
+            return {"success": False, "error": "No project data"}
+
+        added_count = 0
+        for char_data in characters:
+            # Ensure required fields
+            character = {
+                "id": char_data.get("id", f"char_{uuid.uuid4().hex[:8]}"),
+                "name": char_data.get("name", ""),
+                "description": char_data.get("description", ""),
+                "imageUrl": char_data.get("imageUrl", ""),
+                "referenceAudioPath": char_data.get("referenceAudioPath", ""),
+                "speed": char_data.get("speed", 1.0),
+                "isNarrator": char_data.get("isNarrator", False),
+                "status": char_data.get("status", "pending"),
+            }
+
+            if character["name"]:
+                self.project_data["characters"].append(character)
+                added_count += 1
+
+        logger.info(f"Added {added_count} characters to project")
+        return {"success": True, "addedCount": added_count}
+
+    def export_character_template(self) -> dict:
+        """Export character template Excel file"""
+        if not self._window:
+            return {"success": False, "error": "Window not initialized"}
+
+        result = self._window.create_file_dialog(
+            webview.FileDialog.SAVE,
+            save_filename="角色模板.xlsx",
+            file_types=("Excel Files (*.xlsx)",),
+        )
+
+        if not result:
+            return {"success": False, "error": "No file selected"}
+
+        try:
+            import pandas as pd
+
+            # Create template data with Chinese column names
+            template_data = {
+                "角色": ["示例角色1", "示例角色2"],
+                "提示词": [
+                    "年轻女性，长黑发，穿白色连衣裙",
+                    "中年男性，短发，穿西装",
+                ],
+                "参考音": ["/path/to/audio1.wav", "/path/to/audio2.wav"],
+            }
+
+            df = pd.DataFrame(template_data)
+            # Write with sheet name "角色"
+            with pd.ExcelWriter(result, engine="openpyxl") as writer:
+                df.to_excel(writer, sheet_name="角色", index=False)
+
+            logger.info(f"Character template exported to: {result}")
+            return {"success": True, "path": result}
+
+        except Exception as e:
+            logger.error(f"Failed to export character template: {e}")
+            return {"success": False, "error": str(e)}
 
     # ========== Shot Management ==========
 

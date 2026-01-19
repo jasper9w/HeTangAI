@@ -141,6 +141,12 @@ export interface PyWebViewApi {
   upload_character_image: (characterId: string) => Promise<ApiResponse & { imageUrl?: string; character?: Character }>;
   set_character_reference_audio: (characterId: string, audioPath: string) => Promise<ApiResponse & { character?: Character }>;
 
+  // Character import
+  import_characters_from_text: (text: string) => Promise<ApiResponse & { characters?: Partial<Character>[]; errors?: string[] }>;
+  import_characters_from_file: () => Promise<ApiResponse & { characters?: Partial<Character>[]; errors?: string[] }>;
+  confirm_import_characters: (characters: Partial<Character>[]) => Promise<ApiResponse & { addedCount?: number }>;
+  export_character_template: () => Promise<ApiResponse & { path?: string }>;
+
   // Shot management
   update_shot: (shotId: string, field: string, value: unknown) => Promise<ApiResponse & { shot?: Shot }>;
   delete_shots: (shotIds: string[]) => Promise<ApiResponse & { deletedCount?: number }>;

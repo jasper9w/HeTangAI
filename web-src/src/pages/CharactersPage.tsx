@@ -14,9 +14,11 @@ import {
   ZoomIn,
   ZoomOut,
   RotateCcw,
-  Upload
+  Upload,
+  FileUp
 } from 'lucide-react';
 import { ReferenceAudioModal } from '../components/character/ReferenceAudioModal';
+import { CharacterImportModal } from '../components/character/CharacterImportModal';
 import type { Character } from '../types';
 
 interface CharactersPageProps {
@@ -28,8 +30,28 @@ interface CharactersPageProps {
   onGenerateImage: (id: string) => void;
   onUploadImage: (id: string) => void;
   onSetReferenceAudio: (id: string, audioPath: string) => void;
+  onImportFromText: (text: string) => Promise<{
+    success: boolean;
+    characters: Partial<Character>[];
+    errors: string[];
+    error?: string;
+  }>;
+  onImportFromFile: () => Promise<{
+    success: boolean;
+    characters: Partial<Character>[];
+    errors: string[];
+    error?: string;
+  }>;
+  onConfirmImport: (characters: Partial<Character>[]) => Promise<{
+    success: boolean;
+    addedCount?: number;
+    error?: string;
+  }>;
+  onExportTemplate: () => Promise<void>;
   addModalOpen: boolean;
   onAddModalOpenChange: (open: boolean) => void;
+  importModalOpen: boolean;
+  onImportModalOpenChange: (open: boolean) => void;
 }
 
 export function CharactersPage({
@@ -41,8 +63,14 @@ export function CharactersPage({
   onGenerateImage,
   onUploadImage,
   onSetReferenceAudio,
+  onImportFromText,
+  onImportFromFile,
+  onConfirmImport,
+  onExportTemplate,
   addModalOpen,
   onAddModalOpenChange,
+  importModalOpen,
+  onImportModalOpenChange,
 }: CharactersPageProps) {
   const [audioModalOpen, setAudioModalOpen] = useState(false);
   const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(null);
@@ -466,13 +494,22 @@ export function CharactersPage({
           <p className="text-slate-500 mb-4">
             点击"添加角色"创建新角色，或导入 Excel 自动提取角色
           </p>
-          <button
-            onClick={() => onAddModalOpenChange(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-500 rounded-lg text-sm text-white transition-colors mx-auto"
-          >
-            <Plus className="w-4 h-4" />
-            添加角色
-          </button>
+          <div className="flex items-center gap-3 justify-center">
+            <button
+              onClick={() => onAddModalOpenChange(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-500 rounded-lg text-sm text-white transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              添加角色
+            </button>
+            <button
+              onClick={() => onImportModalOpenChange(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-300 transition-colors"
+            >
+              <FileUp className="w-4 h-4" />
+              导入角色
+            </button>
+          </div>
         </div>
       )}
 
@@ -483,6 +520,16 @@ export function CharactersPage({
         onSelect={handleSelectAudio}
         currentAudioPath={selectedCharacter?.referenceAudioPath}
         currentSpeed={selectedCharacter?.speed}
+      />
+
+      {/* Character Import Modal */}
+      <CharacterImportModal
+        isOpen={importModalOpen}
+        onClose={() => onImportModalOpenChange(false)}
+        onImportFromText={onImportFromText}
+        onImportFromFile={onImportFromFile}
+        onConfirmImport={onConfirmImport}
+        onExportTemplate={onExportTemplate}
       />
 
       {/* Add Character Modal */}

@@ -24,7 +24,7 @@ import { CharactersPage } from './pages/CharactersPage';
 import { DubbingPage } from './pages/DubbingPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { Toast, type ToastMessage } from './components/ui/Toast';
-import type { ProjectData, Shot, PageType } from './types';
+import type { ProjectData, Shot, PageType, Character } from './types';
 
 function App() {
   const { api, ready } = useApi();
@@ -57,6 +57,7 @@ function App() {
 
   // Character modal state
   const [addCharacterModalOpen, setAddCharacterModalOpen] = useState(false);
+  const [importCharacterModalOpen, setImportCharacterModalOpen] = useState(false);
 
   // Toast notifications
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -213,14 +214,17 @@ function App() {
   };
 
   const handleGenerateCharacterImage = async (id: string) => {
-    if (!api || !project) return;
+    if (!api) return;
 
-    // Update status locally first
-    setProject({
-      ...project,
-      characters: project.characters.map((c) =>
-        c.id === id ? { ...c, status: 'generating' as const } : c
-      ),
+    // Update status locally first using functional update
+    setProject((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        characters: prev.characters.map((c) =>
+          c.id === id ? { ...c, status: 'generating' as const } : c
+        ),
+      };
     });
 
     const result = await api.generate_character_image(id);
@@ -301,6 +305,54 @@ function App() {
       showToast('success', '角色图片上传成功');
     } else if (result.error && result.error !== 'No file selected') {
       showToast('error', `角色图片上传失败: ${result.error}`);
+    }
+  };
+
+  const handleImportCharactersFromText = async (text: string) => {
+    if (!api) return { success: false, characters: [], errors: [], error: 'API not ready' };
+    const result = await api.import_characters_from_text(text);
+    return {
+      success: result.success,
+      characters: result.characters || [],
+      errors: result.errors || [],
+      error: result.error,
+    };
+  };
+
+  const handleImportCharactersFromFile = async () => {
+    if (!api) return { success: false, characters: [], errors: [], error: 'API not ready' };
+    const result = await api.import_characters_from_file();
+    return {
+      success: result.success,
+      characters: result.characters || [],
+      errors: result.errors || [],
+      error: result.error,
+    };
+  };
+
+  const handleConfirmImportCharacters = async (characters: Partial<Character>[]) => {
+    if (!api || !project) return { success: false, error: 'No project data' };
+
+    const result = await api.confirm_import_characters(characters);
+    if (result.success) {
+      // Reload project data to get updated characters
+      const projectResult = await api.get_project_data();
+      if (projectResult.success && projectResult.data) {
+        setProject(projectResult.data);
+      }
+      setIsDirty(true);
+      showToast('success', `成功导入 ${result.addedCount || 0} 个角色`);
+    }
+    return result;
+  };
+
+  const handleExportCharacterTemplate = async () => {
+    if (!api) return;
+    const result = await api.export_character_template();
+    if (result.success) {
+      showToast('success', '模板导出成功');
+    } else if (result.error && result.error !== 'No file selected') {
+      showToast('error', `模板导出失败: ${result.error}`);
     }
   };
 
@@ -714,6 +766,13 @@ function App() {
               </div>
             )}
             <button
+              onClick={() => setImportCharacterModalOpen(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-200 transition-colors"
+            >
+              <FileUp className="w-4 h-4" />
+              导入角色
+            </button>
+            <button
               onClick={() => setAddCharacterModalOpen(true)}
               className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-200 transition-colors"
             >
@@ -772,8 +831,14 @@ function App() {
             onGenerateImage={handleGenerateCharacterImage}
             onUploadImage={handleUploadCharacterImage}
             onSetReferenceAudio={handleSetCharacterReferenceAudio}
+            onImportFromText={handleImportCharactersFromText}
+            onImportFromFile={handleImportCharactersFromFile}
+            onConfirmImport={handleConfirmImportCharacters}
+            onExportTemplate={handleExportCharacterTemplate}
             addModalOpen={addCharacterModalOpen}
             onAddModalOpenChange={setAddCharacterModalOpen}
+            importModalOpen={importCharacterModalOpen}
+            onImportModalOpenChange={setImportCharacterModalOpen}
           />
         );
       case 'dubbing':
