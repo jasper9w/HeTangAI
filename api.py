@@ -112,12 +112,9 @@ class Api:
             desktop = Path.home() / "Desktop"
             default_work_dir = str(desktop / "荷塘AI")
 
-            # Default JianYing draft directory (macOS)
-            default_jianying_dir = str(Path.home() / "Movies" / "JianyingPro Drafts")
-
             default_settings = {
                 "workDir": default_work_dir,
-                "jianyingDraftDir": default_jianying_dir,
+                "jianyingDraftDir": "",
                 "tts": {
                     "apiUrl": "",
                     "model": "tts-1",
