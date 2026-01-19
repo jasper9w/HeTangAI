@@ -1,97 +1,66 @@
 """
 Local file server for serving generated images and videos
+Based on Bottle framework
 """
 import os
-import mimetypes
 from pathlib import Path
-from http.server import HTTPServer, SimpleHTTPRequestHandler
 from threading import Thread
-from urllib.parse import unquote
+from bottle import Bottle, static_file, route
 from loguru import logger
 
 
-class LocalFileHandler(SimpleHTTPRequestHandler):
-    """Custom handler for serving local files"""
-
-    def __init__(self, *args, base_dir=None, **kwargs):
-        self.base_dir = base_dir or os.getcwd()
-        super().__init__(*args, **kwargs)
-
-    def do_GET(self):
-        """Handle GET requests for local files"""
-        try:
-            # Decode URL path
-            filepath = unquote(self.path[1:])  # Remove leading '/'
-
-            # Try relative path first (relative to base_dir)
-            full_path = os.path.join(self.base_dir, filepath)
-
-            if os.path.isfile(full_path):
-                self.serve_file(full_path)
-                return
-
-            # Try absolute path
-            if os.path.isfile(filepath):
-                self.serve_file(filepath)
-                return
-
-            # File not found
-            self.send_error(404, f"File not found: {filepath}")
-
-        except Exception as e:
-            logger.error(f"Error serving file: {e}")
-            self.send_error(500, str(e))
-
-    def serve_file(self, filepath):
-        """Serve a file with appropriate MIME type"""
-        try:
-            # Guess MIME type
-            mime_type, _ = mimetypes.guess_type(filepath)
-            if not mime_type:
-                mime_type = 'application/octet-stream'
-
-            # Read file
-            with open(filepath, 'rb') as f:
-                content = f.read()
-
-            # Send response
-            self.send_response(200)
-            self.send_header('Content-Type', mime_type)
-            self.send_header('Content-Length', len(content))
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.end_headers()
-            self.wfile.write(content)
-
-            logger.debug(f"Served file: {filepath} ({mime_type})")
-
-        except Exception as e:
-            logger.error(f"Error reading file {filepath}: {e}")
-            self.send_error(500, str(e))
-
-    def log_message(self, format, *args):
-        """Override to use loguru instead of print"""
-        logger.debug(f"File server: {format % args}")
-
-
 class LocalFileServer:
-    """Local HTTP server for serving files"""
+    """Local HTTP server for serving files using Bottle"""
 
     def __init__(self, port=8765, base_dir=None):
         self.port = port
         self.base_dir = base_dir or os.getcwd()
-        self.server = None
+        self.app = Bottle()
         self.thread = None
+        self._setup_routes()
+
+    def _setup_routes(self):
+        """Setup bottle routes"""
+        @self.app.route('/<filepath:path>')
+        def server_static(filepath):
+            # Try absolute path first
+            if os.path.isfile(filepath):
+                return static_file(os.path.basename(filepath),
+                                   root=os.path.dirname(filepath),
+                                   mimetype='auto')
+
+            # Try with leading slash (absolute path)
+            full_path = '/' + filepath
+            if os.path.isfile(full_path):
+                return static_file(os.path.basename(full_path),
+                                   root=os.path.dirname(full_path),
+                                   mimetype='auto')
+
+            # Try relative to current working directory
+            cwd_path = os.path.join(os.getcwd(), filepath)
+            if os.path.isfile(cwd_path):
+                return static_file(os.path.basename(cwd_path),
+                                   root=os.path.dirname(cwd_path),
+                                   mimetype='auto')
+
+            # Try relative to base directory
+            base_path = os.path.join(self.base_dir, filepath)
+            if os.path.isfile(base_path):
+                return static_file(os.path.basename(base_path),
+                                   root=os.path.dirname(base_path),
+                                   mimetype='auto')
+
+            # File not found
+            from bottle import abort
+            abort(404, f"File not found: {filepath}")
 
     def start(self):
         """Start the file server in a background thread"""
         try:
-            # Create handler with base_dir
-            handler = lambda *args, **kwargs: LocalFileHandler(
-                *args, base_dir=self.base_dir, **kwargs
-            )
+            def run_server():
+                self.app.run(host='127.0.0.1', port=self.port, quiet=True)
 
-            self.server = HTTPServer(('127.0.0.1', self.port), handler)
-            self.thread = Thread(target=self.server.serve_forever, daemon=True)
+            self.thread = Thread(target=run_server, daemon=True)
             self.thread.start()
 
             logger.info(f"Local file server started on http://127.0.0.1:{self.port}")
@@ -103,9 +72,9 @@ class LocalFileServer:
 
     def stop(self):
         """Stop the file server"""
-        if self.server:
-            self.server.shutdown()
-            logger.info("Local file server stopped")
+        # Bottle doesn't have a clean shutdown method when running in thread
+        # The daemon thread will be terminated when main process exits
+        logger.info("Local file server stopped")
 
     def get_url(self, filepath: str) -> str:
         """Convert a file path to a server URL"""

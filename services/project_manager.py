@@ -50,29 +50,32 @@ class ProjectManager:
         """Get shot directory path"""
         return self.work_dir / project_name / "镜头"
 
-    def get_shot_image_path(self, project_name: str, sequence: int, index: int = 0) -> Path:
+    def get_shot_image_path(self, project_name: str, shot_id: str, index: int) -> Path:
         """
         Get shot image path
         Args:
             project_name: Project name
-            sequence: Shot sequence number
-            index: Image index (0 for main image, 1+ for alternatives)
+            shot_id: Shot unique ID (6-char random string)
+            index: Image index (1-4 for alternatives)
         """
         shot_dir = self.get_shot_dir(project_name)
-        if index == 0:
-            return shot_dir / f"shot_image_{sequence:03d}.jpeg"
-        else:
-            return shot_dir / f"shot_image_{sequence:03d}_{index:02d}.jpeg"
+        return shot_dir / f"shot_{shot_id}_{index}.jpeg"
 
-    def get_shot_video_path(self, project_name: str, sequence: int) -> Path:
-        """Get shot video path"""
+    def get_shot_video_path(self, project_name: str, shot_id: str, index: int) -> Path:
+        """
+        Get shot video path
+        Args:
+            project_name: Project name
+            shot_id: Shot unique ID (6-char random string)
+            index: Video index (1-4 for alternatives)
+        """
         shot_dir = self.get_shot_dir(project_name)
-        return shot_dir / f"shot_video_{sequence:03d}.mp4"
+        return shot_dir / f"shot_{shot_id}_{index}.mp4"
 
-    def get_shot_audio_path(self, project_name: str, sequence: int) -> Path:
+    def get_shot_audio_path(self, project_name: str, shot_id: str) -> Path:
         """Get shot audio path"""
         shot_dir = self.get_shot_dir(project_name)
-        return shot_dir / f"shot_audio_{sequence:03d}.wav"
+        return shot_dir / f"shot_{shot_id}_audio.wav"
 
     def get_character_image_path(self, project_name: str, character_id: str) -> Path:
         """Get character image path"""
@@ -188,51 +191,26 @@ class ProjectManager:
         logger.info(f"Saved shot audio: {audio_path}")
         return audio_path
 
-    def set_main_shot_image(self, project_name: str, sequence: int, alt_index: int) -> bool:
-        """
-        Set alternative image as main image
-        Swaps the main image (index 0) with the alternative (alt_index)
-        """
-        main_path = self.get_shot_image_path(project_name, sequence, 0)
-        alt_path = self.get_shot_image_path(project_name, sequence, alt_index)
-
-        if not alt_path.exists():
-            logger.warning(f"Alternative image not found: {alt_path}")
-            return False
-
-        # Swap files
-        temp_path = main_path.with_suffix(".tmp")
-
-        if main_path.exists():
-            shutil.move(main_path, temp_path)
-
-        shutil.copy2(alt_path, main_path)
-
-        if temp_path.exists():
-            shutil.move(temp_path, alt_path)
-
-        logger.info(f"Set alternative {alt_index} as main image for shot {sequence}")
-        return True
-
-    def delete_shot_files(self, project_name: str, sequence: int):
+    def delete_shot_files(self, project_name: str, shot_id: str):
         """Delete all files related to a shot"""
         shot_dir = self.get_shot_dir(project_name)
 
-        # Delete main image and alternatives (up to 10)
-        for i in range(10):
-            img_path = self.get_shot_image_path(project_name, sequence, i)
+        # Delete alternative images (1-4)
+        for i in range(1, 5):
+            img_path = self.get_shot_image_path(project_name, shot_id, i)
             if img_path.exists():
                 img_path.unlink()
                 logger.info(f"Deleted: {img_path}")
 
-        # Delete video
-        video_path = self.get_shot_video_path(project_name, sequence)
-        if video_path.exists():
-            video_path.unlink()
-            logger.info(f"Deleted: {video_path}")
+        # Delete alternative videos (1-4)
+        for i in range(1, 5):
+            video_path = self.get_shot_video_path(project_name, shot_id, i)
+            if video_path.exists():
+                video_path.unlink()
+                logger.info(f"Deleted: {video_path}")
 
         # Delete audio
-        audio_path = self.get_shot_audio_path(project_name, sequence)
+        audio_path = self.get_shot_audio_path(project_name, shot_id)
         if audio_path.exists():
             audio_path.unlink()
             logger.info(f"Deleted: {audio_path}")

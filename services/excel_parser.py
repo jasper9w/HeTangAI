@@ -1,6 +1,8 @@
 """
 Excel/CSV parser for importing shot data
 """
+import random
+import string
 import uuid
 from pathlib import Path
 from typing import Tuple
@@ -29,6 +31,11 @@ CHINESE_COLUMNS = ["xuhao", "peiyin_juese", "chuchang_juese", "qinggan", "qiangd
 
 class ExcelParser:
     """Parser for Excel/CSV shot data"""
+
+    def _generate_shot_id(self) -> str:
+        """Generate a 6-character random ID for shot"""
+        chars = string.ascii_lowercase + string.digits
+        return ''.join(random.choices(chars, k=6))
 
     def parse(self, file_path: Path) -> Tuple[list, set, list]:
         """
@@ -123,7 +130,7 @@ class ExcelParser:
     def _parse_row(self, row: pd.Series, idx: int) -> dict:
         """Parse a single row into a shot dict"""
         return {
-            "id": f"shot_{uuid.uuid4().hex[:8]}",
+            "id": self._generate_shot_id(),
             "sequence": int(row.get("sequence", idx + 1)) if pd.notna(row.get("sequence")) else idx + 1,
             "voiceActor": str(row.get("voiceActor", "")) if pd.notna(row.get("voiceActor")) else "",
             "characters": self._split_characters(str(row.get("characters", ""))),
@@ -134,6 +141,8 @@ class ExcelParser:
             "videoPrompt": str(row.get("videoPrompt", "")) if pd.notna(row.get("videoPrompt")) else "",
             "images": [],
             "selectedImageIndex": 0,
+            "videos": [],
+            "selectedVideoIndex": 0,
             "videoUrl": "",
             "audioUrl": "",
             "status": "pending",

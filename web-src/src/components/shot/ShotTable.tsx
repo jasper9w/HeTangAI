@@ -1,10 +1,14 @@
 /**
- * Shot Table - Main content area for displaying shots with table header
+ * Shot Table - Main content area for displaying shots with Excel-style column filters
  */
-import { useState } from 'react';
-import { Image, Film, Trash2, Loader2, Check, AlertCircle, Clock, Play, X, ZoomIn, Volume2 } from 'lucide-react';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { Image, Film, Trash2, Loader2, Check, X, ZoomIn, Volume2, Plus, Play } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import type { Shot, ShotStatus, Character } from '../../types';
+import { useVirtualizer } from '@tanstack/react-virtual';
+import { VideoModal } from '../ui/VideoModal';
+import { useColumnFilter } from './ColumnFilter';
+import { ColumnHeaderFilter, SearchFilter, MultiSelectFilter, StatusFilter } from './ExcelColumnFilter';
+import type { Shot, Character } from '../../types';
 
 interface ShotTableProps {
   shots: Shot[];
@@ -17,18 +21,11 @@ interface ShotTableProps {
   onGenerateVideo: (id: string) => void;
   onGenerateAudio: (id: string) => void;
   onSelectImage: (shotId: string, imageIndex: number) => void;
+  onSelectVideo: (shotId: string, videoIndex: number) => void;
   onUpdateShot: (shotId: string, field: string, value: string | string[]) => void;
+  onFilterChange: (filteredShots: Shot[]) => void;
+  onInsertShot: (afterShotId: string | null) => void;
 }
-
-const statusConfig: Record<ShotStatus, { icon: React.ComponentType<{ className?: string }>; color: string; label: string; animate?: boolean }> = {
-  pending: { icon: Clock, color: 'text-slate-400', label: '待处理' },
-  generating_images: { icon: Loader2, color: 'text-blue-400', label: '生成图片中...', animate: true },
-  images_ready: { icon: Check, color: 'text-emerald-400', label: '图片就绪' },
-  generating_video: { icon: Loader2, color: 'text-violet-400', label: '生成视频中...', animate: true },
-  generating_audio: { icon: Loader2, color: 'text-orange-400', label: '生成配音中...', animate: true },
-  completed: { icon: Check, color: 'text-emerald-400', label: '已完成' },
-  error: { icon: AlertCircle, color: 'text-red-400', label: '错误' },
-};
 
 export function ShotTable({
   shots,
@@ -41,32 +38,130 @@ export function ShotTable({
   onGenerateVideo,
   onGenerateAudio,
   onSelectImage,
+  onSelectVideo,
   onUpdateShot,
+  onFilterChange,
+  onInsertShot,
 }: ShotTableProps) {
   const [previewImage, setPreviewImage] = useState<string | null>(null);
-  const allSelected = shots.length > 0 && selectedIds.length === shots.length;
-  const someSelected = selectedIds.length > 0 && selectedIds.length < shots.length;
+  const [previewVideo, setPreviewVideo] = useState<{ url: string; title: string } | null>(null);
+  const [hoveredShotId, setHoveredShotId] = useState<string | null>(null);
+  const parentRef = useRef<HTMLDivElement>(null);
+
+  // 使用列筛选钩子
+  const {
+    filters,
+    updateFilter,
+    clearAllFilters,
+    hasActiveFilters,
+    filteredShots,
+    filteredCount,
+  } = useColumnFilter({ shots, characters });
+
+  // 设置虚拟列表
+  const rowVirtualizer = useVirtualizer({
+    count: filteredShots.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 150, // 估计每行高度约150px
+    overscan: 5, // 预渲染5个额外的行
+  });
+
+  // 通知父组件筛选结果变化
+  useEffect(() => {
+    onFilterChange(filteredShots);
+  }, [filteredShots, onFilterChange]);
+
+  // 获取图片状态
+  const getImageStatus = (shot: Shot): string => {
+    if (shot.status === 'generating_images') return 'generating';
+    if (shot.status === 'error') return 'error';
+    if (shot.images.length > 0) return 'generated';
+    return 'pending';
+  };
+
+  // 获取视频状态
+  const getVideoStatus = (shot: Shot): string => {
+    if (shot.status === 'generating_video') return 'generating';
+    if (shot.status === 'error') return 'error';
+    if (shot.videos && shot.videos.length > 0) return 'generated';
+    return 'pending';
+  };
+
+  // 状态标签映射
+  const imageStatusLabels = {
+    generated: '已生成',
+    pending: '待生成',
+    generating: '生成中',
+    error: '错误',
+  };
+
+  const videoStatusLabels = {
+    generated: '已生成',
+    pending: '待生成',
+    generating: '生成中',
+    error: '错误',
+  };
+
+  const voiceActorOptions = useMemo(() => {
+    const actorCounts: Record<string, number> = {};
+    shots.forEach(shot => {
+      if (shot.voiceActor) {
+        actorCounts[shot.voiceActor] = (actorCounts[shot.voiceActor] || 0) + 1;
+      }
+    });
+
+    return Object.entries(actorCounts).map(([actor, count]) => ({
+      value: actor,
+      label: actor,
+      count,
+    }));
+  }, [shots]);
+
+  const characterOptions = useMemo(() => {
+    const charCounts: Record<string, number> = {};
+    shots.forEach(shot => {
+      shot.characters.forEach(char => {
+        charCounts[char] = (charCounts[char] || 0) + 1;
+      });
+    });
+
+    return Object.entries(charCounts).map(([char, count]) => ({
+      value: char,
+      label: char,
+      count,
+    }));
+  }, [shots]);
+
+  // Handle ESC key for image preview
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        if (previewImage) {
+          setPreviewImage(null);
+        }
+      }
+    };
+
+    if (previewImage) {
+      document.addEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = 'hidden';
+    }
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = 'unset';
+    };
+  }, [previewImage]);
 
   return (
     <div className="h-full flex flex-col">
-      {/* Table Header Row */}
-      <div className="bg-slate-800 border-b border-slate-700">
+      {/* Table Header with Excel-style Filters */}
+      <div className="bg-slate-800 border-b border-slate-700 flex-shrink-0">
         {/* Selection bar */}
         <div className="px-4 py-2 border-b border-slate-700/50">
           <div className="flex items-center gap-4">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={allSelected}
-                ref={(el) => {
-                  if (el) el.indeterminate = someSelected;
-                }}
-                onChange={(e) => onSelectAll(e.target.checked)}
-                className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-violet-500 focus:ring-violet-500 focus:ring-offset-0"
-              />
-              <span className="text-sm text-slate-400">
-                {selectedIds.length > 0 ? `已选 ${selectedIds.length} 项` : '全选'}
-              </span>
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              镜头列表
             </label>
 
             {selectedIds.length > 0 && (
@@ -78,50 +173,292 @@ export function ShotTable({
                 删除 ({selectedIds.length})
               </button>
             )}
+
+            {hasActiveFilters && (
+              <div className="flex items-center gap-2 ml-auto">
+                <span className="text-xs text-slate-400">
+                  显示 {filteredCount} / {shots.length} 个镜头
+                </span>
+                <button
+                  onClick={clearAllFilters}
+                  className="px-2 py-1 bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded text-xs transition-colors"
+                >
+                  清除筛选
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Column headers */}
-        <div className="px-4 py-2 flex items-center gap-4 text-xs text-slate-400 font-medium">
-          <div className="w-4" /> {/* Checkbox space */}
-          <div className="w-12 text-center">序号</div>
-          <div className="w-24">配音角色</div>
-          <div className="flex-1 min-w-0 max-w-[200px]">文案</div>
-          <div className="w-40">图片提示词</div>
-          <div className="w-24">出场角色</div>
-          <div className="w-48">图片预览</div>
-          <div className="w-40">视频提示词</div>
-          <div className="w-20 text-center">视频</div>
-          <div className="w-32 text-center">操作</div>
+        {/* Column headers with filter icons */}
+        <div className="px-4 py-2 flex items-center gap-4">
+          {/* Checkbox column - 全选 */}
+          <div className="w-4">
+            <input
+              type="checkbox"
+              checked={
+                filteredShots.length > 0 &&
+                filteredShots.every(shot => selectedIds.includes(shot.id))
+              }
+              ref={(el) => {
+                if (el) {
+                  const selectedFilteredCount = filteredShots.filter(shot => selectedIds.includes(shot.id)).length;
+                  el.indeterminate = selectedFilteredCount > 0 && selectedFilteredCount < filteredShots.length;
+                }
+              }}
+              onChange={(e) => onSelectAll(e.target.checked)}
+              className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-violet-600 focus:ring-violet-500 cursor-pointer"
+              title="全选/取消全选当前筛选结果"
+            />
+          </div>
+
+          {/* 序号列 */}
+          <div className="w-12">
+            <ColumnHeaderFilter
+              title="序号"
+              hasActiveFilter={!!filters.sequence.value || filters.sequence.inverted}
+            >
+              <SearchFilter
+                value={filters.sequence.value}
+                inverted={filters.sequence.inverted}
+                onChange={(value) => updateFilter('sequence', { ...filters.sequence, value })}
+                onInvertedChange={(inverted) => updateFilter('sequence', { ...filters.sequence, inverted })}
+                placeholder="搜索序号..."
+              />
+            </ColumnHeaderFilter>
+          </div>
+
+          {/* 配音角色列 */}
+          <div className="w-24">
+            <ColumnHeaderFilter
+              title="配音角色"
+              hasActiveFilter={filters.voiceActor.values.length > 0 || filters.voiceActor.inverted}
+            >
+              <MultiSelectFilter
+                selectedValues={filters.voiceActor.values}
+                inverted={filters.voiceActor.inverted}
+                onChange={(values) => updateFilter('voiceActor', { ...filters.voiceActor, values })}
+                onInvertedChange={(inverted) => updateFilter('voiceActor', { ...filters.voiceActor, inverted })}
+                options={voiceActorOptions}
+                searchValue=""
+                onSearchChange={() => {}}
+              />
+            </ColumnHeaderFilter>
+          </div>
+
+          {/* 文案列 */}
+          <div className="flex-1 min-w-0 max-w-[200px]">
+            <ColumnHeaderFilter
+              title="文案"
+              hasActiveFilter={!!filters.script.value || filters.script.inverted}
+            >
+              <SearchFilter
+                value={filters.script.value}
+                inverted={filters.script.inverted}
+                onChange={(value) => updateFilter('script', { ...filters.script, value })}
+                onInvertedChange={(inverted) => updateFilter('script', { ...filters.script, inverted })}
+                placeholder="搜索文案内容..."
+              />
+            </ColumnHeaderFilter>
+          </div>
+
+          {/* 图片提示词列 */}
+          <div className="w-40">
+            <ColumnHeaderFilter
+              title="图片提示词"
+              hasActiveFilter={!!filters.imagePrompt.value || filters.imagePrompt.inverted}
+            >
+              <SearchFilter
+                value={filters.imagePrompt.value}
+                inverted={filters.imagePrompt.inverted}
+                onChange={(value) => updateFilter('imagePrompt', { ...filters.imagePrompt, value })}
+                onInvertedChange={(inverted) => updateFilter('imagePrompt', { ...filters.imagePrompt, inverted })}
+                placeholder="搜索提示词..."
+              />
+            </ColumnHeaderFilter>
+          </div>
+
+          {/* 出场角色列 */}
+          <div className="w-24">
+            <ColumnHeaderFilter
+              title="出场角色"
+              hasActiveFilter={filters.characters.values.length > 0 || filters.characters.inverted}
+            >
+              <MultiSelectFilter
+                selectedValues={filters.characters.values}
+                inverted={filters.characters.inverted}
+                onChange={(values) => updateFilter('characters', { ...filters.characters, values })}
+                onInvertedChange={(inverted) => updateFilter('characters', { ...filters.characters, inverted })}
+                options={characterOptions}
+                searchValue=""
+                onSearchChange={() => {}}
+              />
+            </ColumnHeaderFilter>
+          </div>
+
+          {/* 图片预览列 */}
+          <div className="w-48">
+            <ColumnHeaderFilter
+              title="图片预览"
+              hasActiveFilter={filters.imageStatus.values.length > 0 || filters.imageStatus.inverted}
+            >
+              <StatusFilter
+                selectedValues={filters.imageStatus.values}
+                inverted={filters.imageStatus.inverted}
+                onChange={(values) => updateFilter('imageStatus', { ...filters.imageStatus, values })}
+                onInvertedChange={(inverted) => updateFilter('imageStatus', { ...filters.imageStatus, inverted })}
+                shots={shots}
+                getStatus={getImageStatus}
+                statusLabels={imageStatusLabels}
+              />
+            </ColumnHeaderFilter>
+          </div>
+
+          {/* 视频提示词列 */}
+          <div className="w-40">
+            <ColumnHeaderFilter
+              title="视频提示词"
+              hasActiveFilter={!!filters.videoPrompt.value || filters.videoPrompt.inverted}
+            >
+              <SearchFilter
+                value={filters.videoPrompt.value}
+                inverted={filters.videoPrompt.inverted}
+                onChange={(value) => updateFilter('videoPrompt', { ...filters.videoPrompt, value })}
+                onInvertedChange={(inverted) => updateFilter('videoPrompt', { ...filters.videoPrompt, inverted })}
+                placeholder="搜索提示词..."
+              />
+            </ColumnHeaderFilter>
+          </div>
+
+          {/* 视频列 */}
+          <div className="w-20">
+            <ColumnHeaderFilter
+              title="视频"
+              hasActiveFilter={filters.videoStatus.values.length > 0 || filters.videoStatus.inverted}
+            >
+              <StatusFilter
+                selectedValues={filters.videoStatus.values}
+                inverted={filters.videoStatus.inverted}
+                onChange={(values) => updateFilter('videoStatus', { ...filters.videoStatus, values })}
+                onInvertedChange={(inverted) => updateFilter('videoStatus', { ...filters.videoStatus, inverted })}
+                shots={shots}
+                getStatus={getVideoStatus}
+                statusLabels={videoStatusLabels}
+              />
+            </ColumnHeaderFilter>
+          </div>
         </div>
       </div>
 
       {/* Table Content */}
-      <div className="flex-1 overflow-y-auto">
-        {shots.length === 0 ? (
+      <div ref={parentRef} className="flex-1 overflow-y-auto">
+        {filteredShots.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-slate-500">
             <Film className="w-16 h-16 mb-4 opacity-30" />
-            <p className="text-lg">暂无镜头</p>
-            <p className="text-sm mt-1">导入 Excel 文件开始创作</p>
+            {shots.length === 0 ? (
+              <>
+                <p className="text-lg">暂无镜头</p>
+                <p className="text-sm mt-1">导入 Excel 文件开始创作</p>
+              </>
+            ) : (
+              <>
+                <p className="text-lg">没有匹配的镜头</p>
+                <p className="text-sm mt-1">尝试调整筛选条件</p>
+                {hasActiveFilters && (
+                  <button
+                    onClick={clearAllFilters}
+                    className="mt-3 px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white rounded-lg text-sm transition-colors"
+                  >
+                    清除所有筛选
+                  </button>
+                )}
+              </>
+            )}
           </div>
         ) : (
-          <div className="divide-y divide-slate-700/50">
-            {shots.map((shot) => (
-              <ShotRow
-                key={shot.id}
-                shot={shot}
-                characters={characters}
-                isSelected={selectedIds.includes(shot.id)}
-                onSelect={(selected) => onSelectShot(shot.id, selected)}
-                onGenerateImages={() => onGenerateImages(shot.id)}
-                onGenerateVideo={() => onGenerateVideo(shot.id)}
-                onGenerateAudio={() => onGenerateAudio(shot.id)}
-                onSelectImage={(idx) => onSelectImage(shot.id, idx)}
-                onDelete={() => onDeleteShots([shot.id])}
-                onPreviewImage={setPreviewImage}
-                onUpdateField={(field, value) => onUpdateShot(shot.id, field, value)}
-              />
-            ))}
+          <div
+            style={{
+              height: `${rowVirtualizer.getTotalSize()}px`,
+              width: '100%',
+              position: 'relative',
+            }}
+          >
+            {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+              const shot = filteredShots[virtualRow.index];
+              const isFirst = virtualRow.index === 0;
+
+              return (
+                <div
+                  key={virtualRow.key}
+                  data-index={virtualRow.index}
+                  ref={rowVirtualizer.measureElement}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    transform: `translateY(${virtualRow.start}px)`,
+                  }}
+                >
+                  {/* 在第一个镜头前添加插入按钮 */}
+                  {isFirst && (
+                    <div
+                      className="relative h-0.5 bg-slate-700/50 group"
+                      onMouseEnter={() => setHoveredShotId('before-first')}
+                      onMouseLeave={() => setHoveredShotId(null)}
+                    >
+                      {hoveredShotId === 'before-first' && (
+                        <button
+                          onClick={() => onInsertShot(null)}
+                          className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-1 px-3 py-1 bg-violet-600 hover:bg-violet-500 text-white text-xs rounded-full shadow-lg transition-colors z-10"
+                        >
+                          <Plus className="w-3 h-3" />
+                          插入镜头
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  <div
+                    onMouseEnter={() => setHoveredShotId(shot.id)}
+                    onMouseLeave={() => setHoveredShotId(null)}
+                  >
+                    <ShotRow
+                      shot={shot}
+                      characters={characters}
+                      isSelected={selectedIds.includes(shot.id)}
+                      onSelect={(selected) => onSelectShot(shot.id, selected)}
+                      onGenerateImages={() => onGenerateImages(shot.id)}
+                      onGenerateVideo={() => onGenerateVideo(shot.id)}
+                      onGenerateAudio={() => onGenerateAudio(shot.id)}
+                      onSelectImage={(idx) => onSelectImage(shot.id, idx)}
+                      onSelectVideo={(idx) => onSelectVideo(shot.id, idx)}
+                      onDelete={() => onDeleteShots([shot.id])}
+                      onPreviewImage={setPreviewImage}
+                      onPreviewVideo={(url, title) => setPreviewVideo({ url, title })}
+                      onUpdateField={(field, value) => onUpdateShot(shot.id, field, value)}
+                    />
+                  </div>
+
+                  {/* 在每个镜头后添加插入按钮 */}
+                  <div
+                    className="relative h-0.5 bg-slate-700/50 group"
+                    onMouseEnter={() => setHoveredShotId(`after-${shot.id}`)}
+                    onMouseLeave={() => setHoveredShotId(null)}
+                  >
+                    {hoveredShotId === `after-${shot.id}` && (
+                      <button
+                        onClick={() => onInsertShot(shot.id)}
+                        className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-1 px-3 py-1 bg-violet-600 hover:bg-violet-500 text-white text-xs rounded-full shadow-lg transition-colors z-10"
+                      >
+                        <Plus className="w-3 h-3" />
+                        插入镜头
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
@@ -141,6 +478,7 @@ export function ShotTable({
               animate={{ scale: 1 }}
               exit={{ scale: 0.9 }}
               className="relative max-w-4xl max-h-full"
+              onClick={(e) => e.stopPropagation()}
             >
               <img
                 src={previewImage}
@@ -153,10 +491,22 @@ export function ShotTable({
               >
                 <X className="w-5 h-5 text-slate-300" />
               </button>
+              {/* ESC hint */}
+              <div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 text-sm text-slate-400">
+                按 ESC 键或点击背景关闭
+              </div>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Video Preview Modal */}
+      <VideoModal
+        isOpen={!!previewVideo}
+        onClose={() => setPreviewVideo(null)}
+        videoUrl={previewVideo?.url || ''}
+        title={previewVideo?.title || ''}
+      />
     </div>
   );
 }
@@ -170,8 +520,10 @@ interface ShotRowProps {
   onGenerateVideo: () => void;
   onGenerateAudio: () => void;
   onSelectImage: (imageIndex: number) => void;
+  onSelectVideo: (videoIndex: number) => void;
   onDelete: () => void;
   onPreviewImage: (url: string) => void;
+  onPreviewVideo: (url: string, title: string) => void;
   onUpdateField: (field: string, value: string | string[]) => void;
 }
 
@@ -184,16 +536,17 @@ function ShotRow({
   onGenerateVideo,
   onGenerateAudio,
   onSelectImage,
+  onSelectVideo,
   onDelete,
   onPreviewImage,
+  onPreviewVideo,
   onUpdateField,
 }: ShotRowProps) {
-  const status = statusConfig[shot.status];
-  const StatusIcon = status.icon;
   const hasImages = shot.images.length > 0;
-  const hasVideo = !!shot.videoUrl;
+  const hasVideo = shot.videos && shot.videos.length > 0;
   const hasAudio = !!shot.audioUrl;
   const selectedImage = hasImages ? shot.images[shot.selectedImageIndex] : null;
+  const selectedVideo = hasVideo ? shot.videos[shot.selectedVideoIndex || 0] : null;
 
   const isGeneratingImages = shot.status === 'generating_images';
   const isGeneratingVideo = shot.status === 'generating_video';
@@ -218,9 +571,16 @@ function ShotRow({
           className="mt-2 w-4 h-4 rounded border-slate-600 bg-slate-700 text-violet-500 focus:ring-violet-500 focus:ring-offset-0"
         />
 
-        {/* Sequence */}
+        {/* Sequence with Delete Button */}
         <div className="w-12 flex-shrink-0 text-center">
           <span className="text-lg font-bold text-slate-300">#{shot.sequence}</span>
+          <button
+            onClick={onDelete}
+            className="mt-1 p-1 hover:bg-red-600/20 rounded text-red-400 transition-colors"
+            title="删除"
+          >
+            <Trash2 className="w-3 h-3" />
+          </button>
         </div>
 
         {/* Voice Actor */}
@@ -246,41 +606,51 @@ function ShotRow({
           </div>
         </div>
 
-        {/* Script with Audio Button */}
-        <div className="flex-1 min-w-0 max-w-[200px]">
-          <div className="flex items-center justify-end gap-1 mb-1">
-            {hasAudio && (
-              <div className="w-4 h-4 rounded-full bg-emerald-500/20 flex items-center justify-center">
-                <Volume2 className="w-2.5 h-2.5 text-emerald-400" />
-              </div>
-            )}
-            <button
-              onClick={onGenerateAudio}
-              disabled={isGeneratingAudio || !shot.script.trim()}
-              className="p-1 hover:bg-orange-600/20 rounded transition-colors disabled:opacity-50"
-              title="生成配音"
-            >
-              {isGeneratingAudio ? (
-                <Loader2 className="w-3 h-3 text-orange-400 animate-spin" />
-              ) : (
-                <Volume2 className="w-3 h-3 text-orange-400" />
-              )}
-            </button>
-          </div>
+        {/* Script with Audio Buttons */}
+        <div className="flex-1 min-w-0 max-w-[200px] relative">
           <textarea
             value={shot.script}
             onChange={(e) => onUpdateField('script', e.target.value)}
             className="w-full h-20 px-2 py-1 bg-slate-700/50 hover:bg-slate-700 focus:bg-slate-700 rounded text-sm text-slate-300 resize-none focus:outline-none focus:ring-1 focus:ring-violet-500 transition-colors"
             placeholder="镜头文案"
           />
+          {/* Audio buttons overlay */}
+          <div className="absolute bottom-1 right-1 flex items-center gap-1">
+            {hasAudio && (
+              <button
+                onClick={() => {
+                  if (shot.audioUrl) {
+                    const audio = new Audio(shot.audioUrl);
+                    audio.play();
+                  }
+                }}
+                className="p-1.5 bg-slate-800/80 hover:bg-emerald-600/20 rounded transition-colors backdrop-blur-sm"
+                title="试听配音"
+              >
+                <Play className="w-4 h-4 text-emerald-400" />
+              </button>
+            )}
+            <button
+              onClick={onGenerateAudio}
+              disabled={isGeneratingAudio || !shot.script.trim()}
+              className="p-1.5 bg-slate-800/80 hover:bg-orange-600/20 rounded transition-colors disabled:opacity-50 backdrop-blur-sm"
+              title="生成配音"
+            >
+              {isGeneratingAudio ? (
+                <Loader2 className="w-4 h-4 text-orange-400 animate-spin" />
+              ) : (
+                <Volume2 className="w-4 h-4 text-orange-400" />
+              )}
+            </button>
+          </div>
         </div>
 
         {/* Image Prompt */}
-        <div className="w-40 flex-shrink-0">
+        <div className="w-42 flex-shrink-0">
           <textarea
             value={shot.imagePrompt}
             onChange={(e) => onUpdateField('imagePrompt', e.target.value)}
-            className="w-full h-20 px-2 py-1 bg-slate-700/50 hover:bg-slate-700 focus:bg-slate-700 rounded text-xs text-slate-400 resize-none focus:outline-none focus:ring-1 focus:ring-violet-500 transition-colors"
+            className="w-full h-32 px-2 py-1 bg-slate-700/50 hover:bg-slate-700 focus:bg-slate-700 rounded text-xs text-slate-400 resize-none focus:outline-none focus:ring-1 focus:ring-violet-500 transition-colors"
             placeholder="TTI 提示词"
           />
         </div>
@@ -312,12 +682,27 @@ function ShotRow({
         </div>
 
         {/* Image Preview & Selection */}
-        <div className="w-48 flex-shrink-0">
+        <div className="w-48 flex-shrink-0 relative">
           {hasImages ? (
             <div className="space-y-2">
+              {/* Generate button overlay */}
+              <button
+                onClick={onGenerateImages}
+                disabled={isGeneratingImages || isGeneratingVideo || !shot.imagePrompt.trim()}
+                className="absolute top-1 right-1 z-10 px-2 py-1 bg-slate-800/90 hover:bg-violet-600/30 disabled:opacity-50 disabled:cursor-not-allowed rounded text-xs text-violet-400 transition-colors backdrop-blur-sm"
+              >
+                {isGeneratingImages ? (
+                  <span className="flex items-center gap-1">
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    生成中
+                  </span>
+                ) : (
+                  '重新生成'
+                )}
+              </button>
               {/* Main preview */}
               <div
-                className="relative h-20 rounded-lg overflow-hidden bg-slate-700 cursor-pointer group"
+                className="relative h-24 rounded-lg overflow-hidden bg-slate-700 cursor-pointer group"
                 onClick={() => selectedImage && onPreviewImage(selectedImage)}
               >
                 <img
@@ -329,13 +714,13 @@ function ShotRow({
                   <ZoomIn className="w-6 h-6 text-white" />
                 </div>
               </div>
-              {/* Thumbnails */}
-              <div className="flex gap-1">
-                {shot.images.map((img, idx) => (
+              {/* Thumbnails - 4 options */}
+              <div className="grid grid-cols-4 gap-1">
+                {shot.images.slice(0, 4).map((img, idx) => (
                   <button
                     key={idx}
                     onClick={() => onSelectImage(idx)}
-                    className={`relative w-10 h-10 rounded overflow-hidden transition-all ${
+                    className={`relative aspect-square rounded overflow-hidden transition-all ${
                       idx === shot.selectedImageIndex
                         ? 'ring-2 ring-violet-500'
                         : 'ring-1 ring-slate-600 hover:ring-slate-500'
@@ -352,91 +737,171 @@ function ShotRow({
               </div>
             </div>
           ) : (
-            <div className="h-20 rounded-lg bg-slate-700/50 flex flex-col items-center justify-center text-slate-500">
-              <Image className="w-6 h-6 mb-1" />
-              <span className="text-xs">暂无图片</span>
+            <div className="relative space-y-2">
+              {/* Generate button overlay */}
+              <button
+                onClick={onGenerateImages}
+                disabled={isGeneratingImages || isGeneratingVideo || !shot.imagePrompt.trim()}
+                className="absolute top-1 right-1 z-10 px-2 py-1 bg-slate-800/90 hover:bg-violet-600/30 disabled:opacity-50 disabled:cursor-not-allowed rounded text-xs text-white transition-colors backdrop-blur-sm"
+              >
+                {isGeneratingImages ? (
+                  <span className="flex items-center gap-1">
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    生成中
+                  </span>
+                ) : (
+                  '生成图片'
+                )}
+              </button>
+              {/* Empty main preview */}
+              <div className="h-24 rounded-lg bg-slate-700/50 flex flex-col items-center justify-center text-slate-500">
+                <Image className="w-8 h-8 mb-1" />
+                <span className="text-xs">暂无图片</span>
+              </div>
+              {/* Empty thumbnails */}
+              <div className="grid grid-cols-4 gap-1">
+                {[1, 2, 3, 4].map((num) => (
+                  <div
+                    key={num}
+                    className="aspect-square rounded-lg bg-slate-700/50 flex items-center justify-center text-slate-500 text-xs"
+                  >
+                    {num}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>
 
         {/* Video Prompt */}
-        <div className="w-40 flex-shrink-0">
+        <div className="w-42 flex-shrink-0">
           <textarea
             value={shot.videoPrompt}
             onChange={(e) => onUpdateField('videoPrompt', e.target.value)}
-            className="w-full h-20 px-2 py-1 bg-slate-700/50 hover:bg-slate-700 focus:bg-slate-700 rounded text-xs text-slate-400 resize-none focus:outline-none focus:ring-1 focus:ring-violet-500 transition-colors"
+            className="w-full h-32 px-2 py-1 bg-slate-700/50 hover:bg-slate-700 focus:bg-slate-700 rounded text-xs text-slate-400 resize-none focus:outline-none focus:ring-1 focus:ring-violet-500 transition-colors"
             placeholder="TTV 提示词"
           />
         </div>
 
         {/* Video Preview */}
-        <div className="w-20 flex-shrink-0 text-center">
+        <div className="w-48 flex-shrink-0 relative">
           {hasVideo ? (
-            <div className="h-14 rounded-lg bg-slate-700 flex items-center justify-center">
-              <Play className="w-6 h-6 text-emerald-400" />
+            <div className="space-y-2">
+              {/* Generate button overlay */}
+              <button
+                onClick={onGenerateVideo}
+                disabled={!hasImages || isGeneratingImages || isGeneratingVideo}
+                className="absolute top-1 right-1 z-10 px-2 py-1 bg-slate-800/90 hover:bg-emerald-600/30 disabled:opacity-50 disabled:cursor-not-allowed rounded text-xs text-emerald-400 transition-colors backdrop-blur-sm"
+              >
+                {isGeneratingVideo ? (
+                  <span className="flex items-center gap-1">
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    生成中
+                  </span>
+                ) : (
+                  '重新生成'
+                )}
+              </button>
+              {/* Main video preview */}
+              <div
+                className="relative h-24 rounded-lg overflow-hidden bg-slate-700 cursor-pointer group"
+                onClick={() => selectedVideo && onPreviewVideo(selectedVideo, `镜头 #${shot.sequence} 视频`)}
+              >
+                {selectedVideo && (
+                  <>
+                    <video
+                      src={selectedVideo}
+                      className="w-full h-full object-cover pointer-events-none"
+                      preload="metadata"
+                      muted
+                      playsInline
+                      onLoadedMetadata={(e) => {
+                        const video = e.target as HTMLVideoElement;
+                        video.currentTime = 0.1;
+                      }}
+                    />
+                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Play className="w-8 h-8 text-white" />
+                    </div>
+                  </>
+                )}
+              </div>
+              {/* Thumbnails - 4 options */}
+              <div className="grid grid-cols-4 gap-1">
+                {shot.videos.slice(0, 4).map((video, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => onSelectVideo(idx)}
+                    className={`relative aspect-square rounded overflow-hidden transition-all ${
+                      idx === shot.selectedVideoIndex
+                        ? 'ring-2 ring-emerald-500'
+                        : 'ring-1 ring-slate-600 hover:ring-slate-500'
+                    }`}
+                  >
+                    <video
+                      src={video}
+                      className="w-full h-full object-cover pointer-events-none"
+                      preload="metadata"
+                      muted
+                      playsInline
+                      onLoadedMetadata={(e) => {
+                        const video = e.target as HTMLVideoElement;
+                        video.currentTime = 0.1;
+                      }}
+                    />
+                    {idx === shot.selectedVideoIndex && (
+                      <div className="absolute inset-0 bg-emerald-500/20 flex items-center justify-center">
+                        <Check className="w-4 h-4 text-emerald-400" />
+                      </div>
+                    )}
+                  </button>
+                ))}
+                {/* Empty slots for remaining videos */}
+                {Array.from({ length: 4 - shot.videos.length }).map((_, idx) => (
+                  <div
+                    key={shot.videos.length + idx}
+                    className="aspect-square rounded-lg bg-slate-700/50 flex items-center justify-center text-slate-500 text-xs"
+                  >
+                    {shot.videos.length + idx + 1}
+                  </div>
+                ))}
+              </div>
             </div>
           ) : (
-            <div className="h-14 rounded-lg bg-slate-700/50 flex flex-col items-center justify-center text-slate-500">
-              <Film className="w-5 h-5 mb-1" />
-              <span className="text-xs">暂无</span>
+            <div className="relative space-y-2">
+              {/* Generate button overlay */}
+              <button
+                onClick={onGenerateVideo}
+                disabled={!hasImages || isGeneratingImages || isGeneratingVideo}
+                className="absolute top-1 right-1 z-10 px-2 py-1 bg-slate-800/90 hover:bg-emerald-600/30 disabled:opacity-50 disabled:cursor-not-allowed rounded text-xs text-white transition-colors backdrop-blur-sm"
+              >
+                {isGeneratingVideo ? (
+                  <span className="flex items-center gap-1">
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    生成中
+                  </span>
+                ) : (
+                  '生成视频'
+                )}
+              </button>
+              {/* Empty main preview */}
+              <div className="h-24 rounded-lg bg-slate-700/50 flex flex-col items-center justify-center text-slate-500">
+                <Film className="w-8 h-8 mb-1" />
+                <span className="text-xs">暂无视频</span>
+              </div>
+              {/* Empty thumbnails */}
+              <div className="grid grid-cols-4 gap-1">
+                {[1, 2, 3, 4].map((num) => (
+                  <div
+                    key={num}
+                    className="aspect-square rounded-lg bg-slate-700/50 flex items-center justify-center text-slate-500 text-xs"
+                  >
+                    {num}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
-        </div>
-
-        {/* Status & Actions */}
-        <div className="w-32 flex-shrink-0 space-y-2">
-          {/* Status */}
-          <div className="flex items-center gap-1.5 justify-center">
-            <StatusIcon className={`w-4 h-4 ${status.color} ${status.animate ? 'animate-spin' : ''}`} />
-            <span className={`text-xs ${status.color}`}>{status.label}</span>
-          </div>
-
-          {/* Actions */}
-          <div className="grid grid-cols-2 gap-1">
-            <button
-              onClick={onGenerateImages}
-              disabled={isGeneratingImages || isGeneratingVideo || isGeneratingAudio}
-              className="flex items-center justify-center gap-1 px-2 py-1.5 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed rounded text-xs text-white transition-colors"
-              title="生成图片"
-            >
-              {isGeneratingImages ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <Image className="w-3.5 h-3.5" />
-              )}
-            </button>
-            <button
-              onClick={onGenerateVideo}
-              disabled={!hasImages || isGeneratingImages || isGeneratingVideo || isGeneratingAudio}
-              className="flex items-center justify-center gap-1 px-2 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed rounded text-xs text-white transition-colors"
-              title="生成视频"
-            >
-              {isGeneratingVideo ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <Film className="w-3.5 h-3.5" />
-              )}
-            </button>
-            <button
-              onClick={onGenerateAudio}
-              disabled={!shot.script.trim() || isGeneratingImages || isGeneratingVideo || isGeneratingAudio}
-              className="flex items-center justify-center gap-1 px-2 py-1.5 bg-orange-600 hover:bg-orange-500 disabled:opacity-50 disabled:cursor-not-allowed rounded text-xs text-white transition-colors"
-              title="生成配音"
-            >
-              {isGeneratingAudio ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <Volume2 className="w-3.5 h-3.5" />
-              )}
-            </button>
-            <button
-              onClick={onDelete}
-              className="flex items-center justify-center p-1.5 hover:bg-red-600/20 rounded text-red-400 transition-colors"
-              title="删除"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
-          </div>
         </div>
       </div>
 

@@ -28,10 +28,10 @@ interface CharactersPageProps {
   onUpdateCharacterSpeed: (id: string, speed: number) => void;
   onDeleteCharacter: (id: string) => void;
   onGenerateImage: (id: string) => void;
-  onGenerateAllImages: () => void;
   onUploadImage: (id: string) => void;
   onSetReferenceAudio: (id: string, audioPath: string) => void;
-  isGenerating: boolean;
+  addModalOpen: boolean;
+  onAddModalOpenChange: (open: boolean) => void;
 }
 
 export function CharactersPage({
@@ -41,15 +41,14 @@ export function CharactersPage({
   onUpdateCharacterSpeed,
   onDeleteCharacter,
   onGenerateImage,
-  onGenerateAllImages,
   onUploadImage,
   onSetReferenceAudio,
-  isGenerating,
+  addModalOpen,
+  onAddModalOpenChange,
 }: CharactersPageProps) {
   const [audioModalOpen, setAudioModalOpen] = useState(false);
   const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(null);
   const [editModalOpen, setEditModalOpen] = useState(false);
-  const [addModalOpen, setAddModalOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [characterToDelete, setCharacterToDelete] = useState<Character | null>(null);
   const [imageViewerOpen, setImageViewerOpen] = useState(false);
@@ -100,13 +99,13 @@ export function CharactersPage({
     if (newCharacter.name.trim()) {
       onAddCharacter(newCharacter.name.trim(), newCharacter.description.trim());
       setNewCharacter({ name: '', description: '' });
-      setAddModalOpen(false);
+      onAddModalOpenChange(false);
     }
   };
 
   const handleCancelAdd = () => {
     setNewCharacter({ name: '', description: '' });
-    setAddModalOpen(false);
+    onAddModalOpenChange(false);
   };
 
   const handleDeleteClick = (character: Character) => {
@@ -163,49 +162,6 @@ export function CharactersPage({
 
   return (
     <div className="h-full p-6 overflow-y-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className="text-xl font-semibold text-slate-100">角色库</h2>
-          <p className="text-slate-400 mt-1">
-            {characters.length} 个角色 {pendingCount > 0 && `· ${pendingCount} 个待生成`}
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          {pendingWithDescriptionCount > 0 && (
-            <button
-              onClick={onGenerateAllImages}
-              disabled={isGenerating}
-              className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 rounded-lg text-sm text-white transition-colors"
-            >
-              {isGenerating ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  生成中...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-4 h-4" />
-                  生成全部 ({pendingWithDescriptionCount})
-                </>
-              )}
-            </button>
-          )}
-          {pendingCount > pendingWithDescriptionCount && (
-            <div className="text-xs text-amber-400">
-              {pendingCount - pendingWithDescriptionCount} 个角色缺少描述
-            </div>
-          )}
-          <button
-            onClick={() => setAddModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-200 transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            添加角色
-          </button>
-        </div>
-      </div>
-
       {/* Characters Grid */}
       {characters.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -505,7 +461,7 @@ export function CharactersPage({
             点击"添加角色"创建新角色，或导入 Excel 自动提取角色
           </p>
           <button
-            onClick={() => setAddModalOpen(true)}
+            onClick={() => onAddModalOpenChange(true)}
             className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-500 rounded-lg text-sm text-white transition-colors mx-auto"
           >
             <Plus className="w-4 h-4" />

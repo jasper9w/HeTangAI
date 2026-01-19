@@ -3,6 +3,8 @@ API class exposed to frontend via pywebview
 """
 import base64
 import json
+import random
+import string
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -33,6 +35,11 @@ class Api:
         work_dir = Path(settings.get("workDir", str(Path.home() / "Desktop" / "荷塘AI")))
         self._project_manager = ProjectManager(work_dir)
         logger.info("API initialized")
+
+    def _generate_shot_id(self) -> str:
+        """Generate a 6-character random ID for shot"""
+        chars = string.ascii_lowercase + string.digits
+        return ''.join(random.choices(chars, k=6))
 
     def _path_to_url(self, filepath: str) -> str:
         """Convert local file path to HTTP URL for file server"""
@@ -145,9 +152,27 @@ class Api:
         return {"success": True, "data": self.project_data}
 
     def list_projects(self) -> dict:
-        """List all projects in work directory"""
+        """List all projects in work directory with metadata"""
         try:
-            projects = self.project_manager.list_projects()
+            project_names = self.project_manager.list_projects()
+            projects = []
+
+            for name in project_names:
+                try:
+                    project_data = self.project_manager.load_project(name)
+                    if project_data:
+                        projects.append({
+                            "name": name,
+                            "path": str(self.project_manager.get_project_file(name)),
+                            "createdAt": project_data.get("createdAt", ""),
+                            "updatedAt": project_data.get("updatedAt", ""),
+                            "shotCount": len(project_data.get("shots", [])),
+                            "characterCount": len(project_data.get("characters", [])),
+                        })
+                except Exception as e:
+                    logger.warning(f"Failed to load project {name}: {e}")
+                    continue
+
             return {"success": True, "projects": projects}
         except Exception as e:
             logger.error(f"Failed to list projects: {e}")
@@ -161,6 +186,53 @@ class Api:
                 self.project_data = project_data
                 self.project_name = project_name
                 self.project_path = self.project_manager.get_project_file(project_name)
+
+                # Clear all "generating" statuses on startup
+                for shot in self.project_data.get("shots", []):
+                    if shot.get("status") in ["generating_images", "generating_video", "generating_audio"]:
+                        shot["status"] = "pending"
+                        logger.info(f"Cleared generating status for shot {shot.get('id')}")
+
+                for character in self.project_data.get("characters", []):
+                    if character.get("status") == "generating":
+                        character["status"] = "pending"
+                        logger.info(f"Cleared generating status for character {character.get('name')}")
+
+                # Load all alternative images for each shot (slots 1-4)
+                for shot in self.project_data.get("shots", []):
+                    shot_id = shot.get("id")
+                    all_image_paths = []
+                    all_local_paths = []
+
+                    for slot in range(1, 5):
+                        slot_path = self.project_manager.get_shot_image_path(project_name, shot_id, slot)
+                        if slot_path.exists():
+                            all_image_paths.append(self._path_to_url(str(slot_path)))
+                            all_local_paths.append(str(slot_path))
+
+                    shot["images"] = all_image_paths
+                    shot["_localImagePaths"] = all_local_paths
+                    if all_image_paths and "selectedImageIndex" not in shot:
+                        shot["selectedImageIndex"] = 0
+
+                    # Load all alternative videos for each shot (slots 1-4)
+                    all_video_paths = []
+                    for slot in range(1, 5):
+                        slot_path = self.project_manager.get_shot_video_path(project_name, shot_id, slot)
+                        if slot_path.exists():
+                            all_video_paths.append(self._path_to_url(str(slot_path)))
+
+                    shot["videos"] = all_video_paths
+                    if all_video_paths and "selectedVideoIndex" not in shot:
+                        shot["selectedVideoIndex"] = 0
+
+                    # Load audio
+                    audio_path = self.project_manager.get_shot_audio_path(project_name, shot_id)
+                    if audio_path.exists():
+                        shot["audioUrl"] = self._path_to_url(str(audio_path))
+                    else:
+                        shot["audioUrl"] = ""
+
                 logger.info(f"Opened project from workdir: {project_name}")
                 return {"success": True, "data": self.project_data, "name": project_name}
             else:
@@ -188,6 +260,59 @@ class Api:
             return {"success": True, "name": name, "path": str(project_file)}
         except Exception as e:
             logger.error(f"Failed to save project: {e}")
+            return {"success": False, "error": str(e)}
+
+    def delete_project_from_workdir(self, project_name: str) -> dict:
+        """Delete a project from work directory"""
+        try:
+            project_dir = self.project_manager.get_project_dir(project_name)
+            if not project_dir.exists():
+                return {"success": False, "error": "Project not found"}
+
+            import shutil
+            shutil.rmtree(project_dir)
+            logger.info(f"Deleted project: {project_name}")
+            return {"success": True}
+        except Exception as e:
+            logger.error(f"Failed to delete project: {e}")
+            return {"success": False, "error": str(e)}
+
+    def rename_project_in_workdir(self, old_name: str, new_name: str) -> dict:
+        """Rename a project in work directory"""
+        try:
+            old_dir = self.project_manager.get_project_dir(old_name)
+            new_dir = self.project_manager.get_project_dir(new_name)
+
+            if not old_dir.exists():
+                return {"success": False, "error": "Project not found"}
+
+            if new_dir.exists():
+                return {"success": False, "error": "A project with this name already exists"}
+
+            # Load project data and update name
+            project_data = self.project_manager.load_project(old_name)
+            if not project_data:
+                return {"success": False, "error": "Failed to load project data"}
+
+            project_data["name"] = new_name
+            project_data["updatedAt"] = datetime.now().isoformat()
+
+            # Rename directory
+            old_dir.rename(new_dir)
+
+            # Update project.json with new name
+            self.project_manager.save_project(new_name, project_data)
+
+            # Update current project if it's the one being renamed
+            if self.project_name == old_name:
+                self.project_name = new_name
+                self.project_data = project_data
+                self.project_path = self.project_manager.get_project_file(new_name)
+
+            logger.info(f"Renamed project: {old_name} -> {new_name}")
+            return {"success": True, "name": new_name}
+        except Exception as e:
+            logger.error(f"Failed to rename project: {e}")
             return {"success": False, "error": str(e)}
 
     def open_project(self) -> dict:
@@ -218,12 +343,17 @@ class Api:
             return {"success": False, "error": str(e)}
 
     def save_project(self) -> dict:
-        """Save project to current path"""
+        """Save project to current path or work directory"""
         if not self.project_data:
             return {"success": False, "error": "No project data"}
 
+        # If project has a name but no path, save to work directory
+        if not self.project_path and self.project_name:
+            return self.save_project_to_workdir(self.project_name)
+
+        # If no path and no name, save to work directory with project data name
         if not self.project_path:
-            return self.save_project_as()
+            return self.save_project_to_workdir()
 
         return self._save_to_path(self.project_path)
 
@@ -459,25 +589,27 @@ class Api:
                     # Build professional 3-view character design prompt
                     character_desc = char.get('description', '').strip()
 
-                    prompt_template = """一张横向3等分的专业角色设计三视图。
-纯白背景，高清画质，三个视角保持角色完全一致。
-左侧正面全身，中间侧面全身，右侧背面全身。
+                    prompt_template = """
+**一张专业角色设计参考图，横向3等分布局展示同一角色的三个视角。**
 
-画面为横向16:9比例，纯白背景，横向平均分为3个区域，从左到右依次展示同一角色的正面、侧面、背面全身图。
+画面比例16:9，纯白背景，从左到右依次为：正面全身视角、侧面全身视角、背面全身视角。
 
-全局规范：
-- 三个视图必须保持完全一致：同一角色、同一服装、同一体型比例
-- 人物占每个区域高度的85%，头顶与脚底适当留白，禁止裁切
-- 统一站姿：自然站立，双臂垂于身侧，双脚并拢，身体放松
-- 画质要求：高清、精细、专业角色设计稿风格
+**全局要求：**
+- 三个视角必须是同一角色：相同的面容、服装、体型、比例
+- 角色占每个区域高度的85%，头顶和脚底保留适当留白，不得裁切
+- 统一姿态：自然站立，双臂自然下垂于身体两侧，双脚并拢，身体放松
+- **画质标准：电影级别的超高清画质，细节丰富精细，光影自然真实，质感层次分明，达到专业影视制作的视觉水准（除非角色描述中有特殊风格要求）**
+- **角色类型默认设定：真人风格，亚洲面孔（中国人），写实呈现（除非角色描述中另有说明）**
+- **外貌品质标准：角色必须具备主角级别的出众外貌，五官精致立体，面部比例完美，气质超凡，具有强烈的视觉美感和吸引力。皮肤质感细腻，整体呈现应达到专业演员/模特的高水准颜值（除非角色描述中有特殊设定）**
 
-区域定义：
-1. 左侧 - 正面图：人物正对镜头，左右对称，展示面部与服装正面全部细节
-2. 中间 - 侧面图：人物右侧90度朝向镜头，展示身体轮廓与服装侧面结构
-3. 右侧 - 背面图：人物完全背对镜头，展示发型后部与服装背面设计
+**三个视角的具体要求：**
+1. **左侧区域 - 正面视角**：角色正面朝向观察者，身体对称，完整展示面部特征和服装正面细节
+2. **中间区域 - 侧面视角**：角色右侧身90度朝向观察者，清晰展示身体轮廓线条和服装侧面结构
+3. **右侧区域 - 背面视角**：角色背部朝向观察者，完整呈现发型背面和服装后部设计
 
-角色描述：
-{character_desc}"""
+**角色描述：**
+{character_desc}
+"""
 
                     prompt = prompt_template.format(character_desc=character_desc if character_desc else char['name'])
                     image_urls = asyncio.run(client.generate_image(prompt, count=1))
@@ -487,20 +619,19 @@ class Api:
 
                     image_url = image_urls[0]
 
-                    # Download and save to project directory if project is saved
-                    if self.project_name:
-                        image_path = self.project_manager.get_character_image_path(
-                            self.project_name, character_id
-                        )
-                        asyncio.run(download_file(image_url, image_path))
-                        # Convert to HTTP URL for frontend
-                        char["imageUrl"] = self._path_to_url(str(image_path))
-                    else:
-                        # Save to temp output directory
-                        output_path = self.output_dir / "characters" / f"{character_id}.jpg"
-                        asyncio.run(download_file(image_url, output_path))
-                        # Convert to HTTP URL for frontend
-                        char["imageUrl"] = self._path_to_url(str(output_path))
+                    # Require project to be saved before generating images
+                    if not self.project_name:
+                        raise ValueError("Please save the project first before generating character images")
+
+                    # Download and save to project directory
+                    image_path = self.project_manager.get_character_image_path(
+                        self.project_name, character_id
+                    )
+                    asyncio.run(download_file(image_url, image_path))
+                    # Convert to HTTP URL for frontend with cache-busting timestamp
+                    import time
+                    timestamp = int(time.time() * 1000)  # milliseconds timestamp
+                    char["imageUrl"] = f"{self._path_to_url(str(image_path))}?t={timestamp}"
 
                     char["status"] = "ready"
                     logger.info(f"Generated character image for {character_id}")
@@ -544,19 +675,28 @@ class Api:
         try:
             import shutil
 
+            # Require project to be saved before uploading images
+            if not self.project_name:
+                return {"success": False, "error": "Please save the project first before uploading character images"}
+
             source_path = Path(result[0])
-            # Copy to output directory
-            output_path = self.output_dir / "characters" / f"{character_id}{source_path.suffix}"
+            # Copy to project directory
+            output_path = self.project_manager.get_character_image_path(
+                self.project_name, character_id
+            )
             output_path.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source_path, output_path)
 
             # Update character
             for char in self.project_data["characters"]:
                 if char["id"] == character_id:
-                    char["imageUrl"] = str(output_path)
+                    # Convert to HTTP URL for frontend with cache-busting timestamp
+                    import time
+                    timestamp = int(time.time() * 1000)  # milliseconds timestamp
+                    char["imageUrl"] = f"{self._path_to_url(str(output_path))}?t={timestamp}"
                     char["status"] = "ready"
                     logger.info(f"Uploaded character image for {character_id}")
-                    return {"success": True, "imageUrl": str(output_path), "character": char}
+                    return {"success": True, "imageUrl": char["imageUrl"], "character": char}
 
             return {"success": False, "error": "Character not found"}
 
@@ -607,6 +747,56 @@ class Api:
         logger.info(f"Deleted {deleted_count} shots")
         return {"success": True, "deletedCount": deleted_count}
 
+    def insert_shot(self, after_shot_id: str = None) -> dict:
+        """Insert a new empty shot after the specified shot (or at the beginning if None)"""
+        if not self.project_data:
+            return {"success": False, "error": "No project data"}
+
+        # Create new shot with default values
+        new_shot = {
+            "id": self._generate_shot_id(),
+            "sequence": 0,
+            "voiceActor": "",
+            "characters": [],
+            "emotion": "",
+            "intensity": "",
+            "script": "",
+            "imagePrompt": "",
+            "videoPrompt": "",
+            "images": [],
+            "selectedImageIndex": 0,
+            "videos": [],
+            "selectedVideoIndex": 0,
+            "videoUrl": "",
+            "audioUrl": "",
+            "status": "pending",
+        }
+
+        # Find insertion position
+        if after_shot_id is None:
+            # Insert at the beginning
+            insert_index = 0
+        else:
+            # Find the shot to insert after
+            insert_index = None
+            for i, shot in enumerate(self.project_data["shots"]):
+                if shot["id"] == after_shot_id:
+                    insert_index = i + 1
+                    break
+
+            if insert_index is None:
+                return {"success": False, "error": "Shot not found"}
+
+        # Insert the new shot
+        self.project_data["shots"].insert(insert_index, new_shot)
+
+        # Update sequence numbers for all shots
+        for i, shot in enumerate(self.project_data["shots"]):
+            shot["sequence"] = i + 1
+
+        logger.info(f"Inserted new shot at position {insert_index + 1}")
+        return {"success": True, "shot": new_shot, "index": insert_index, "shots": self.project_data["shots"]}
+
     def select_image(self, shot_id: str, image_index: int) -> dict:
         """Select which image to use for a shot"""
         if not self.project_data:
@@ -622,10 +812,27 @@ class Api:
 
         return {"success": False, "error": "Shot not found"}
 
+    def select_video(self, shot_id: str, video_index: int) -> dict:
+        """Select which video to use for a shot"""
+        if not self.project_data:
+            return {"success": False, "error": "No project data"}
+
+        for shot in self.project_data["shots"]:
+            if shot["id"] == shot_id:
+                videos = shot.get("videos", [])
+                if 0 <= video_index < len(videos):
+                    shot["selectedVideoIndex"] = video_index
+                    shot["videoUrl"] = videos[video_index]
+                    logger.debug(f"Shot {shot_id} selected video {video_index}")
+                    return {"success": True}
+                return {"success": False, "error": "Invalid video index"}
+
+        return {"success": False, "error": "Shot not found"}
+
     # ========== Image Generation ==========
 
     def generate_images_for_shot(self, shot_id: str) -> dict:
-        """Generate 4 images for a single shot"""
+        """Generate 4 images for a single shot using character references"""
         if not self.project_data:
             return {"success": False, "error": "No project data"}
 
@@ -633,7 +840,7 @@ class Api:
             if shot["id"] == shot_id:
                 try:
                     import asyncio
-                    from services.generator import GenerationClient, download_file
+                    from services.generator import GenerationClient, download_file, compress_image_if_needed
 
                     shot["status"] = "generating_images"
 
@@ -644,6 +851,45 @@ class Api:
                     if not tti_config.get("apiUrl") or not tti_config.get("apiKey"):
                         raise ValueError("TTI API not configured in settings")
 
+                    # Require project to be saved before generating images
+                    if not self.project_name:
+                        raise ValueError("Please save the project first before generating shot images")
+
+                    # Get character references for this shot
+                    shot_characters = shot.get("characters", [])
+                    reference_images = []
+                    character_references = []  # Store character name and image data pairs
+
+                    if shot_characters:
+                        logger.info(f"Shot involves characters: {shot_characters}")
+
+                        # Find characters with images
+                        for char_name in shot_characters:
+                            for char in self.project_data["characters"]:
+                                if char["name"] == char_name and char.get("imageUrl"):
+                                    # Get local path from imageUrl
+                                    image_url = char["imageUrl"]
+                                    # Remove cache-busting timestamp
+                                    if "?t=" in image_url:
+                                        image_url = image_url.split("?t=")[0]
+
+                                    # Convert HTTP URL back to local path
+                                    if image_url.startswith(f"http://127.0.0.1:{self._file_server_port}/"):
+                                        local_path = image_url.replace(f"http://127.0.0.1:{self._file_server_port}/", "")
+                                        # Handle both relative and absolute paths
+                                        if not local_path.startswith("/"):
+                                            local_path = str(Path.cwd() / local_path)
+
+                                        if Path(local_path).exists():
+                                            # Compress the reference image
+                                            reference_image_data = compress_image_if_needed(local_path, max_size_kb=256)
+                                            reference_images.append(reference_image_data)
+                                            character_references.append(char_name)
+                                            logger.info(f"Added character reference: {char_name} -> {local_path}")
+                                        else:
+                                            logger.warning(f"Character image not found: {local_path}")
+                                    break
+
                     # Create client
                     client = GenerationClient(
                         api_url=tti_config["apiUrl"],
@@ -651,54 +897,113 @@ class Api:
                         model=tti_config.get("model", "gemini-2.5-flash-image-landscape"),
                     )
 
-                    # Generate images (returns URLs)
-                    prompt = shot.get("imagePrompt", "")
-                    image_urls = asyncio.run(client.generate_image(prompt, count=4))
+                    # Build enhanced prompt with character information
+                    base_prompt = shot.get("imagePrompt", "")
+
+                    if reference_images:
+                        # Build character reference description
+                        character_descriptions = []
+                        for i, char_name in enumerate(character_references, 1):
+                            character_descriptions.append(f"第{i}张图：{char_name}")
+
+                        character_info = "、".join(character_descriptions)
+
+                        # Use image-to-image generation with character references
+                        enhanced_prompt = f"""基于提供的角色参考图，生成以下场景：
+
+{base_prompt}
+
+参考图说明：
+{character_info}
+
+要求：
+- 严格按照参考图中对应角色的外观、服装、特征进行绘制
+- 保持每个角色的一致性和辨识度
+- 场景构图要符合镜头描述的要求
+- 画质要求：电影级别的超高清画质，细节丰富精细
+- 如果场景中涉及多个角色，请确保每个角色都按照对应的参考图进行绘制"""
+
+                        logger.info(f"Using {len(reference_images)} character reference images: {character_references}")
+                        image_urls = asyncio.run(client.generate_image(
+                            enhanced_prompt,
+                            reference_images=reference_images,
+                            count=4
+                        ))
+                    else:
+                        # Use text-to-image generation (original behavior)
+                        logger.info("No character references found, using text-to-image generation")
+                        image_urls = asyncio.run(client.generate_image(base_prompt, count=4))
 
                     if not image_urls:
                         raise ValueError("No images generated")
 
-                    # Download and save images to project directory if project is saved
+                    # Download and save images to project directory
+                    # Strategy: Always maintain 4 alternative images (index 1-4)
+                    # If slots are available, fill them; otherwise replace the oldest one
                     image_paths = []
-                    image_local_paths = []  # Store local paths for video generation
-                    sequence = shot.get("sequence", 1)
+                    image_local_paths = []
+                    shot_id = shot["id"]
 
+                    # Check which slots (1-4) are already occupied
+                    existing_slots = []
+                    for slot in range(1, 5):
+                        slot_path = self.project_manager.get_shot_image_path(self.project_name, shot_id, slot)
+                        if slot_path.exists():
+                            existing_slots.append((slot, slot_path.stat().st_mtime))
+
+                    # Sort by modification time (oldest first)
+                    existing_slots.sort(key=lambda x: x[1])
+
+                    # Determine which slots to use for new images
+                    slots_to_use = []
+                    if len(existing_slots) < 4:
+                        # Fill empty slots first
+                        occupied = {slot for slot, _ in existing_slots}
+                        for slot in range(1, 5):
+                            if slot not in occupied:
+                                slots_to_use.append(slot)
+                                if len(slots_to_use) == 4:
+                                    break
+                    else:
+                        # All slots occupied, replace the 4 oldest ones
+                        slots_to_use = [slot for slot, _ in existing_slots[:4]]
+
+                    # Download and save new images
+                    first_new_slot = None  # Track the first newly generated image slot
                     for idx, img_url in enumerate(image_urls):
-                        if self.project_name:
-                            # Save to project directory
-                            image_path = self.project_manager.get_shot_image_path(
-                                self.project_name,
-                                sequence,
-                                index=idx + 1  # 1-4 for alternatives, 0 reserved for main
-                            )
-                            asyncio.run(download_file(img_url, image_path))
-                            # Store local path for video generation
-                            image_local_paths.append(str(image_path))
-                            # Convert to HTTP URL for frontend
-                            image_paths.append(self._path_to_url(str(image_path)))
-                        else:
-                            # Save to temp output directory
-                            output_path = self.output_dir / "shots" / f"shot_{shot_id}_{idx}.jpg"
-                            asyncio.run(download_file(img_url, output_path))
-                            # Store local path for video generation
-                            image_local_paths.append(str(output_path))
-                            # Convert to HTTP URL for frontend
-                            image_paths.append(self._path_to_url(str(output_path)))
+                        slot = slots_to_use[idx]
+                        if first_new_slot is None:
+                            first_new_slot = slot
+                        image_path = self.project_manager.get_shot_image_path(self.project_name, shot_id, slot)
+                        asyncio.run(download_file(img_url, image_path))
+                        image_local_paths.append(str(image_path))
+                        image_paths.append(self._path_to_url(str(image_path)))
 
-                    # Set first alternative as main image
-                    if self.project_name and image_paths:
-                        self.project_manager.set_main_shot_image(self.project_name, sequence, 1)
-                        # Get the main image path and convert to URL
-                        main_path = self.project_manager.get_shot_image_path(self.project_name, sequence, 0)
-                        image_local_paths.insert(0, str(main_path))
-                        image_paths.insert(0, self._path_to_url(str(main_path)))
+                    # Load all 4 slots for frontend display (in order 1-4)
+                    all_image_paths = []
+                    all_local_paths = []
+                    for slot in range(1, 5):
+                        slot_path = self.project_manager.get_shot_image_path(self.project_name, shot_id, slot)
+                        if slot_path.exists():
+                            all_image_paths.append(self._path_to_url(str(slot_path)))
+                            all_local_paths.append(str(slot_path))
 
-                    shot["images"] = image_paths
-                    shot["_localImagePaths"] = image_local_paths  # Store local paths for internal use
-                    shot["selectedImageIndex"] = 0
+                    # If no images existed before, set the first newly generated image as selected
+                    # Otherwise keep the current selection
+                    if len(existing_slots) == 0 and first_new_slot is not None:
+                        # Find the index of the first new slot in the sorted list
+                        shot["selectedImageIndex"] = first_new_slot - 1  # Convert slot (1-4) to index (0-3)
+                        logger.info(f"Set first generated image (slot {first_new_slot}) as default selection")
+                    elif "selectedImageIndex" not in shot or shot["selectedImageIndex"] >= len(all_image_paths):
+                        shot["selectedImageIndex"] = 0  # Default to first available image
+
+                    shot["images"] = all_image_paths
+                    shot["_localImagePaths"] = all_local_paths
                     shot["status"] = "images_ready"
-                    logger.info(f"Generated {len(image_paths)} images for shot {shot_id}")
-                    return {"success": True, "images": image_paths, "shot": shot}
+
+                    generation_type = "图生图" if reference_images else "文生图"
+                    logger.info(f"Generated {len(image_urls)} images for shot {shot_id} using {generation_type}, total alternatives: {len(all_image_paths)}")
+                    return {"success": True, "images": all_image_paths, "shot": shot}
 
                 except Exception as e:
                     shot["status"] = "error"
@@ -771,28 +1076,68 @@ class Api:
                     if not video_url:
                         raise ValueError("No video generated")
 
-                    # Download and save video to project directory if project is saved
-                    sequence = shot.get("sequence", 1)
+                    # Require project to be saved before generating videos
+                    if not self.project_name:
+                        raise ValueError("Please save the project first before generating videos")
 
-                    if self.project_name:
-                        # Save to project directory
-                        video_path = self.project_manager.get_shot_video_path(
-                            self.project_name, sequence
-                        )
-                        asyncio.run(download_file(video_url, video_path))
-                        # Convert to HTTP URL for frontend
-                        video_local_url = self._path_to_url(str(video_path))
+                    # Download and save video to project directory
+                    # Strategy: Always maintain 4 alternative videos (index 1-4)
+                    # If slots are available, fill them; otherwise replace the oldest one
+                    video_paths = []
+                    shot_id_str = shot["id"]
+
+                    # Check which slots (1-4) are already occupied
+                    existing_slots = []
+                    for slot in range(1, 5):
+                        slot_path = self.project_manager.get_shot_video_path(self.project_name, shot_id_str, slot)
+                        if slot_path.exists():
+                            existing_slots.append((slot, slot_path.stat().st_mtime))
+
+                    # Sort by modification time (oldest first)
+                    existing_slots.sort(key=lambda x: x[1])
+
+                    # Determine which slot to use for new video
+                    target_slot = None
+                    if len(existing_slots) < 4:
+                        # Fill empty slot first
+                        occupied = {slot for slot, _ in existing_slots}
+                        for slot in range(1, 5):
+                            if slot not in occupied:
+                                target_slot = slot
+                                break
                     else:
-                        # Save to temp output directory
-                        output_path = self.output_dir / "shots" / f"shot_{shot_id}.mp4"
-                        asyncio.run(download_file(video_url, output_path))
-                        # Convert to HTTP URL for frontend
-                        video_local_url = self._path_to_url(str(output_path))
+                        # All slots occupied, replace the oldest one
+                        target_slot = existing_slots[0][0]
 
-                    shot["videoUrl"] = video_local_url
+                    # Download and save new video
+                    video_path = self.project_manager.get_shot_video_path(self.project_name, shot_id_str, target_slot)
+                    asyncio.run(download_file(video_url, video_path))
+
+                    # Load all 4 slots for frontend display (in order 1-4)
+                    all_video_paths = []
+                    for slot in range(1, 5):
+                        slot_path = self.project_manager.get_shot_video_path(self.project_name, shot_id_str, slot)
+                        if slot_path.exists():
+                            all_video_paths.append(self._path_to_url(str(slot_path)))
+
+                    # If no videos existed before, set the first newly generated video as selected
+                    # Otherwise keep the current selection
+                    if len(existing_slots) == 0 and target_slot is not None:
+                        shot["selectedVideoIndex"] = target_slot - 1  # Convert slot (1-4) to index (0-3)
+                        shot["videoUrl"] = all_video_paths[target_slot - 1] if target_slot - 1 < len(all_video_paths) else all_video_paths[0]
+                        logger.info(f"Set first generated video (slot {target_slot}) as default selection")
+                    elif "selectedVideoIndex" not in shot or shot["selectedVideoIndex"] >= len(all_video_paths):
+                        shot["selectedVideoIndex"] = 0
+                        shot["videoUrl"] = all_video_paths[0] if all_video_paths else ""
+                    else:
+                        # Keep current selection, update videoUrl
+                        selected_idx = shot.get("selectedVideoIndex", 0)
+                        shot["videoUrl"] = all_video_paths[selected_idx] if selected_idx < len(all_video_paths) else all_video_paths[0]
+
+                    shot["videos"] = all_video_paths
                     shot["status"] = "completed"
-                    logger.info(f"Generated video for shot {shot_id}")
-                    return {"success": True, "videoUrl": video_local_url, "shot": shot}
+                    logger.info(f"Generated video for shot {shot_id}, total alternatives: {len(all_video_paths)}")
+                    return {"success": True, "videoUrl": shot["videoUrl"], "shot": shot}
 
                 except Exception as e:
                     shot["status"] = "error"

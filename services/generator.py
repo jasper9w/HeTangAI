@@ -142,7 +142,7 @@ class GenerationClient:
         self.timeout = 300.0  # 5 minutes timeout
 
     async def generate_image(
-        self, prompt: str, reference_image: Optional[str] = None, count: int = 4
+        self, prompt: str, reference_images: Optional[List[str]] = None, count: int = 4
     ) -> List[str]:
         """
         Generate images using streaming API
@@ -150,7 +150,7 @@ class GenerationClient:
 
         Args:
             prompt: Text prompt for image generation
-            reference_image: Optional base64 encoded reference image
+            reference_images: Optional list of base64 encoded reference images
             count: Number of images to generate (default 4)
         """
         headers = {
@@ -159,15 +159,15 @@ class GenerationClient:
         }
 
         # Build message content
-        if reference_image:
-            # Image-to-image
-            content = [
-                {"type": "text", "text": prompt},
-                {
+        if reference_images:
+            # Image-to-image with multiple references
+            content = [{"type": "text", "text": prompt}]
+
+            for img_data in reference_images:
+                content.append({
                     "type": "image_url",
-                    "image_url": {"url": f"data:image/jpeg;base64,{reference_image}"},
-                },
-            ]
+                    "image_url": {"url": f"data:image/jpeg;base64,{img_data}"},
+                })
         else:
             # Text-to-image
             content = prompt
@@ -179,6 +179,8 @@ class GenerationClient:
         }
 
         logger.info(f"Generating {count} images with model: {self.model}")
+        if reference_images:
+            logger.info(f"Using {len(reference_images)} reference images")
 
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
@@ -239,6 +241,15 @@ class GenerationClient:
         except Exception as e:
             logger.error(f"Failed to generate image: {e}")
             raise
+
+    async def generate_image_single(
+        self, prompt: str, reference_image: Optional[str] = None, count: int = 4
+    ) -> List[str]:
+        """
+        Backward compatibility method for single reference image
+        """
+        reference_images = [reference_image] if reference_image else None
+        return await self.generate_image(prompt, reference_images, count)
 
     async def generate_video(
         self, prompt: str, image_paths: Optional[List[str]] = None

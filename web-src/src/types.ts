@@ -4,7 +4,7 @@
 
 // ========== Page Types ==========
 
-export type PageType = 'home' | 'shots' | 'characters' | 'dubbing' | 'settings';
+export type PageType = 'projects' | 'home' | 'shots' | 'characters' | 'dubbing' | 'settings';
 
 // ========== Shot Types ==========
 
@@ -18,7 +18,7 @@ export type ShotStatus =
   | 'error';
 
 export interface Shot {
-  id: string;
+  id: string;  // 6位随机字符，用于文件命名
   sequence: number;
   voiceActor: string;
   characters: string[];
@@ -27,9 +27,10 @@ export interface Shot {
   script: string;
   imagePrompt: string;
   videoPrompt: string;
-  images: string[];
-  selectedImageIndex: number;
-  videoUrl: string;
+  images: string[];  // 备选图URL数组，最多4个
+  selectedImageIndex: number;  // 选中的备选图索引
+  videos: string[];  // 备选视频URL数组，最多4个
+  selectedVideoIndex: number;  // 选中的备选视频索引
   audioUrl: string;     // 配音文件URL
   status: ShotStatus;
   errorMessage?: string;
@@ -52,6 +53,15 @@ export interface Character {
 }
 
 // ========== Project Types ==========
+
+export interface ProjectListItem {
+  name: string;
+  path: string;
+  createdAt: string;
+  updatedAt: string;
+  shotCount: number;
+  characterCount: number;
+}
 
 export interface ProjectData {
   version: string;
@@ -108,9 +118,11 @@ export interface PyWebViewApi {
   update_project_name: (name: string) => Promise<ApiResponse>;
 
   // Work directory project management
-  list_projects: () => Promise<ApiResponse & { projects?: string[] }>;
+  list_projects: () => Promise<ApiResponse & { projects?: ProjectListItem[] }>;
   open_project_from_workdir: (projectName: string) => Promise<ApiResponse<ProjectData> & { name?: string }>;
   save_project_to_workdir: (projectName?: string) => Promise<ApiResponse & { name?: string; path?: string }>;
+  delete_project_from_workdir: (projectName: string) => Promise<ApiResponse>;
+  rename_project_in_workdir: (oldName: string, newName: string) => Promise<ApiResponse & { name?: string }>;
 
   // Import/Export
   import_excel: () => Promise<ImportResult>;
@@ -130,6 +142,7 @@ export interface PyWebViewApi {
   update_shot: (shotId: string, field: string, value: unknown) => Promise<ApiResponse & { shot?: Shot }>;
   delete_shots: (shotIds: string[]) => Promise<ApiResponse & { deletedCount?: number }>;
   select_image: (shotId: string, imageIndex: number) => Promise<ApiResponse>;
+  select_video: (shotId: string, videoIndex: number) => Promise<ApiResponse>;
 
   // Generation
   generate_images_for_shot: (shotId: string) => Promise<GenerateResult>;
