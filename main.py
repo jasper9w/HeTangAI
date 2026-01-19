@@ -13,7 +13,7 @@ from services.file_server import LocalFileServer
 
 # Environment
 DEV = os.environ.get("DEV") == "1"
-APP_NAME = "AI Lens Workshop"
+APP_NAME = "荷塘AI - 视频创作工坊"
 
 # Paths
 if getattr(sys, "frozen", False):
@@ -77,7 +77,8 @@ def main():
     # Store window reference in api for dialogs (NOT in Api class directly per CLAUDE.md)
     api.set_window(window)
 
-    webview.start(debug=DEV)
+    # webview.start(debug=DEV)
+    webview.start()
 
     # Cleanup
     file_server.stop()
