@@ -318,7 +318,7 @@ export function SettingsPage({}: SettingsPageProps) {
           <div className="space-y-1 text-xs text-slate-400">
             <p>荷塘AI - 视频创作工坊</p>
             {/*<p>版本: 1.0.0</p>*/}
-            <p className="text-slate-500 mt-2">配置文件位置: ~/.hetang/settings.json</p>
+            <p className="text-slate-500 mt-2">配置文件位置: ~/.hetangai/settings.json</p>
           </div>
         </div>
       </div>

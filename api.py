@@ -29,26 +29,13 @@ class Api:
         self.project_name: Optional[str] = None
         self._file_server_port = 8765  # Must match port in main.py
 
-        # Initialize work directory and settings file location
-        default_work_dir = Path.home() / "Desktop" / "荷塘AI"
-        # Try to load existing settings to get work_dir, or use default
-        temp_settings_file = default_work_dir / "settings.json"
-        if temp_settings_file.exists():
-            try:
-                with open(temp_settings_file, "r", encoding="utf-8") as f:
-                    settings = json.load(f)
-                    work_dir = Path(settings.get("workDir", str(default_work_dir)))
-            except Exception:
-                work_dir = default_work_dir
-        else:
-            work_dir = default_work_dir
-
-        # Settings file is now in work directory
-        self._settings_file = work_dir / "settings.json"
+        # Settings file is always in ~/.hetangai/settings.json
+        self._settings_file = Path.home() / ".hetangai" / "settings.json"
         self._ensure_settings_file()
 
         # Initialize project manager with work directory from settings
         settings = self._load_settings()
+        default_work_dir = Path.home() / "Desktop" / "荷塘AI"
         work_dir = Path(settings.get("workDir", str(default_work_dir)))
         self._project_manager = ProjectManager(work_dir)
         logger.info("API initialized")
@@ -1437,43 +1424,10 @@ class Api:
     def save_settings(self, settings: dict) -> dict:
         """Save application settings"""
         try:
-            # Check if work directory changed
-            old_work_dir = None
-            if self.settings_file.exists():
-                try:
-                    with open(self.settings_file, "r", encoding="utf-8") as f:
-                        old_settings = json.load(f)
-                        old_work_dir = old_settings.get("workDir")
-                except Exception:
-                    pass
-
-            new_work_dir = settings.get("workDir")
-
-            # If work directory changed, move settings file to new location
-            if old_work_dir and new_work_dir and old_work_dir != new_work_dir:
-                new_settings_file = Path(new_work_dir) / "settings.json"
-                new_settings_file.parent.mkdir(parents=True, exist_ok=True)
-
-                # Save to new location
-                with open(new_settings_file, "w", encoding="utf-8") as f:
-                    json.dump(settings, f, indent=2, ensure_ascii=False)
-
-                # Remove old settings file
-                try:
-                    if self.settings_file.exists():
-                        self.settings_file.unlink()
-                        logger.info(f"Removed old settings file: {self.settings_file}")
-                except Exception as e:
-                    logger.warning(f"Failed to remove old settings file: {e}")
-
-                # Update settings file path
-                self._settings_file = new_settings_file
-                logger.info(f"Moved settings file to: {new_settings_file}")
-            else:
-                # Save to current location
-                self.settings_file.parent.mkdir(parents=True, exist_ok=True)
-                with open(self.settings_file, "w", encoding="utf-8") as f:
-                    json.dump(settings, f, indent=2, ensure_ascii=False)
+            # Save to settings file (always in ~/.hetangai/settings.json)
+            self.settings_file.parent.mkdir(parents=True, exist_ok=True)
+            with open(self.settings_file, "w", encoding="utf-8") as f:
+                json.dump(settings, f, indent=2, ensure_ascii=False)
 
             # Update project manager work directory if changed
             if "workDir" in settings:
