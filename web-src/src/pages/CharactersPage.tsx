@@ -13,7 +13,8 @@ import {
   Sparkles,
   ZoomIn,
   ZoomOut,
-  RotateCcw
+  RotateCcw,
+  Upload
 } from 'lucide-react';
 import { ReferenceAudioModal } from '../components/character/ReferenceAudioModal';
 import type { Character } from '../types';
@@ -25,6 +26,7 @@ interface CharactersPageProps {
   onUpdateCharacterSpeed: (id: string, speed: number) => void;
   onDeleteCharacter: (id: string) => void;
   onGenerateImage: (id: string) => void;
+  onUploadImage: (id: string) => void;
   onSetReferenceAudio: (id: string, audioPath: string) => void;
   addModalOpen: boolean;
   onAddModalOpenChange: (open: boolean) => void;
@@ -37,6 +39,7 @@ export function CharactersPage({
   onUpdateCharacterSpeed,
   onDeleteCharacter,
   onGenerateImage,
+  onUploadImage,
   onSetReferenceAudio,
   addModalOpen,
   onAddModalOpenChange,
@@ -276,6 +279,21 @@ export function CharactersPage({
                           ) : (
                             <Sparkles className="w-3.5 h-3.5" />
                           )}
+                        </button>
+                      )}
+
+                      {/* Upload Image Button - Only for non-narrator characters */}
+                      {!char.isNarrator && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onUploadImage(char.id);
+                          }}
+                          disabled={char.status === 'generating'}
+                          className="p-1.5 bg-black/50 hover:bg-blue-600/70 disabled:opacity-50 rounded-full text-white transition-colors backdrop-blur-sm"
+                          title="上传参考图"
+                        >
+                          <Upload className="w-3.5 h-3.5" />
                         </button>
                       )}
 

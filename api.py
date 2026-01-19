@@ -340,7 +340,7 @@ class Api:
 
         file_types = ("HeTangAI Project (*.htai)",)
         result = self._window.create_file_dialog(
-            webview.OPEN_DIALOG,
+            webview.FileDialog.OPEN,
             allow_multiple=False,
             file_types=file_types,
         )
@@ -384,7 +384,7 @@ class Api:
             return {"success": False, "error": "No project data"}
 
         result = self._window.create_file_dialog(
-            webview.SAVE_DIALOG,
+            webview.FileDialog.SAVE,
             save_filename=f"{self.project_data.get('name', 'project')}.htai",
             file_types=("HeTangAI Project (*.htai)",),
         )
@@ -436,7 +436,7 @@ class Api:
 
         file_types = ("Excel Files (*.xlsx;*.xls;*.csv)",)
         result = self._window.create_file_dialog(
-            webview.OPEN_DIALOG,
+            webview.FileDialog.OPEN,
             allow_multiple=False,
             file_types=file_types,
         )
@@ -489,7 +489,7 @@ class Api:
             return {"success": False, "error": "Window not initialized"}
 
         result = self._window.create_file_dialog(
-            webview.SAVE_DIALOG,
+            webview.FileDialog.SAVE,
             save_filename="template.xlsx",
             file_types=("Excel Files (*.xlsx)",),
         )
@@ -682,7 +682,7 @@ class Api:
         # Open file dialog
         file_types = ("Image Files (*.png;*.jpg;*.jpeg;*.webp)",)
         result = self._window.create_file_dialog(
-            webview.OPEN_DIALOG,
+            webview.FileDialog.OPEN,
             allow_multiple=False,
             file_types=file_types,
         )
@@ -1356,7 +1356,7 @@ class Api:
             return {"success": False, "error": "Window not initialized"}
 
         result = self._window.create_file_dialog(
-            webview.FOLDER_DIALOG,
+            webview.FileDialog.FOLDER,
             allow_multiple=False,
         )
 
@@ -1450,7 +1450,7 @@ class Api:
             return {"success": False, "error": "Window not initialized"}
 
         result = self._window.create_file_dialog(
-            webview.FOLDER_DIALOG,
+            webview.FileDialog.FOLDER,
             allow_multiple=False,
         )
 
@@ -1468,7 +1468,7 @@ class Api:
             return {"success": False, "error": "Window not initialized"}
 
         result = self._window.create_file_dialog(
-            webview.FOLDER_DIALOG,
+            webview.FileDialog.FOLDER,
             allow_multiple=False,
         )
 

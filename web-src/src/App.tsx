@@ -286,6 +286,24 @@ function App() {
     }
   };
 
+  const handleUploadCharacterImage = async (id: string) => {
+    if (!api || !project) return;
+
+    const result = await api.upload_character_image(id);
+    if (result.success && result.character) {
+      setProject({
+        ...project,
+        characters: project.characters.map((c) =>
+          c.id === id ? result.character! : c
+        ),
+      });
+      setIsDirty(true);
+      showToast('success', '角色图片上传成功');
+    } else if (result.error && result.error !== 'No file selected') {
+      showToast('error', `角色图片上传失败: ${result.error}`);
+    }
+  };
+
   const handleUpdateCharacterSpeed = async (id: string, speed: number) => {
     if (!api || !project) return;
 
@@ -752,6 +770,7 @@ function App() {
             onUpdateCharacterSpeed={handleUpdateCharacterSpeed}
             onDeleteCharacter={handleDeleteCharacter}
             onGenerateImage={handleGenerateCharacterImage}
+            onUploadImage={handleUploadCharacterImage}
             onSetReferenceAudio={handleSetCharacterReferenceAudio}
             addModalOpen={addCharacterModalOpen}
             onAddModalOpenChange={setAddCharacterModalOpen}
