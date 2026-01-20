@@ -64,7 +64,7 @@ export function ShotTable({
   const rowVirtualizer = useVirtualizer({
     count: filteredShots.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 180, // 固定高度：内容区域150px + 错误消息区域30px
+    estimateSize: () => 240, // 固定高度：内容区域180px + 错误消息区域30px
     overscan: 5, // 预渲染5个额外的行
   });
 
@@ -347,7 +347,7 @@ export function ShotTable({
           </div>
 
           {/* 图片预览列 */}
-          <div className="w-48">
+          <div className="w-44">
             <ColumnHeaderFilter
               title="图片预览"
               hasActiveFilter={filters.imageStatus.values.length > 0 || filters.imageStatus.inverted}
@@ -381,7 +381,7 @@ export function ShotTable({
           </div>
 
           {/* 视频列 */}
-          <div className="w-20">
+          <div className="w-44">
             <ColumnHeaderFilter
               title="视频"
               hasActiveFilter={filters.videoStatus.values.length > 0 || filters.videoStatus.inverted}
@@ -618,7 +618,7 @@ function ShotRow({
 
   return (
     <div className={`px-4 py-3 hover:bg-slate-800/50 transition-colors ${isSelected ? 'bg-slate-800/70' : ''}`}>
-      <div className="flex items-start gap-4 h-[150px]">
+      <div className="flex items-start gap-4 h-[210px]">
         {/* Checkbox */}
         <input
           type="checkbox"
@@ -705,7 +705,7 @@ function ShotRow({
         </div>
 
         {/* Image Prompt */}
-        <div className="w-42 flex-shrink-0">
+        <div className="w-40 flex-shrink-0">
           <textarea
             value={shot.imagePrompt}
             onChange={(e) => onUpdateField('imagePrompt', e.target.value)}
@@ -740,100 +740,89 @@ function ShotRow({
           </div>
         </div>
 
-        {/* Image Preview & Selection */}
-        <div className="w-48 flex-shrink-0 relative">
-          {hasImages ? (
-            <div className="space-y-2">
-              {/* Generate button overlay */}
-              <button
-                onClick={onGenerateImages}
-                disabled={isGeneratingImages || isGeneratingVideo || !shot.imagePrompt.trim()}
-                className="absolute top-1 right-1 z-10 px-2 py-1 bg-slate-800/90 hover:bg-violet-600/30 disabled:opacity-50 disabled:cursor-not-allowed rounded text-xs text-violet-400 transition-colors backdrop-blur-sm"
-              >
-                {isGeneratingImages ? (
-                  <span className="flex items-center gap-1">
-                    <Loader2 className="w-3 h-3 animate-spin" />
-                    生成中
-                  </span>
-                ) : (
-                  '重新生成'
-                )}
-              </button>
-              {/* Main preview */}
-              <div
-                className="relative h-24 rounded-lg overflow-hidden bg-slate-700 cursor-pointer group"
-                onClick={() => selectedImage && onPreviewImage(selectedImage)}
-              >
-                <img
-                  src={selectedImage!}
-                  alt={`镜头 ${shot.sequence}`}
-                  className="w-full h-full object-cover"
-                />
-                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                  <ZoomIn className="w-6 h-6 text-white" />
+        {/* Image Preview & Selection - 左右结构 */}
+        <div className="w-44 flex-shrink-0 relative">
+          <div className="flex gap-1.5 h-full">
+            {/* Main preview - 左侧 */}
+            <div
+              className={`relative flex-1 rounded-lg overflow-hidden cursor-pointer group flex items-center justify-center ${
+                hasImages ? 'bg-slate-700' : 'bg-slate-700/50'
+              }`}
+              onClick={() => selectedImage && onPreviewImage(selectedImage)}
+            >
+              {hasImages ? (
+                <>
+                  <img
+                    src={selectedImage!}
+                    alt={`镜头 ${shot.sequence}`}
+                    className="max-w-full max-h-full object-contain"
+                  />
+                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <ZoomIn className="w-6 h-6 text-white" />
+                  </div>
+                </>
+              ) : (
+                <div className="flex flex-col items-center justify-center text-slate-500">
+                  <Image className="w-6 h-6 mb-1" />
+                  <span className="text-[10px]">暂无图片</span>
                 </div>
-              </div>
-              {/* Thumbnails - 4 options */}
-              <div className="grid grid-cols-4 gap-1">
-                {shot.images.slice(0, 4).map((img, idx) => (
+              )}
+              {/* Generate button overlay */}
+              {isGeneratingImages ? (
+                <div className="absolute top-1 right-1 z-10 px-2 py-1 bg-violet-600 rounded text-[10px] text-white flex items-center gap-1">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  <span>生成中</span>
+                </div>
+              ) : (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onGenerateImages(); }}
+                  disabled={isGeneratingVideo || !shot.imagePrompt.trim()}
+                  className={`absolute top-1 right-1 z-10 px-2 py-1 rounded text-[10px] transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                    hasImages 
+                      ? 'bg-slate-800/90 hover:bg-violet-600 text-violet-400 hover:text-white' 
+                      : 'bg-violet-600 hover:bg-violet-500 text-white'
+                  }`}
+                >
+                  {hasImages ? '重新生成' : '生成图片'}
+                </button>
+              )}
+            </div>
+            {/* Thumbnails - 右侧垂直排列，预置4个坑位 */}
+            <div className="flex flex-col gap-1 w-8">
+              {[0, 1, 2, 3].map((idx) => {
+                const img = shot.images[idx];
+                return img ? (
                   <button
                     key={idx}
                     onClick={() => onSelectImage(idx)}
-                    className={`relative aspect-square rounded overflow-hidden transition-all ${
+                    className={`relative flex-1 rounded overflow-hidden transition-all bg-slate-800 flex items-center justify-center ${
                       idx === shot.selectedImageIndex
                         ? 'ring-2 ring-violet-500'
                         : 'ring-1 ring-slate-600 hover:ring-slate-500'
                     }`}
                   >
-                    <img src={img} alt={`选项 ${idx + 1}`} className="w-full h-full object-cover" />
+                    <img src={img} alt={`选项 ${idx + 1}`} className="max-w-full max-h-full object-contain" />
                     {idx === shot.selectedImageIndex && (
                       <div className="absolute inset-0 bg-violet-500/20 flex items-center justify-center">
-                        <Check className="w-4 h-4 text-violet-400" />
+                        <Check className="w-3 h-3 text-violet-400" />
                       </div>
                     )}
                   </button>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div className="relative space-y-2">
-              {/* Generate button overlay */}
-              <button
-                onClick={onGenerateImages}
-                disabled={isGeneratingImages || isGeneratingVideo || !shot.imagePrompt.trim()}
-                className="absolute top-1 right-1 z-10 px-2 py-1 bg-slate-800/90 hover:bg-violet-600/30 disabled:opacity-50 disabled:cursor-not-allowed rounded text-xs text-white transition-colors backdrop-blur-sm"
-              >
-                {isGeneratingImages ? (
-                  <span className="flex items-center gap-1">
-                    <Loader2 className="w-3 h-3 animate-spin" />
-                    生成中
-                  </span>
                 ) : (
-                  '生成图片'
-                )}
-              </button>
-              {/* Empty main preview */}
-              <div className="h-24 rounded-lg bg-slate-700/50 flex flex-col items-center justify-center text-slate-500">
-                <Image className="w-8 h-8 mb-1" />
-                <span className="text-xs">暂无图片</span>
-              </div>
-              {/* Empty thumbnails */}
-              <div className="grid grid-cols-4 gap-1">
-                {[1, 2, 3, 4].map((num) => (
                   <div
-                    key={num}
-                    className="aspect-square rounded-lg bg-slate-700/50 flex items-center justify-center text-slate-500 text-xs"
+                    key={idx}
+                    className="flex-1 rounded bg-slate-700/50 flex items-center justify-center text-slate-500 text-[10px]"
                   >
-                    {num}
+                    {idx + 1}
                   </div>
-                ))}
-              </div>
+                );
+              })}
             </div>
-          )}
+          </div>
         </div>
 
         {/* Video Prompt */}
-        <div className="w-42 flex-shrink-0">
+        <div className="w-40 flex-shrink-0">
           <textarea
             value={shot.videoPrompt}
             onChange={(e) => onUpdateField('videoPrompt', e.target.value)}
@@ -842,35 +831,20 @@ function ShotRow({
           />
         </div>
 
-        {/* Video Preview */}
-        <div className="w-48 flex-shrink-0 relative">
+        {/* Video Preview - 左右结构 */}
+        <div className="w-44 flex-shrink-0 relative">
           {hasVideo ? (
-            <div className="space-y-2">
-              {/* Generate button overlay */}
-              <button
-                onClick={onGenerateVideo}
-                disabled={!hasImages || isGeneratingImages || isGeneratingVideo}
-                className="absolute top-1 right-1 z-10 px-2 py-1 bg-slate-800/90 hover:bg-emerald-600/30 disabled:opacity-50 disabled:cursor-not-allowed rounded text-xs text-emerald-400 transition-colors backdrop-blur-sm"
-              >
-                {isGeneratingVideo ? (
-                  <span className="flex items-center gap-1">
-                    <Loader2 className="w-3 h-3 animate-spin" />
-                    生成中
-                  </span>
-                ) : (
-                  '重新生成'
-                )}
-              </button>
-              {/* Main video preview */}
+            <div className="flex gap-1.5 h-full">
+              {/* Main video preview - 左侧 */}
               <div
-                className="relative h-24 rounded-lg overflow-hidden bg-slate-700 cursor-pointer group"
+                className="relative flex-1 rounded-lg overflow-hidden bg-slate-700 cursor-pointer group flex items-center justify-center"
                 onClick={() => selectedVideo && onPreviewVideo(selectedVideo, `镜头 #${shot.sequence} 视频`)}
               >
                 {selectedVideo && (
                   <>
                     <video
                       src={selectedVideo}
-                      className="w-full h-full object-cover pointer-events-none"
+                      className="max-w-full max-h-full object-contain pointer-events-none"
                       preload="metadata"
                       muted
                       playsInline
@@ -880,80 +854,100 @@ function ShotRow({
                       }}
                     />
                     <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Play className="w-8 h-8 text-white" />
+                      <Play className="w-6 h-6 text-white" />
                     </div>
                   </>
                 )}
-              </div>
-              {/* Thumbnails - 4 options */}
-              <div className="grid grid-cols-4 gap-1">
-                {shot.videos.slice(0, 4).map((video, idx) => (
+                {/* Generate button overlay */}
+                {isGeneratingVideo ? (
+                  <div className="absolute top-1 right-1 z-10 px-2 py-1 bg-emerald-600 rounded text-[10px] text-white flex items-center gap-1">
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    <span>生成中</span>
+                  </div>
+                ) : (
                   <button
-                    key={idx}
-                    onClick={() => onSelectVideo(idx)}
-                    className={`relative aspect-square rounded overflow-hidden transition-all ${
-                      idx === shot.selectedVideoIndex
-                        ? 'ring-2 ring-emerald-500'
-                        : 'ring-1 ring-slate-600 hover:ring-slate-500'
+                    onClick={(e) => { e.stopPropagation(); onGenerateVideo(); }}
+                    disabled={!hasImages || isGeneratingImages}
+                    className={`absolute top-1 right-1 z-10 px-2 py-1 rounded text-[10px] transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                      hasVideo 
+                        ? 'bg-slate-800/90 hover:bg-emerald-600 text-emerald-400 hover:text-white' 
+                        : 'bg-emerald-600 hover:bg-emerald-500 text-white'
                     }`}
                   >
-                    <video
-                      src={video}
-                      className="w-full h-full object-cover pointer-events-none"
-                      preload="metadata"
-                      muted
-                      playsInline
-                      onLoadedMetadata={(e) => {
-                        const video = e.target as HTMLVideoElement;
-                        video.currentTime = 0.1;
-                      }}
-                    />
-                    {idx === shot.selectedVideoIndex && (
-                      <div className="absolute inset-0 bg-emerald-500/20 flex items-center justify-center">
-                        <Check className="w-4 h-4 text-emerald-400" />
-                      </div>
-                    )}
+                    {hasVideo ? '重新生成' : '生成视频'}
                   </button>
-                ))}
-                {/* Empty slots for remaining videos */}
-                {Array.from({ length: 4 - shot.videos.length }).map((_, idx) => (
-                  <div
-                    key={shot.videos.length + idx}
-                    className="aspect-square rounded-lg bg-slate-700/50 flex items-center justify-center text-slate-500 text-xs"
-                  >
-                    {shot.videos.length + idx + 1}
-                  </div>
-                ))}
+                )}
+              </div>
+              {/* Thumbnails - 右侧垂直排列，预置4个坑位 */}
+              <div className="flex flex-col gap-1 w-8">
+                {[0, 1, 2, 3].map((idx) => {
+                  const video = shot.videos[idx];
+                  return video ? (
+                    <button
+                      key={idx}
+                      onClick={() => onSelectVideo(idx)}
+                      className={`relative flex-1 rounded overflow-hidden transition-all bg-slate-800 flex items-center justify-center ${
+                        idx === shot.selectedVideoIndex
+                          ? 'ring-2 ring-emerald-500'
+                          : 'ring-1 ring-slate-600 hover:ring-slate-500'
+                      }`}
+                    >
+                      <video
+                        src={video}
+                        className="max-w-full max-h-full object-contain pointer-events-none"
+                        preload="metadata"
+                        muted
+                        playsInline
+                        onLoadedMetadata={(e) => {
+                          const v = e.target as HTMLVideoElement;
+                          v.currentTime = 0.1;
+                        }}
+                      />
+                      {idx === shot.selectedVideoIndex && (
+                        <div className="absolute inset-0 bg-emerald-500/20 flex items-center justify-center">
+                          <Check className="w-3 h-3 text-emerald-400" />
+                        </div>
+                      )}
+                    </button>
+                  ) : (
+                    <div
+                      key={idx}
+                      className="flex-1 rounded bg-slate-700/50 flex items-center justify-center text-slate-500 text-[10px]"
+                    >
+                      {idx + 1}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           ) : (
-            <div className="relative space-y-2">
-              {/* Generate button overlay */}
-              <button
-                onClick={onGenerateVideo}
-                disabled={!hasImages || isGeneratingImages || isGeneratingVideo}
-                className="absolute top-1 right-1 z-10 px-2 py-1 bg-slate-800/90 hover:bg-emerald-600/30 disabled:opacity-50 disabled:cursor-not-allowed rounded text-xs text-white transition-colors backdrop-blur-sm"
-              >
+            <div className="flex gap-1.5 h-full">
+              {/* Empty main preview - 左侧 */}
+              <div className="relative flex-1 rounded-lg bg-slate-700/50 flex flex-col items-center justify-center text-slate-500">
+                <Film className="w-6 h-6 mb-1" />
+                <span className="text-[10px]">暂无视频</span>
+                {/* Generate button overlay */}
                 {isGeneratingVideo ? (
-                  <span className="flex items-center gap-1">
+                  <div className="absolute top-1 right-1 z-10 px-2 py-1 bg-emerald-600 rounded text-[10px] text-white flex items-center gap-1">
                     <Loader2 className="w-3 h-3 animate-spin" />
-                    生成中
-                  </span>
+                    <span>生成中</span>
+                  </div>
                 ) : (
-                  '生成视频'
+                  <button
+                    onClick={onGenerateVideo}
+                    disabled={!hasImages || isGeneratingImages}
+                    className="absolute top-1 right-1 z-10 px-2 py-1 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed rounded text-[10px] text-white transition-colors"
+                  >
+                    生成视频
+                  </button>
                 )}
-              </button>
-              {/* Empty main preview */}
-              <div className="h-24 rounded-lg bg-slate-700/50 flex flex-col items-center justify-center text-slate-500">
-                <Film className="w-8 h-8 mb-1" />
-                <span className="text-xs">暂无视频</span>
               </div>
-              {/* Empty thumbnails */}
-              <div className="grid grid-cols-4 gap-1">
+              {/* Empty thumbnails - 右侧垂直排列 */}
+              <div className="flex flex-col gap-1 w-8">
                 {[1, 2, 3, 4].map((num) => (
                   <div
                     key={num}
-                    className="aspect-square rounded-lg bg-slate-700/50 flex items-center justify-center text-slate-500 text-xs"
+                    className="flex-1 rounded bg-slate-700/50 flex items-center justify-center text-slate-500 text-[10px]"
                   >
                     {num}
                   </div>

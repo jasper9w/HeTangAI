@@ -43,9 +43,9 @@ export function VideoModal({ isOpen, onClose, videoUrl, title }: VideoModalProps
       />
 
       {/* Modal Content */}
-      <div className="relative bg-slate-800 rounded-lg overflow-hidden max-w-4xl max-h-[90vh] w-full">
+      <div className="relative bg-slate-800 rounded-lg overflow-hidden max-w-4xl max-h-[90vh] flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 bg-slate-700">
+        <div className="flex items-center justify-between p-4 bg-slate-700 flex-shrink-0">
           <h3 className="text-lg font-semibold text-slate-100">
             {title || '视频播放'}
           </h3>
@@ -58,10 +58,10 @@ export function VideoModal({ isOpen, onClose, videoUrl, title }: VideoModalProps
         </div>
 
         {/* Video Player */}
-        <div className="p-4">
+        <div className="p-4 flex items-center justify-center flex-1 min-h-0">
           <video
             src={videoUrl}
-            className="w-full max-h-[70vh] rounded-lg bg-black"
+            className="max-w-full max-h-[70vh] rounded-lg bg-black object-contain"
             controls
             autoPlay
             onError={(e) => {
@@ -72,7 +72,7 @@ export function VideoModal({ isOpen, onClose, videoUrl, title }: VideoModalProps
         </div>
 
         {/* Footer */}
-        <div className="p-4 bg-slate-700 text-center">
+        <div className="p-4 bg-slate-700 text-center flex-shrink-0">
           <p className="text-sm text-slate-400">
             按 ESC 键或点击背景关闭
           </p>

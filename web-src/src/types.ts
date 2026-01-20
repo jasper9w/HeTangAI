@@ -182,6 +182,7 @@ export interface PyWebViewApi {
 export interface AppSettings {
   workDir: string;
   jianyingDraftDir: string;
+  referenceAudioDir: string;  // 参考音频目录
   tts: {
     apiUrl: string;
     model: string;

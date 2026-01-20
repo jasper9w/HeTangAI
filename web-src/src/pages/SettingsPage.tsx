@@ -14,6 +14,7 @@ type TabType = 'tts' | 'tti' | 'ttv';
 const defaultSettings: AppSettings = {
   workDir: '',
   jianyingDraftDir: '',
+  referenceAudioDir: '',
   tts: { apiUrl: 'https://9u7acouw9j7q8f5o-6006.container.x-gpu.com/tts_url', model: 'indextts2', apiKey: '', concurrency: 1 },
   tti: { apiUrl: '', model: '', apiKey: '', concurrency: 1 },
   ttv: { apiUrl: '', model: '', apiKey: '', concurrency: 1 },
@@ -101,6 +102,22 @@ export function SettingsPage({}: SettingsPageProps) {
       }
     } catch (error) {
       console.error('Failed to select JianYing draft directory:', error);
+    }
+  };
+
+  const handleSelectReferenceAudioDir = async () => {
+    if (!window.pywebview?.api) return;
+
+    try {
+      const result = await (window.pywebview.api as any).select_reference_audio_dir();
+      if (result.success && result.path) {
+        setSettings({
+          ...settings,
+          referenceAudioDir: result.path,
+        });
+      }
+    } catch (error) {
+      console.error('Failed to select reference audio directory:', error);
     }
   };
 
@@ -227,6 +244,28 @@ export function SettingsPage({}: SettingsPageProps) {
       )}
 
       <div className="space-y-6 max-w-4xl">
+        {/* Reference Audio Directory */}
+        <div className="bg-slate-800 rounded-lg p-4">
+          <h3 className="text-base font-medium text-slate-100 mb-3">参考音频目录</h3>
+          <p className="text-xs text-slate-500 mb-2">设置角色选择参考音频时使用的目录</p>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={settings.referenceAudioDir}
+              readOnly
+              placeholder="请选择参考音频目录..."
+              className="flex-1 px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500"
+            />
+            <button
+              onClick={handleSelectReferenceAudioDir}
+              className="flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-200 transition-colors"
+            >
+              <FolderOpen className="w-4 h-4" />
+              选择
+            </button>
+          </div>
+        </div>
+
         {/* JianYing Draft Directory */}
         <div className="bg-slate-800 rounded-lg p-4">
           <h3 className="text-base font-medium text-slate-100 mb-3">剪映草稿目录</h3>

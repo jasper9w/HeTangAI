@@ -136,6 +136,37 @@ function App() {
     return () => clearInterval(autoSaveInterval);
   }, [api, project, isDirty, handleSaveProject]);
 
+  // Register callbacks for backend to notify shot status changes and progress
+  useEffect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).onShotStatusChange = (shotId: string, status: string) => {
+      setProject((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          shots: prev.shots.map((s) =>
+            s.id === shotId ? { ...s, status: status as Shot['status'] } : s
+          ),
+        };
+      });
+    };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).onProgressIncrement = () => {
+      setGenerationProgress((prev) => {
+        if (!prev) return prev;
+        return { ...prev, current: prev.current + 1 };
+      });
+    };
+
+    return () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      delete (window as any).onShotStatusChange;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      delete (window as any).onProgressIncrement;
+    };
+  }, []);
+
   // Keyboard shortcut: Cmd+S / Ctrl+S
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -624,22 +655,86 @@ function App() {
     setIsGenerating(true);
     setGenerationProgress({ current: 0, total: shotIds.length, type: batchModalType });
 
-    for (let i = 0; i < shotIds.length; i++) {
-      setGenerationProgress({ current: i + 1, total: shotIds.length, type: batchModalType });
+    // Mark shots as pending (waiting to be processed)
+    // Actual "generating" status will be set by backend when each shot starts processing
+    setProject((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        shots: prev.shots.map((s) =>
+          shotIds.includes(s.id) ? { ...s, status: 'pending' as const } : s
+        ),
+      };
+    });
 
+    try {
+      let result;
       switch (batchModalType) {
         case 'image':
-          await handleGenerateImages(shotIds[i]);
+          result = await api.generate_images_batch(shotIds);
           break;
         case 'video':
-          await handleGenerateVideo(shotIds[i]);
+          result = await api.generate_videos_batch(shotIds);
           break;
         case 'audio':
-          await handleGenerateAudio(shotIds[i]);
+          result = await api.generate_audios_batch(shotIds);
           break;
       }
+
+      // Update project with results from batch generation
+      if (result && result.results) {
+        // Update each shot with its result
+        setProject((prev) => {
+          if (!prev) return prev;
+          const updatedShots = [...prev.shots];
+          
+          for (const r of result.results as Array<{ shot_id: string; success: boolean; shot?: Shot; error?: string }>) {
+            const idx = updatedShots.findIndex(s => s.id === r.shot_id);
+            if (idx !== -1) {
+              if (r.success && r.shot) {
+                // Use the returned shot data
+                updatedShots[idx] = r.shot;
+              } else {
+                // Mark as error
+                updatedShots[idx] = {
+                  ...updatedShots[idx],
+                  status: 'error' as const,
+                  errorMessage: r.error || 'Unknown error',
+                };
+              }
+            }
+          }
+          
+          return { ...prev, shots: updatedShots };
+        });
+        setIsDirty(true);
+
+        // Count successes and failures
+        const successCount = result.results.filter((r: { success: boolean }) => r.success).length;
+        const failCount = result.results.length - successCount;
+
+        if (failCount === 0) {
+          showToast('success', `批量生成完成: ${successCount} 个成功`);
+        } else {
+          showToast('info', `批量生成完成: ${successCount} 个成功, ${failCount} 个失败`);
+        }
+      }
+    } catch (error) {
+      console.error('Batch generation failed:', error);
+      // Reset status on error
+      setProject((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          shots: prev.shots.map((s) =>
+            shotIds.includes(s.id) ? { ...s, status: 'error' as const, errorMessage: 'Batch generation failed' } : s
+          ),
+        };
+      });
+      showToast('error', '批量生成失败');
     }
 
+    setGenerationProgress({ current: shotIds.length, total: shotIds.length, type: batchModalType });
     setIsGenerating(false);
     setGenerationProgress(null);
   };
@@ -648,7 +743,7 @@ function App() {
 
   const renderPageActions = () => {
     switch (currentPage) {
-      case 'shots':
+      case 'shots': {
         const selectedShots = (project?.shots || []).filter(s => selectedShotIds.includes(s.id));
         const hasSelection = selectedShots.length > 0;
 
@@ -731,7 +826,8 @@ function App() {
             </button>
           </div>
         );
-      case 'characters':
+      }
+      case 'characters': {
         const pendingWithDescriptionCount = project?.characters.filter(c =>
           !c.isNarrator &&
           c.description?.trim() &&
@@ -781,6 +877,7 @@ function App() {
             </button>
           </div>
         );
+      }
       default:
         return null;
     }

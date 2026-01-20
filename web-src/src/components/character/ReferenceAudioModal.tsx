@@ -1,9 +1,10 @@
 /**
  * ReferenceAudioModal - Modal for selecting reference audio
  */
-import { useState, useRef, useEffect } from 'react';
-import { X, Play, Pause, Search, Loader2, Check, Gauge } from 'lucide-react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { X, Play, Pause, Search, Loader2, Check, Gauge, FolderOpen } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import type { AppSettings } from '../../types';
 
 interface ReferenceAudio {
   path: string;
@@ -26,9 +27,10 @@ export function ReferenceAudioModal({
   currentAudioPath,
   currentSpeed = 1.0,
 }: ReferenceAudioModalProps) {
-  const [referenceDir] = useState<string>('/Users/wei/Downloads/800+音色/逗哥音色整理合集');
+  const [referenceDir, setReferenceDir] = useState<string>('');
   const [referenceAudios, setReferenceAudios] = useState<ReferenceAudio[]>([]);
   const [isLoadingAudios, setIsLoadingAudios] = useState(false);
+  const [isLoadingSettings, setIsLoadingSettings] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [playingAudio, setPlayingAudio] = useState<string | null>(null);
   const [selectedAudio, setSelectedAudio] = useState<string | undefined>(currentAudioPath);
@@ -38,21 +40,12 @@ export function ReferenceAudioModal({
   // 常用倍速选项
   const speedOptions = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
 
-  // Load reference audios when modal opens
-  useEffect(() => {
-    if (isOpen) {
-      loadReferenceAudios();
-      setSelectedAudio(currentAudioPath);
-      setSelectedSpeed(currentSpeed || 1.0);
-    }
-  }, [isOpen, currentAudioPath, currentSpeed]);
-
-  const loadReferenceAudios = async () => {
-    if (!window.pywebview?.api) return;
+  const loadReferenceAudios = useCallback(async (dir: string) => {
+    if (!window.pywebview?.api || !dir) return;
 
     setIsLoadingAudios(true);
     try {
-      const result = await window.pywebview.api.scan_reference_audios(referenceDir);
+      const result = await window.pywebview.api.scan_reference_audios(dir);
       if (result.success && result.audios) {
         setReferenceAudios(result.audios);
       }
@@ -61,7 +54,39 @@ export function ReferenceAudioModal({
     } finally {
       setIsLoadingAudios(false);
     }
-  };
+  }, []);
+
+  const loadSettingsAndAudios = useCallback(async () => {
+    if (!window.pywebview?.api) return;
+
+    setIsLoadingSettings(true);
+    try {
+      // 从设置中获取参考音频目录
+      const settingsResult = await window.pywebview.api.get_settings() as { success: boolean; settings?: AppSettings };
+      if (settingsResult.success && settingsResult.settings?.referenceAudioDir) {
+        const dir = settingsResult.settings.referenceAudioDir;
+        setReferenceDir(dir);
+        // 加载音频文件
+        await loadReferenceAudios(dir);
+      } else {
+        setReferenceDir('');
+        setReferenceAudios([]);
+      }
+    } catch (error) {
+      console.error('Failed to load settings:', error);
+    } finally {
+      setIsLoadingSettings(false);
+    }
+  }, [loadReferenceAudios]);
+
+  // Load settings and reference audios when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      loadSettingsAndAudios();
+      setSelectedAudio(currentAudioPath);
+      setSelectedSpeed(currentSpeed || 1.0);
+    }
+  }, [isOpen, currentAudioPath, currentSpeed, loadSettingsAndAudios]);
 
   const handlePlayAudio = async (audio: ReferenceAudio) => {
     if (playingAudio === audio.path) {
@@ -197,9 +222,15 @@ export function ReferenceAudioModal({
 
           {/* Audio List */}
           <div className="flex-1 overflow-y-auto p-4">
-            {isLoadingAudios ? (
+            {isLoadingSettings || isLoadingAudios ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="w-8 h-8 text-violet-500 animate-spin" />
+              </div>
+            ) : !referenceDir ? (
+              <div className="text-center py-12">
+                <FolderOpen className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+                <p className="text-slate-400 mb-2">未设置参考音频目录</p>
+                <p className="text-slate-500 text-sm">请在设置页面中配置参考音频目录</p>
               </div>
             ) : filteredAudios.length === 0 ? (
               <div className="text-center py-12 text-slate-500">

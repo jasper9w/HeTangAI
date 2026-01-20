@@ -1,7 +1,7 @@
 /**
  * Sidebar - Left navigation component
  */
-import { Home, Film, Users, Volume2, Settings } from 'lucide-react';
+import { Home, Film, Users, Settings } from 'lucide-react';
 import type { PageType } from '../../types';
 
 interface NavItem {
@@ -14,7 +14,6 @@ const navItems: NavItem[] = [
   { id: 'home', label: '首页', icon: Home },
   { id: 'shots', label: '镜头', icon: Film },
   { id: 'characters', label: '角色', icon: Users },
-  { id: 'dubbing', label: '配音', icon: Volume2 },
   { id: 'settings', label: '设置', icon: Settings },
 ];
 

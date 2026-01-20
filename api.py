@@ -6,6 +6,8 @@ import json
 import random
 import string
 import uuid
+from concurrent.futures import ThreadPoolExecutor
+from threading import Semaphore
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
@@ -38,6 +40,28 @@ class Api:
         default_work_dir = Path.home() / "Desktop" / "荷塘AI"
         work_dir = Path(settings.get("workDir", str(default_work_dir)))
         self._project_manager = ProjectManager(work_dir)
+
+        # Initialize unified thread pool with semaphores for concurrency control
+        tts_concurrency = settings.get("tts", {}).get("concurrency", 1)
+        tti_concurrency = settings.get("tti", {}).get("concurrency", 1)
+        ttv_concurrency = settings.get("ttv", {}).get("concurrency", 1)
+        
+        # Single thread pool with enough workers to handle all concurrent tasks
+        total_max_workers = tts_concurrency + tti_concurrency + ttv_concurrency
+        self._thread_pool = ThreadPoolExecutor(max_workers=total_max_workers, thread_name_prefix="gen")
+        
+        # Semaphores to control per-task-type concurrency
+        self._tts_semaphore = Semaphore(tts_concurrency)
+        self._tti_semaphore = Semaphore(tti_concurrency)
+        self._ttv_semaphore = Semaphore(ttv_concurrency)
+        
+        # Store current concurrency values for comparison
+        self._tts_concurrency = tts_concurrency
+        self._tti_concurrency = tti_concurrency
+        self._ttv_concurrency = ttv_concurrency
+        
+        logger.info(f"Thread pool initialized: total_workers={total_max_workers}, TTS={tts_concurrency}, TTI={tti_concurrency}, TTV={ttv_concurrency}")
+
         logger.info("API initialized")
 
     def _generate_shot_id(self) -> str:
@@ -108,6 +132,7 @@ class Api:
             default_settings = {
                 "workDir": default_work_dir,
                 "jianyingDraftDir": "",
+                "referenceAudioDir": "",
                 "tts": {
                     "apiUrl": "",
                     "model": "tts-1",
@@ -1346,12 +1371,58 @@ class Api:
 
         return {"success": False, "error": "Shot not found"}
 
-    def generate_images_batch(self, shot_ids: list) -> dict:
-        """Generate images for multiple shots"""
-        results = []
-        for shot_id in shot_ids:
+    def _notify_shot_status(self, shot_id: str, status: str):
+        """Notify frontend about shot status change"""
+        try:
+            if self._window:
+                self._window.evaluate_js(f'window.onShotStatusChange && window.onShotStatusChange("{shot_id}", "{status}")')
+        except Exception as e:
+            logger.warning(f"Failed to notify frontend: {e}")
+
+    def _notify_progress(self):
+        """Notify frontend to increment progress"""
+        try:
+            if self._window:
+                self._window.evaluate_js('window.onProgressIncrement && window.onProgressIncrement()')
+        except Exception as e:
+            logger.warning(f"Failed to notify progress: {e}")
+
+    def _generate_images_with_semaphore(self, shot_id: str) -> dict:
+        """Generate images for a shot with semaphore control"""
+        with self._tti_semaphore:
+            # Notify frontend that this shot is now generating
+            self._notify_shot_status(shot_id, "generating_images")
             result = self.generate_images_for_shot(shot_id)
-            results.append({"shot_id": shot_id, **result})
+            # Notify frontend of completion status and progress
+            if result.get("success"):
+                self._notify_shot_status(shot_id, "images_ready")
+            else:
+                self._notify_shot_status(shot_id, "error")
+            self._notify_progress()
+            return result
+
+    def generate_images_batch(self, shot_ids: list) -> dict:
+        """Generate images for multiple shots using thread pool with semaphore control"""
+        from concurrent.futures import as_completed
+
+        results = []
+        futures = {}
+
+        # Submit all tasks to thread pool (semaphore controls actual concurrency)
+        for shot_id in shot_ids:
+            future = self._thread_pool.submit(self._generate_images_with_semaphore, shot_id)
+            futures[future] = shot_id
+
+        # Collect results as they complete
+        for future in as_completed(futures):
+            shot_id = futures[future]
+            try:
+                result = future.result()
+                results.append({"shot_id": shot_id, **result})
+            except Exception as e:
+                logger.error(f"Failed to generate images for shot {shot_id}: {e}")
+                results.append({"shot_id": shot_id, "success": False, "error": str(e)})
+
         return {"success": True, "results": results}
 
     # ========== Video Generation ==========
@@ -1480,12 +1551,42 @@ class Api:
 
         return {"success": False, "error": "Shot not found"}
 
-    def generate_videos_batch(self, shot_ids: list) -> dict:
-        """Generate videos for multiple shots"""
-        results = []
-        for shot_id in shot_ids:
+    def _generate_video_with_semaphore(self, shot_id: str) -> dict:
+        """Generate video for a shot with semaphore control"""
+        with self._ttv_semaphore:
+            # Notify frontend that this shot is now generating
+            self._notify_shot_status(shot_id, "generating_video")
             result = self.generate_video_for_shot(shot_id)
-            results.append({"shot_id": shot_id, **result})
+            # Notify frontend of completion status and progress
+            if result.get("success"):
+                self._notify_shot_status(shot_id, "completed")
+            else:
+                self._notify_shot_status(shot_id, "error")
+            self._notify_progress()
+            return result
+
+    def generate_videos_batch(self, shot_ids: list) -> dict:
+        """Generate videos for multiple shots using thread pool with semaphore control"""
+        from concurrent.futures import as_completed
+
+        results = []
+        futures = {}
+
+        # Submit all tasks to thread pool (semaphore controls actual concurrency)
+        for shot_id in shot_ids:
+            future = self._thread_pool.submit(self._generate_video_with_semaphore, shot_id)
+            futures[future] = shot_id
+
+        # Collect results as they complete
+        for future in as_completed(futures):
+            shot_id = futures[future]
+            try:
+                result = future.result()
+                results.append({"shot_id": shot_id, **result})
+            except Exception as e:
+                logger.error(f"Failed to generate video for shot {shot_id}: {e}")
+                results.append({"shot_id": shot_id, "success": False, "error": str(e)})
+
         return {"success": True, "results": results}
 
     # ========== Audio Generation ==========
@@ -1584,12 +1685,42 @@ class Api:
 
         return {"success": False, "error": "Shot not found"}
 
-    def generate_audios_batch(self, shot_ids: list) -> dict:
-        """Generate audio for multiple shots"""
-        results = []
-        for shot_id in shot_ids:
+    def _generate_audio_with_semaphore(self, shot_id: str) -> dict:
+        """Generate audio for a shot with semaphore control"""
+        with self._tts_semaphore:
+            # Notify frontend that this shot is now generating
+            self._notify_shot_status(shot_id, "generating_audio")
             result = self.generate_audio_for_shot(shot_id)
-            results.append({"shot_id": shot_id, **result})
+            # Notify frontend of completion status and progress
+            if result.get("success"):
+                self._notify_shot_status(shot_id, "audio_ready")
+            else:
+                self._notify_shot_status(shot_id, "error")
+            self._notify_progress()
+            return result
+
+    def generate_audios_batch(self, shot_ids: list) -> dict:
+        """Generate audio for multiple shots using thread pool with semaphore control"""
+        from concurrent.futures import as_completed
+
+        results = []
+        futures = {}
+
+        # Submit all tasks to thread pool (semaphore controls actual concurrency)
+        for shot_id in shot_ids:
+            future = self._thread_pool.submit(self._generate_audio_with_semaphore, shot_id)
+            futures[future] = shot_id
+
+        # Collect results as they complete
+        for future in as_completed(futures):
+            shot_id = futures[future]
+            try:
+                result = future.result()
+                results.append({"shot_id": shot_id, **result})
+            except Exception as e:
+                logger.error(f"Failed to generate audio for shot {shot_id}: {e}")
+                results.append({"shot_id": shot_id, "success": False, "error": str(e)})
+
         return {"success": True, "results": results}
 
     # ========== File Operations ==========
@@ -1738,11 +1869,50 @@ class Api:
             if "workDir" in settings:
                 self._project_manager.set_work_dir(Path(settings["workDir"]))
 
+            # Update thread pool sizes if concurrency changed
+            self._update_thread_pools(settings)
+
             logger.info("Saved settings")
             return {"success": True}
         except Exception as e:
             logger.error(f"Failed to save settings: {e}")
             return {"success": False, "error": str(e)}
+
+    def _update_thread_pools(self, settings: dict):
+        """Update thread pool and semaphores based on settings"""
+        tts_concurrency = settings.get("tts", {}).get("concurrency", 1)
+        tti_concurrency = settings.get("tti", {}).get("concurrency", 1)
+        ttv_concurrency = settings.get("ttv", {}).get("concurrency", 1)
+
+        needs_pool_update = False
+
+        # Update TTS semaphore if changed
+        if self._tts_concurrency != tts_concurrency:
+            self._tts_semaphore = Semaphore(tts_concurrency)
+            self._tts_concurrency = tts_concurrency
+            needs_pool_update = True
+            logger.info(f"TTS concurrency updated: {tts_concurrency}")
+
+        # Update TTI semaphore if changed
+        if self._tti_concurrency != tti_concurrency:
+            self._tti_semaphore = Semaphore(tti_concurrency)
+            self._tti_concurrency = tti_concurrency
+            needs_pool_update = True
+            logger.info(f"TTI concurrency updated: {tti_concurrency}")
+
+        # Update TTV semaphore if changed
+        if self._ttv_concurrency != ttv_concurrency:
+            self._ttv_semaphore = Semaphore(ttv_concurrency)
+            self._ttv_concurrency = ttv_concurrency
+            needs_pool_update = True
+            logger.info(f"TTV concurrency updated: {ttv_concurrency}")
+
+        # Update thread pool if total concurrency changed
+        if needs_pool_update:
+            total_max_workers = tts_concurrency + tti_concurrency + ttv_concurrency
+            self._thread_pool.shutdown(wait=False)
+            self._thread_pool = ThreadPoolExecutor(max_workers=total_max_workers, thread_name_prefix="gen")
+            logger.info(f"Thread pool updated: total_workers={total_max_workers}")
 
     def select_work_dir(self) -> dict:
         """Select work directory"""
