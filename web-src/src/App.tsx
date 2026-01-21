@@ -14,6 +14,7 @@ import {
   Video,
   Mic,
   Sparkles,
+  Type,
 } from 'lucide-react';
 import { useApi } from './hooks/useApi';
 import { Sidebar } from './components/layout/Sidebar';
@@ -58,6 +59,10 @@ function App() {
   // Character modal state
   const [addCharacterModalOpen, setAddCharacterModalOpen] = useState(false);
   const [importCharacterModalOpen, setImportCharacterModalOpen] = useState(false);
+
+  // Prefix modal state
+  const [prefixModalOpen, setPrefixModalOpen] = useState(false);
+  const [promptPrefix, setPromptPrefix] = useState('');
 
   // Toast notifications
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -139,14 +144,21 @@ function App() {
   // Register callbacks for backend to notify shot status changes and progress
   useEffect(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (window as any).onShotStatusChange = (shotId: string, status: string) => {
+    (window as any).onShotStatusChange = (shotId: string, status: string, shotData: Shot | null) => {
       setProject((prev) => {
         if (!prev) return prev;
         return {
           ...prev,
-          shots: prev.shots.map((s) =>
-            s.id === shotId ? { ...s, status: status as Shot['status'] } : s
-          ),
+          shots: prev.shots.map((s) => {
+            if (s.id === shotId) {
+              // If full shot data is provided, use it; otherwise just update status
+              if (shotData) {
+                return shotData;
+              }
+              return { ...s, status: status as Shot['status'] };
+            }
+            return s;
+          }),
         };
       });
     };
@@ -797,6 +809,45 @@ function App() {
     setGenerationProgress(null);
   };
 
+  // ========== Add Prefix to Image Prompts ==========
+
+  const handleAddPrefix = () => {
+    if (!project || !promptPrefix.trim()) return;
+
+    const targetShots = selectedShotIds.length > 0
+      ? project.shots.filter(s => selectedShotIds.includes(s.id))
+      : project.shots;
+
+    if (targetShots.length === 0) {
+      showToast('error', '没有可添加前缀的镜头');
+      return;
+    }
+
+    setProject((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        shots: prev.shots.map((shot) => {
+          const shouldUpdate = selectedShotIds.length > 0
+            ? selectedShotIds.includes(shot.id)
+            : true;
+          if (shouldUpdate && shot.imagePrompt) {
+            return {
+              ...shot,
+              imagePrompt: `${promptPrefix.trim()} ${shot.imagePrompt}`,
+            };
+          }
+          return shot;
+        }),
+      };
+    });
+
+    setIsDirty(true);
+    setPrefixModalOpen(false);
+    setPromptPrefix('');
+    showToast('success', `已为 ${targetShots.length} 个镜头添加图片提示词前缀`);
+  };
+
   // ========== Render Page Actions ==========
 
   const renderPageActions = () => {
@@ -821,8 +872,15 @@ function App() {
               <Download className="w-4 h-4" />
               JSONL模板
             </button>
+            <button
+              onClick={() => setPrefixModalOpen(true)}
+              className="flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-200 transition-colors"
+            >
+              <Type className="w-4 h-4" />
+              添加前缀
+            </button>
             <div className="w-px h-6 bg-slate-700 mx-2" />
-                        <button
+            <button
               onClick={handleBatchGenerateAudios}
               disabled={isGenerating || !hasSelection}
               className="flex items-center gap-2 px-3 py-2 bg-orange-600 hover:bg-orange-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm text-white transition-colors"
@@ -1118,6 +1176,45 @@ function App() {
           {renderPageContent()}
         </div>
       </main>
+
+      {/* Prefix Modal */}
+      {prefixModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-slate-800 rounded-xl p-6 w-[500px] max-w-[90vw]">
+            <h2 className="text-lg font-semibold text-white mb-4">添加图片提示词前缀</h2>
+            <p className="text-sm text-slate-400 mb-4">
+              {selectedShotIds.length > 0
+                ? `将为选中的 ${selectedShotIds.length} 个镜头添加前缀`
+                : `将为所有 ${project?.shots.length || 0} 个镜头添加前缀`}
+            </p>
+            <textarea
+              value={promptPrefix}
+              onChange={(e) => setPromptPrefix(e.target.value)}
+              placeholder="输入要添加的前缀，例如：高清电影画质，"
+              className="w-full h-24 px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500 resize-none"
+              autoFocus
+            />
+            <div className="flex justify-end gap-3 mt-4">
+              <button
+                onClick={() => {
+                  setPrefixModalOpen(false);
+                  setPromptPrefix('');
+                }}
+                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-200 transition-colors"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleAddPrefix}
+                disabled={!promptPrefix.trim()}
+                className="px-4 py-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm text-white transition-colors"
+              >
+                添加前缀
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

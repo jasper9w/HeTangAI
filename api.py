@@ -635,11 +635,11 @@ class Api:
                     if not tti_config.get("apiUrl") or not tti_config.get("apiKey"):
                         raise ValueError("TTI API not configured in settings")
 
-                    # Create client
+                    # Create client - use fixed model for character generation
                     client = GenerationClient(
                         api_url=tti_config["apiUrl"],
                         api_key=tti_config["apiKey"],
-                        model=tti_config.get("model", "gemini-2.5-flash-image-landscape"),
+                        model="gemini-3.0-pro-image-landscape",  # Fixed model for character images
                     )
 
                     # Generate image (returns URL)
@@ -1520,11 +1520,17 @@ class Api:
 
         return {"success": False, "error": "Shot not found"}
 
-    def _notify_shot_status(self, shot_id: str, status: str):
-        """Notify frontend about shot status change"""
+    def _notify_shot_status(self, shot_id: str, status: str, shot_data: dict = None):
+        """Notify frontend about shot status change, optionally with full shot data"""
         try:
             if self._window:
-                self._window.evaluate_js(f'window.onShotStatusChange && window.onShotStatusChange("{shot_id}", "{status}")')
+                if shot_data:
+                    # Send full shot data as JSON
+                    import json
+                    shot_json = json.dumps(shot_data)
+                    self._window.evaluate_js(f'window.onShotStatusChange && window.onShotStatusChange("{shot_id}", "{status}", {shot_json})')
+                else:
+                    self._window.evaluate_js(f'window.onShotStatusChange && window.onShotStatusChange("{shot_id}", "{status}", null)')
         except Exception as e:
             logger.warning(f"Failed to notify frontend: {e}")
 
@@ -1542,9 +1548,9 @@ class Api:
             # Notify frontend that this shot is now generating
             self._notify_shot_status(shot_id, "generating_images")
             result = self.generate_images_for_shot(shot_id)
-            # Notify frontend of completion status and progress
-            if result.get("success"):
-                self._notify_shot_status(shot_id, "images_ready")
+            # Notify frontend of completion status with shot data for immediate UI update
+            if result.get("success") and result.get("shot"):
+                self._notify_shot_status(shot_id, "images_ready", result["shot"])
             else:
                 self._notify_shot_status(shot_id, "error")
             self._notify_progress()
@@ -1706,9 +1712,9 @@ class Api:
             # Notify frontend that this shot is now generating
             self._notify_shot_status(shot_id, "generating_video")
             result = self.generate_video_for_shot(shot_id)
-            # Notify frontend of completion status and progress
-            if result.get("success"):
-                self._notify_shot_status(shot_id, "completed")
+            # Notify frontend of completion status with shot data for immediate UI update
+            if result.get("success") and result.get("shot"):
+                self._notify_shot_status(shot_id, "completed", result["shot"])
             else:
                 self._notify_shot_status(shot_id, "error")
             self._notify_progress()
@@ -1861,6 +1867,7 @@ class Api:
                     final_audio_path = self._project_manager.get_shot_audio_path(
                         self.project_name, shot_id
                     )
+                    final_audio_path.parent.mkdir(parents=True, exist_ok=True)
                     combined.export(str(final_audio_path), format="wav")
 
                     # Clean up temporary files
@@ -1891,9 +1898,9 @@ class Api:
             # Notify frontend that this shot is now generating
             self._notify_shot_status(shot_id, "generating_audio")
             result = self.generate_audio_for_shot(shot_id)
-            # Notify frontend of completion status and progress
-            if result.get("success"):
-                self._notify_shot_status(shot_id, "audio_ready")
+            # Notify frontend of completion status with shot data for immediate UI update
+            if result.get("success") and result.get("shot"):
+                self._notify_shot_status(shot_id, "audio_ready", result["shot"])
             else:
                 self._notify_shot_status(shot_id, "error")
             self._notify_progress()
