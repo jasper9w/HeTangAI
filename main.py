@@ -77,8 +77,8 @@ def main():
     # Store window reference in api for dialogs (NOT in Api class directly per CLAUDE.md)
     api.set_window(window)
 
-    # webview.start(debug=DEV)
-    webview.start()
+    webview.start(debug=DEV)
+    # webview.start()
 
     # Cleanup
     file_server.stop()

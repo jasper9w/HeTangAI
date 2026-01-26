@@ -12,24 +12,27 @@ import {
   Loader2,
   Trash2,
 } from 'lucide-react';
-import type { Character } from '../../types';
+import type { Character, ImportedCharacter } from '../../types';
 
 interface CharacterImportModalProps {
   isOpen: boolean;
   onClose: () => void;
   onImportFromText: (text: string) => Promise<{
     success: boolean;
-    characters: Partial<Character>[];
+    characters: ImportedCharacter[];
     errors: string[];
     error?: string;
   }>;
   onImportFromFile: () => Promise<{
     success: boolean;
-    characters: Partial<Character>[];
+    characters: ImportedCharacter[];
     errors: string[];
     error?: string;
   }>;
-  onConfirmImport: (characters: Partial<Character>[]) => Promise<{
+  onConfirmImport: (
+    characters: ImportedCharacter[],
+    options?: { duplicateAction?: 'overwrite' | 'skip' },
+  ) => Promise<{
     success: boolean;
     addedCount?: number;
     error?: string;
@@ -51,8 +54,10 @@ export function CharacterImportModal({
   const [pasteText, setPasteText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [parseErrors, setParseErrors] = useState<string[]>([]);
-  const [parsedCharacters, setParsedCharacters] = useState<Partial<Character>[]>([]);
+  const [parsedCharacters, setParsedCharacters] = useState<ImportedCharacter[]>([]);
   const [showPreview, setShowPreview] = useState(false);
+  const duplicateCharacters = parsedCharacters.filter((char) => !!char.existingId);
+  const hasDuplicates = duplicateCharacters.length > 0;
 
   const handleClose = () => {
     setPasteText('');
@@ -105,12 +110,12 @@ export function CharacterImportModal({
     }
   };
 
-  const handleConfirm = async () => {
+  const handleConfirm = async (duplicateAction?: 'overwrite' | 'skip') => {
     if (parsedCharacters.length === 0) return;
 
     setIsLoading(true);
     try {
-      const result = await onConfirmImport(parsedCharacters);
+      const result = await onConfirmImport(parsedCharacters, { duplicateAction });
       if (result.success) {
         handleClose();
       } else {
@@ -179,7 +184,7 @@ export function CharacterImportModal({
                 }`}
               >
                 <FileSpreadsheet className="w-4 h-4" />
-                CSV/Excel文件
+                CSV/Excel/JSONL文件
               </button>
               <button
                 onClick={() => setActiveTab('template')}
@@ -200,12 +205,12 @@ export function CharacterImportModal({
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-slate-300 mb-2">
-                      粘贴角色数据（Tab或逗号分隔）
+                      粘贴角色数据（Tab/逗号分隔或JSONL）
                     </label>
                     <textarea
                       value={pasteText}
                       onChange={(e) => setPasteText(e.target.value)}
-                      placeholder={`格式示例:\n\n2列 (姓名, 描述):\nAlice\t黑长直的年轻女性\nBob\t穿西装的中年男性\n\n3列 (姓名, 参考音频, 描述):\nAlice\t/path/to/audio.wav\t黑长直的年轻女性\nBob\t/path/to/audio2.wav\t穿西装的中年男性`}
+                      placeholder={`格式示例:\n\n2列 (姓名, 描述):\nAlice\t黑长直的年轻女性\nBob\t穿西装的中年男性\n\n3列 (姓名, 参考音频, 描述):\nAlice\t/path/to/audio.wav\t黑长直的年轻女性\nBob\t/path/to/audio2.wav\t穿西装的中年男性\n\nJSONL:\n{"name":"Alice","dna":"黑长直的年轻女性","tti":{"prompt":"young woman"}}`}
                       rows={10}
                       className="w-full px-3 py-2 bg-slate-700 rounded-lg text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500 resize-none font-mono text-sm"
                     />
@@ -220,6 +225,9 @@ export function CharacterImportModal({
                       <li>
                         <span className="text-slate-300">3列:</span> 角色名, 参考音频路径, 描述
                       </li>
+                      <li>
+                        <span className="text-slate-300">JSONL:</span> 每行一个JSON对象
+                      </li>
                       <li className="text-slate-500">
                         支持Tab或逗号作为分隔符，自动检测。
                       </li>
@@ -233,7 +241,7 @@ export function CharacterImportModal({
                   <div className="bg-slate-700/50 rounded-lg p-6 text-center">
                     <FileSpreadsheet className="w-12 h-12 mx-auto mb-3 text-slate-400" />
                     <p className="text-slate-300 mb-4">
-                      从CSV或Excel文件导入角色
+                      从CSV、Excel或JSONL文件导入角色
                     </p>
                     <button
                       onClick={handleImportFile}
@@ -384,6 +392,17 @@ export function CharacterImportModal({
                     </ul>
                   </div>
                 )}
+                {hasDuplicates && (
+                  <div className="bg-amber-900/30 border border-amber-700 rounded-lg p-3">
+                    <div className="flex items-center gap-2 text-amber-400 mb-2">
+                      <AlertCircle className="w-4 h-4" />
+                      <span className="text-sm font-medium">检测到重复角色</span>
+                    </div>
+                    <p className="text-xs text-amber-300">
+                      有 {duplicateCharacters.length} 个角色已存在。请选择覆盖或跳过重复角色。
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* Character List */}
@@ -397,6 +416,11 @@ export function CharacterImportModal({
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
                           <span className="font-medium text-slate-200">{char.name}</span>
+                          {char.existingId && (
+                            <span className="text-xs px-1.5 py-0.5 bg-amber-600/30 text-amber-300 rounded">
+                              重复
+                            </span>
+                          )}
                           {char.referenceAudioPath && (
                             <span className="text-xs px-1.5 py-0.5 bg-violet-600/30 text-violet-300 rounded">
                               Has Audio
@@ -433,28 +457,57 @@ export function CharacterImportModal({
             {/* Footer */}
             <div className="p-4 border-t border-slate-700 flex items-center justify-end gap-2">
               <button
-                onClick={() => setShowPreview(false)}
+                onClick={hasDuplicates ? handleClose : () => setShowPreview(false)}
                 className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-300 transition-colors"
               >
-                返回
+                {hasDuplicates ? '取消' : '返回'}
               </button>
-              <button
-                onClick={handleConfirm}
-                disabled={isLoading || parsedCharacters.length === 0}
-                className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 rounded-lg text-sm text-white transition-colors"
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    导入中...
-                  </>
-                ) : (
-                  <>
-                    <Check className="w-4 h-4" />
-                    导入 {parsedCharacters.length} 个角色
-                  </>
-                )}
-              </button>
+              {hasDuplicates ? (
+                <>
+                  <button
+                    onClick={() => handleConfirm('skip')}
+                    disabled={isLoading || parsedCharacters.length === 0}
+                    className="px-4 py-2 bg-slate-600 hover:bg-slate-500 disabled:opacity-50 rounded-lg text-sm text-white transition-colors"
+                  >
+                    {isLoading ? '处理中...' : '跳过重复'}
+                  </button>
+                  <button
+                    onClick={() => handleConfirm('overwrite')}
+                    disabled={isLoading || parsedCharacters.length === 0}
+                    className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 rounded-lg text-sm text-white transition-colors"
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        处理中...
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-4 h-4" />
+                        覆盖重复
+                      </>
+                    )}
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={() => handleConfirm()}
+                  disabled={isLoading || parsedCharacters.length === 0}
+                  className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 rounded-lg text-sm text-white transition-colors"
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      导入中...
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-4 h-4" />
+                      导入 {parsedCharacters.length} 个角色
+                    </>
+                  )}
+                </button>
+              )}
             </div>
           </>
         )}

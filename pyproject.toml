@@ -11,4 +11,5 @@ dependencies = [
     "pandas>=2.2",
     "httpx>=0.28.1",
     "pycapcut>=0.0.3",
+    "pydub>=0.25.1",
 ]

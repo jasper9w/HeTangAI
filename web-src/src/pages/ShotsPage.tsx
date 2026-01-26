@@ -17,7 +17,7 @@ interface ShotsPageProps {
   onGenerateAudio: (id: string) => void;
   onSelectImage: (shotId: string, imageIndex: number) => void;
   onSelectVideo: (shotId: string, videoIndex: number) => void;
-  onUpdateShot: (shotId: string, field: string, value: string | string[]) => void;
+  onUpdateShot: (shotId: string, field: string, value: string | string[] | { role: string; text: string }[]) => void;
   onFilterChange: (filteredShots: Shot[]) => void;
   onInsertShot: (afterShotId: string | null) => void;
   batchModalOpen: boolean;

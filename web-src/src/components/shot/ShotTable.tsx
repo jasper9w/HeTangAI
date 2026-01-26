@@ -1,14 +1,82 @@
 /**
  * Shot Table - Main content area for displaying shots with Excel-style column filters
  */
-import { useState, useEffect, useMemo, useRef } from 'react';
-import { Image, Film, Trash2, Loader2, Check, X, ZoomIn, Plus, Play, Pause, Mic } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Image, Film, Trash2, Loader2, Check, X, ZoomIn, Plus, Play, Pause } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { VideoModal } from '../ui/VideoModal';
 import { useColumnFilter } from './ColumnFilter';
-import { ColumnHeaderFilter, SearchFilter, MultiSelectFilter, StatusFilter } from './ExcelColumnFilter';
+import { ColumnHeaderFilter, SearchFilter, StatusFilter } from './ExcelColumnFilter';
 import type { Shot, Character } from '../../types';
+
+// 角色颜色映射 - 使用柔和但可辨识的颜色
+const CHARACTER_COLORS = [
+  '#60a5fa', // blue-400
+  '#34d399', // emerald-400
+  '#f472b6', // pink-400
+  '#a78bfa', // violet-400
+  '#fbbf24', // amber-400
+  '#2dd4bf', // teal-400
+  '#fb923c', // orange-400
+  '#818cf8', // indigo-400
+  '#4ade80', // green-400
+  '#f87171', // red-400
+];
+
+// 为角色分配颜色
+function getCharacterColor(characterName: string, characters: Character[]): string {
+  const idx = characters.findIndex(c => c.name === characterName);
+  if (idx >= 0) {
+    return CHARACTER_COLORS[idx % CHARACTER_COLORS.length];
+  }
+  return '#94a3b8'; // slate-400 默认色
+}
+
+// 检查是否是旁白角色
+function isNarratorRole(roleName: string, characters: Character[]): boolean {
+  const char = characters.find(c => c.name === roleName);
+  return char?.isNarrator ?? false;
+}
+
+// 检查是否是已定义角色
+function isDefinedCharacter(roleName: string, characters: Character[]): boolean {
+  return characters.some(c => c.name === roleName);
+}
+
+// 高亮文本中的角色名称
+function highlightCharacterNames(text: string, characters: Character[]): React.ReactNode {
+  if (!text || characters.length === 0) {
+    return <span className="text-slate-400">{text}</span>;
+  }
+
+  // 获取所有角色名，按长度降序排列（优先匹配长的名称）
+  const charNames = characters.map(c => c.name).filter(n => n).sort((a, b) => b.length - a.length);
+  
+  if (charNames.length === 0) {
+    return <span className="text-slate-400">{text}</span>;
+  }
+
+  // 创建正则表达式匹配所有角色名
+  const escapedNames = charNames.map(name => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const regex = new RegExp(`(${escapedNames.join('|')})`, 'g');
+
+  // 分割文本并高亮
+  const parts = text.split(regex);
+  
+  return parts.map((part, idx) => {
+    const isCharacter = characters.some(c => c.name === part);
+    if (isCharacter) {
+      const color = getCharacterColor(part, characters);
+      return (
+        <span key={idx} style={{ color, fontWeight: 500 }}>
+          {part}
+        </span>
+      );
+    }
+    return <span key={idx} className="text-slate-400">{part}</span>;
+  });
+}
 
 interface ShotTableProps {
   shots: Shot[];
@@ -22,7 +90,7 @@ interface ShotTableProps {
   onGenerateAudio: (id: string) => void;
   onSelectImage: (shotId: string, imageIndex: number) => void;
   onSelectVideo: (shotId: string, videoIndex: number) => void;
-  onUpdateShot: (shotId: string, field: string, value: string | string[]) => void;
+  onUpdateShot: (shotId: string, field: string, value: string | string[] | { role: string; text: string }[]) => void;
   onFilterChange: (filteredShots: Shot[]) => void;
   onInsertShot: (afterShotId: string | null) => void;
 }
@@ -64,7 +132,7 @@ export function ShotTable({
   const rowVirtualizer = useVirtualizer({
     count: filteredShots.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 240, // 固定高度：内容区域180px + 错误消息区域30px
+    estimateSize: () => 240, // 固定高度：内容区域180px + 一些额外空间
     overscan: 5, // 预渲染5个额外的行
   });
 
@@ -152,36 +220,6 @@ export function ShotTable({
     error: '错误',
   };
 
-  const voiceActorOptions = useMemo(() => {
-    const actorCounts: Record<string, number> = {};
-    shots.forEach(shot => {
-      if (shot.voiceActor) {
-        actorCounts[shot.voiceActor] = (actorCounts[shot.voiceActor] || 0) + 1;
-      }
-    });
-
-    return Object.entries(actorCounts).map(([actor, count]) => ({
-      value: actor,
-      label: actor,
-      count,
-    }));
-  }, [shots]);
-
-  const characterOptions = useMemo(() => {
-    const charCounts: Record<string, number> = {};
-    shots.forEach(shot => {
-      shot.characters.forEach(char => {
-        charCounts[char] = (charCounts[char] || 0) + 1;
-      });
-    });
-
-    return Object.entries(charCounts).map(([char, count]) => ({
-      value: char,
-      label: char,
-      count,
-    }));
-  }, [shots]);
-
   // Handle ESC key for image preview
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -262,44 +300,11 @@ export function ShotTable({
             />
           </div>
 
-          {/* 序号列 */}
-          <div className="w-12">
-            <ColumnHeaderFilter
-              title="序号"
-              hasActiveFilter={!!filters.sequence.value || filters.sequence.inverted}
-            >
-              <SearchFilter
-                value={filters.sequence.value}
-                inverted={filters.sequence.inverted}
-                onChange={(value) => updateFilter('sequence', { ...filters.sequence, value })}
-                onInvertedChange={(inverted) => updateFilter('sequence', { ...filters.sequence, inverted })}
-                placeholder="搜索序号..."
-              />
-            </ColumnHeaderFilter>
-          </div>
 
-          {/* 配音角色列 */}
-          <div className="w-24">
+          {/* 配音列 */}
+          <div className="w-84">  {/* 增加宽度以容纳对话列表 */}
             <ColumnHeaderFilter
-              title="配音角色"
-              hasActiveFilter={filters.voiceActor.values.length > 0 || filters.voiceActor.inverted}
-            >
-              <MultiSelectFilter
-                selectedValues={filters.voiceActor.values}
-                inverted={filters.voiceActor.inverted}
-                onChange={(values) => updateFilter('voiceActor', { ...filters.voiceActor, values })}
-                onInvertedChange={(inverted) => updateFilter('voiceActor', { ...filters.voiceActor, inverted })}
-                options={voiceActorOptions}
-                searchValue=""
-                onSearchChange={() => {}}
-              />
-            </ColumnHeaderFilter>
-          </div>
-
-          {/* 文案列 */}
-          <div className="flex-1 min-w-0 max-w-[200px]">
-            <ColumnHeaderFilter
-              title="文案"
+              title="配音"
               hasActiveFilter={!!filters.script.value || filters.script.inverted}
             >
               <SearchFilter
@@ -307,13 +312,13 @@ export function ShotTable({
                 inverted={filters.script.inverted}
                 onChange={(value) => updateFilter('script', { ...filters.script, value })}
                 onInvertedChange={(inverted) => updateFilter('script', { ...filters.script, inverted })}
-                placeholder="搜索文案内容..."
+                placeholder="搜索配音内容..."
               />
             </ColumnHeaderFilter>
           </div>
 
           {/* 图片提示词列 */}
-          <div className="w-40">
+          <div className="w-44">
             <ColumnHeaderFilter
               title="图片提示词"
               hasActiveFilter={!!filters.imagePrompt.value || filters.imagePrompt.inverted}
@@ -328,23 +333,6 @@ export function ShotTable({
             </ColumnHeaderFilter>
           </div>
 
-          {/* 出场角色列 */}
-          <div className="w-24">
-            <ColumnHeaderFilter
-              title="出场角色"
-              hasActiveFilter={filters.characters.values.length > 0 || filters.characters.inverted}
-            >
-              <MultiSelectFilter
-                selectedValues={filters.characters.values}
-                inverted={filters.characters.inverted}
-                onChange={(values) => updateFilter('characters', { ...filters.characters, values })}
-                onInvertedChange={(inverted) => updateFilter('characters', { ...filters.characters, inverted })}
-                options={characterOptions}
-                searchValue=""
-                onSearchChange={() => {}}
-              />
-            </ColumnHeaderFilter>
-          </div>
 
           {/* 图片预览列 */}
           <div className="w-44">
@@ -365,7 +353,7 @@ export function ShotTable({
           </div>
 
           {/* 视频提示词列 */}
-          <div className="w-40">
+          <div className="w-44">
             <ColumnHeaderFilter
               title="视频提示词"
               hasActiveFilter={!!filters.videoPrompt.value || filters.videoPrompt.inverted}
@@ -577,8 +565,82 @@ interface ShotRowProps {
   onDelete: () => void;
   onPreviewImage: (url: string) => void;
   onPreviewVideo: (url: string, title: string) => void;
-  onUpdateField: (field: string, value: string | string[]) => void;
+  onUpdateField: (field: string, value: string | string[] | { role: string; text: string }[]) => void;
   onPlayAudio: (audioUrl: string) => void;
+}
+
+// 高亮文本编辑器组件 - 使用叠加层实现
+interface HighlightedTextAreaProps {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  className?: string;
+  renderHighlight: (text: string) => React.ReactNode;
+}
+
+function HighlightedTextArea({
+  value,
+  onChange,
+  placeholder,
+  className = '',
+  renderHighlight,
+}: HighlightedTextAreaProps) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const highlightRef = useRef<HTMLDivElement>(null);
+
+  // 同步滚动
+  const handleScroll = () => {
+    if (textareaRef.current && highlightRef.current) {
+      highlightRef.current.scrollTop = textareaRef.current.scrollTop;
+      highlightRef.current.scrollLeft = textareaRef.current.scrollLeft;
+    }
+  };
+
+  // 共享的文本样式，确保 textarea 和高亮层完全一致
+  const sharedTextStyle = {
+    fontSize: '12px',      // text-xs
+    lineHeight: '18px',    // 固定行高
+    fontFamily: 'ui-sans-serif, system-ui, sans-serif',
+  };
+
+  return (
+    <div className={`relative ${className}`}>
+      {/* 高亮层 - 在下面 */}
+      <div
+        ref={highlightRef}
+        className="absolute inset-0 px-2 py-1 overflow-hidden whitespace-pre-wrap break-words pointer-events-none"
+        style={{ 
+          ...sharedTextStyle,
+          wordBreak: 'break-word',
+          overflowWrap: 'break-word',
+        }}
+      >
+        {renderHighlight(value)}
+        {/* 添加空白以防止滚动时内容截断 */}
+        <span className="invisible">&nbsp;</span>
+      </div>
+      {/* 透明文本框 - 在上面，可编辑 */}
+      <textarea
+        ref={textareaRef}
+        className="absolute inset-0 w-full h-full px-2 py-1 bg-transparent text-transparent caret-slate-300 outline-none resize-none overflow-y-auto"
+        style={{
+          ...sharedTextStyle,
+          caretColor: '#cbd5e1', // slate-300
+          WebkitTextFillColor: 'transparent',
+        }}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onScroll={handleScroll}
+        placeholder={placeholder}
+      />
+      {/* Placeholder */}
+      {!value && placeholder && (
+        <div className="absolute left-2 top-1 text-xs text-slate-500 pointer-events-none">
+          {placeholder}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function ShotRow({
@@ -592,7 +654,7 @@ function ShotRow({
   onGenerateAudio,
   onSelectImage,
   onSelectVideo,
-  onDelete,
+  onDelete: _onDelete,
   onPreviewImage,
   onPreviewVideo,
   onUpdateField,
@@ -608,144 +670,169 @@ function ShotRow({
   const isGeneratingVideo = shot.status === 'generating_video';
   const isGeneratingAudio = shot.status === 'generating_audio';
 
-  const handleCharacterToggle = (charName: string) => {
-    const currentChars = shot.characters || [];
-    const newChars = currentChars.includes(charName)
-      ? currentChars.filter((c) => c !== charName)
-      : [...currentChars, charName];
-    onUpdateField('characters', newChars);
-  };
-
   return (
-    <div className={`px-4 py-3 hover:bg-slate-800/50 transition-colors ${isSelected ? 'bg-slate-800/70' : ''}`}>
-      <div className="flex items-start gap-4 h-[210px]">
-        {/* Checkbox */}
-        <input
-          type="checkbox"
-          checked={isSelected}
-          onChange={(e) => onSelect(e.target.checked)}
-          className="mt-2 w-4 h-4 rounded border-slate-600 bg-slate-700 text-violet-500 focus:ring-violet-500 focus:ring-offset-0"
-        />
+    <div className={`px-4 py-3 hover:bg-slate-800/50 transition-colors relative ${isSelected ? 'bg-slate-800/70' : ''}`}>
+      <div className="flex items-start gap-4 h-[180px]">
+        {/* Checkbox with sequence number - full cell clickable */}
+        <div
+          className="flex flex-col items-center justify-center w-8 h-[180px] cursor-pointer"
+          onClick={() => onSelect(!isSelected)}
+        >
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={(e) => onSelect(e.target.checked)}
+            className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-violet-500 focus:ring-violet-500 focus:ring-offset-0 cursor-pointer"
+            onClick={(e) => e.stopPropagation()} // 防止事件冒泡
+          />
+          <span className="text-xs text-slate-400 mt-1">#{shot.sequence}</span>
+        </div>
 
-        {/* Sequence with Delete Button */}
-        <div className="w-12 flex-shrink-0 text-center">
-          <span className="text-lg font-bold text-slate-300">#{shot.sequence}</span>
+        {/* 配音列 - 高亮文本框 */}
+        <div className="w-80 flex-shrink-0 relative h-[180px]">
+          <div className="h-[180px] space-y-2 overflow-y-auto relative">
+            <HighlightedTextArea
+              className="w-full h-full bg-slate-700/50 rounded pr-10 pb-8"
+              value={shot.script || ''}
+              onChange={(plainText) => {
+                const lines = plainText.split('\n');
+                const newDialogues: { role: string; text: string }[] = [];
+
+                for (const line of lines) {
+                  const colonIndex = line.indexOf(': ');
+                  if (colonIndex !== -1) {
+                    const role = line.substring(0, colonIndex);
+                    const text = line.substring(colonIndex + 2);
+                    if (role.trim() || text.trim()) {
+                      newDialogues.push({ role, text });
+                    }
+                  } else if (line.trim()) {
+                    newDialogues.push({ role: '', text: line });
+                  }
+                }
+
+                onUpdateField('dialogues', newDialogues);
+                onUpdateField('script', plainText);
+              }}
+              renderHighlight={(text) => {
+                // 按行解析配音文本，高亮冒号后的角色部分
+                const lines = text.split('\n');
+                return lines.map((line, idx) => {
+                  const colonIndex = line.indexOf(': ');
+                  if (colonIndex !== -1) {
+                    const role = line.substring(0, colonIndex);
+                    const rest = line.substring(colonIndex);
+                    
+                    // 确定角色颜色
+                    let roleColor: string;
+                    if (isNarratorRole(role, characters)) {
+                      roleColor = getCharacterColor(role, characters);
+                    } else if (isDefinedCharacter(role, characters)) {
+                      roleColor = getCharacterColor(role, characters);
+                    } else if (role.trim()) {
+                      // 非旁白且非已定义角色，染为红色警示
+                      roleColor = '#f87171'; // red-400
+                    } else {
+                      roleColor = '#94a3b8'; // slate-400
+                    }
+                    
+                    return (
+                      <span key={idx}>
+                        <span style={{ color: roleColor, fontWeight: 500 }}>{role}</span>
+                        <span className="text-slate-300">{rest}</span>
+                        {idx < lines.length - 1 && '\n'}
+                      </span>
+                    );
+                  } else {
+                    return (
+                      <span key={idx} className="text-slate-300">
+                        {line}
+                        {idx < lines.length - 1 && '\n'}
+                      </span>
+                    );
+                  }
+                });
+              }}
+            />
+            {/* 配音控制按钮 - 叠放在文本框右下角 */}
+            <div className="absolute bottom-1 right-1 flex items-center gap-1">
+              {hasAudio && (
+                <button
+                  onClick={() => onPlayAudio(shot.audioUrl)}
+                  className={`p-1.5 rounded transition-colors backdrop-blur-sm ${
+                    isPlayingAudio
+                      ? 'bg-emerald-600/20'
+                      : 'bg-slate-800/80 hover:bg-emerald-600/20'
+                  }`}
+                  title={isPlayingAudio ? '停止播放' : '试听配音'}
+                >
+                  {isPlayingAudio ? (
+                    <Pause className="w-4 h-4 text-emerald-400" />
+                  ) : (
+                    <Play className="w-4 h-4 text-emerald-400" />
+                  )}
+                </button>
+              )}
+              <button
+                onClick={onGenerateAudio}
+                disabled={isGeneratingAudio || !shot.dialogues || shot.dialogues.length === 0}
+                className={`px-2 py-1 rounded text-[10px] transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                  hasAudio
+                    ? 'bg-slate-800/90 hover:bg-orange-600 text-orange-400 hover:text-white'
+                    : 'bg-orange-600 hover:bg-orange-500 text-white'
+                }`}
+                title="生成配音"
+              >
+                {isGeneratingAudio ? (
+                  <>
+                    <Loader2 className="w-3 h-3 animate-spin inline mr-1" />
+                    <span>生成中</span>
+                  </>
+                ) : (
+                  '生成配音'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Image Prompt - 高亮角色名 */}
+        <div className="w-44 flex-shrink-0 h-[180px] relative">
+          <HighlightedTextArea
+            className="w-full h-[180px] bg-slate-700/50 hover:bg-slate-700 rounded pr-8 pb-6"
+            value={shot.imagePrompt || ''}
+            onChange={(value) => onUpdateField('imagePrompt', value)}
+            placeholder="TTI 提示词"
+            renderHighlight={(text) => highlightCharacterNames(text, characters)}
+          />
+          {/* 生成图片按钮 - 叠放在文本框右下角 */}
           <button
-            onClick={onDelete}
-            className="mt-1 p-1 hover:bg-red-600/20 rounded text-red-400 transition-colors"
-            title="删除"
+            onClick={(e) => { e.stopPropagation(); onGenerateImages(); }}
+            disabled={isGeneratingVideo || !shot.imagePrompt.trim()}
+            className={`absolute bottom-1 right-1 px-2 py-1 rounded text-[10px] transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+              hasImages
+                ? 'bg-slate-800/90 hover:bg-violet-600 text-violet-400 hover:text-white'
+                : 'bg-violet-600 hover:bg-violet-500 text-white'
+            }`}
           >
-            <Trash2 className="w-3 h-3" />
+            {isGeneratingImages ? (
+              <>
+                <Loader2 className="w-3 h-3 animate-spin inline mr-1" />
+                <span>生成中</span>
+              </>
+            ) : (
+              hasImages ? '重新生成' : '生成图片'
+            )}
           </button>
         </div>
 
-        {/* Voice Actor */}
-        <div className="w-24 flex-shrink-0">
-          <input
-            type="text"
-            value={shot.voiceActor}
-            onChange={(e) => onUpdateField('voiceActor', e.target.value)}
-            className="w-full px-2 py-1 bg-slate-700/50 hover:bg-slate-700 focus:bg-slate-700 rounded text-sm text-slate-300 focus:outline-none focus:ring-1 focus:ring-violet-500 transition-colors"
-            placeholder="配音角色"
-          />
-          <div className="flex gap-1 mt-1 flex-wrap">
-            {shot.emotion && (
-              <span className="text-xs px-1.5 py-0.5 bg-slate-700 rounded text-slate-400">
-                {shot.emotion}
-              </span>
-            )}
-            {shot.intensity && (
-              <span className="text-xs px-1.5 py-0.5 bg-slate-700 rounded text-slate-400">
-                {shot.intensity}
-              </span>
-            )}
-          </div>
-        </div>
 
-        {/* Script with Audio Buttons */}
-        <div className="flex-1 min-w-0 max-w-[200px] relative">
-          <textarea
-            value={shot.script}
-            onChange={(e) => onUpdateField('script', e.target.value)}
-            className="w-full h-20 px-2 py-1 bg-slate-700/50 hover:bg-slate-700 focus:bg-slate-700 rounded text-sm text-slate-300 resize-none focus:outline-none focus:ring-1 focus:ring-violet-500 transition-colors"
-            placeholder="镜头文案"
-          />
-          {/* Audio buttons overlay */}
-          <div className="absolute bottom-1 right-1 flex items-center gap-1">
-            {hasAudio && (
-              <button
-                onClick={() => onPlayAudio(shot.audioUrl)}
-                className={`p-1.5 rounded transition-colors backdrop-blur-sm ${
-                  isPlayingAudio
-                    ? 'bg-emerald-600/30 hover:bg-emerald-600/40'
-                    : 'bg-slate-800/80 hover:bg-emerald-600/20'
-                }`}
-                title={isPlayingAudio ? '停止播放' : '试听配音'}
-              >
-                {isPlayingAudio ? (
-                  <Pause className="w-4 h-4 text-emerald-400" />
-                ) : (
-                  <Play className="w-4 h-4 text-emerald-400" />
-                )}
-              </button>
-            )}
-            <button
-              onClick={onGenerateAudio}
-              disabled={isGeneratingAudio || !shot.script.trim()}
-              className="p-1.5 bg-slate-800/80 hover:bg-orange-600/20 rounded transition-colors disabled:opacity-50 backdrop-blur-sm"
-              title="生成配音"
-            >
-              {isGeneratingAudio ? (
-                <Loader2 className="w-4 h-4 text-orange-400 animate-spin" />
-              ) : (
-                <Mic className="w-4 h-4 text-orange-400" />
-              )}
-            </button>
-          </div>
-        </div>
-
-        {/* Image Prompt */}
-        <div className="w-40 flex-shrink-0">
-          <textarea
-            value={shot.imagePrompt}
-            onChange={(e) => onUpdateField('imagePrompt', e.target.value)}
-            className="w-full h-32 px-2 py-1 bg-slate-700/50 hover:bg-slate-700 focus:bg-slate-700 rounded text-xs text-slate-400 resize-none focus:outline-none focus:ring-1 focus:ring-violet-500 transition-colors"
-            placeholder="TTI 提示词"
-          />
-        </div>
-
-        {/* Characters (出场角色) */}
-        <div className="w-24 flex-shrink-0">
-          <div className="flex flex-wrap gap-1">
-            {characters.map((char) => {
-              const isInShot = shot.characters?.includes(char.name);
-              return (
-                <button
-                  key={char.id}
-                  onClick={() => handleCharacterToggle(char.name)}
-                  className={`text-xs px-1.5 py-0.5 rounded transition-colors ${
-                    isInShot
-                      ? 'bg-violet-600 text-white'
-                      : 'bg-slate-700 text-slate-400 hover:bg-slate-600'
-                  }`}
-                  title={isInShot ? '点击移除' : '点击添加'}
-                >
-                  {char.name}
-                </button>
-              );
-            })}
-            {characters.length === 0 && (
-              <span className="text-xs text-slate-500">无角色</span>
-            )}
-          </div>
-        </div>
-
-        {/* Image Preview & Selection - 左右结构 */}
-        <div className="w-44 flex-shrink-0 relative">
-          <div className="flex gap-1.5 h-full">
-            {/* Main preview - 左侧 */}
+        {/* Image Preview & Selection - 左右结构，整体宽高比18:16 */}
+        <div className="flex-shrink-0 relative">
+          <div className="flex gap-1.5 h-[180px]">
+            {/* Main preview - 左侧，9:16 */}
             <div
-              className={`relative flex-1 rounded-lg overflow-hidden cursor-pointer group flex items-center justify-center ${
+              className={`relative w-[101px] h-full rounded-lg overflow-hidden cursor-pointer group ${
                 hasImages ? 'bg-slate-700' : 'bg-slate-700/50'
               }`}
               onClick={() => selectedImage && onPreviewImage(selectedImage)}
@@ -755,53 +842,34 @@ function ShotRow({
                   <img
                     src={selectedImage!}
                     alt={`镜头 ${shot.sequence}`}
-                    className="max-w-full max-h-full object-contain"
+                    className="w-full h-full object-cover"
                   />
                   <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                     <ZoomIn className="w-6 h-6 text-white" />
                   </div>
                 </>
               ) : (
-                <div className="flex flex-col items-center justify-center text-slate-500">
+                <div className="w-full h-full flex flex-col items-center justify-center text-slate-500">
                   <Image className="w-6 h-6 mb-1" />
                   <span className="text-[10px]">暂无图片</span>
                 </div>
               )}
-              {/* Generate button overlay */}
-              {isGeneratingImages ? (
-                <div className="absolute top-1 right-1 z-10 px-2 py-1 bg-violet-600 rounded text-[10px] text-white flex items-center gap-1">
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                  <span>生成中</span>
-                </div>
-              ) : (
-                <button
-                  onClick={(e) => { e.stopPropagation(); onGenerateImages(); }}
-                  disabled={isGeneratingVideo || !shot.imagePrompt.trim()}
-                  className={`absolute top-1 right-1 z-10 px-2 py-1 rounded text-[10px] transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                    hasImages 
-                      ? 'bg-slate-800/90 hover:bg-violet-600 text-violet-400 hover:text-white' 
-                      : 'bg-violet-600 hover:bg-violet-500 text-white'
-                  }`}
-                >
-                  {hasImages ? '重新生成' : '生成图片'}
-                </button>
-              )}
             </div>
-            {/* Thumbnails - 右侧垂直排列，预置4个坑位 */}
-            <div className="flex flex-col gap-1 w-8">
+            {/* Thumbnails - 2x2 grid layout，右侧也是9:16 */}
+            <div className="grid grid-cols-2 grid-rows-2 gap-1 w-[101px]">
               {[0, 1, 2, 3].map((idx) => {
                 const img = shot.images[idx];
                 return img ? (
                   <button
                     key={idx}
                     onClick={() => onSelectImage(idx)}
-                    className={`relative flex-1 rounded overflow-hidden transition-all bg-slate-800 flex items-center justify-center ${
+                    className={`relative rounded overflow-hidden transition-all bg-slate-800 flex items-center justify-center aspect-[9/16] ${
                       idx === shot.selectedImageIndex
                         ? 'ring-2 ring-violet-500'
                         : 'ring-1 ring-slate-600 hover:ring-slate-500'
                     }`}
                   >
-                    <img src={img} alt={`选项 ${idx + 1}`} className="max-w-full max-h-full object-contain" />
+                    <img src={img} alt={`选项 ${idx + 1}`} className="object-cover w-full h-full" />
                     {idx === shot.selectedImageIndex && (
                       <div className="absolute inset-0 bg-violet-500/20 flex items-center justify-center">
                         <Check className="w-3 h-3 text-violet-400" />
@@ -811,7 +879,7 @@ function ShotRow({
                 ) : (
                   <div
                     key={idx}
-                    className="flex-1 rounded bg-slate-700/50 flex items-center justify-center text-slate-500 text-[10px]"
+                    className="rounded bg-slate-700/50 flex items-center justify-center text-slate-500 text-[10px] aspect-[9/16]"
                   >
                     {idx + 1}
                   </div>
@@ -821,30 +889,50 @@ function ShotRow({
           </div>
         </div>
 
-        {/* Video Prompt */}
-        <div className="w-40 flex-shrink-0">
-          <textarea
-            value={shot.videoPrompt}
-            onChange={(e) => onUpdateField('videoPrompt', e.target.value)}
-            className="w-full h-32 px-2 py-1 bg-slate-700/50 hover:bg-slate-700 focus:bg-slate-700 rounded text-xs text-slate-400 resize-none focus:outline-none focus:ring-1 focus:ring-violet-500 transition-colors"
+        {/* Video Prompt - 高亮角色名 */}
+        <div className="w-48 flex-shrink-0 h-[180px] relative">
+          <HighlightedTextArea
+            className="w-full h-[180px] bg-slate-700/50 hover:bg-slate-700 rounded pr-8 pb-6"
+            value={shot.videoPrompt || ''}
+            onChange={(value) => onUpdateField('videoPrompt', value)}
             placeholder="TTV 提示词"
+            renderHighlight={(text) => highlightCharacterNames(text, characters)}
           />
+          {/* 生成视频按钮 - 叠放在文本框右下角 */}
+          <button
+            onClick={(e) => { e.stopPropagation(); onGenerateVideo(); }}
+            disabled={!hasImages || isGeneratingImages}
+            className={`absolute bottom-1 right-1 px-2 py-1 rounded text-[10px] transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+              hasVideo
+                ? 'bg-slate-800/90 hover:bg-emerald-600 text-emerald-400 hover:text-white'
+                : 'bg-emerald-600 hover:bg-emerald-500 text-white'
+            }`}
+          >
+            {isGeneratingVideo ? (
+              <>
+                <Loader2 className="w-3 h-3 animate-spin inline mr-1" />
+                <span>生成中</span>
+              </>
+            ) : (
+              hasVideo ? '重新生成' : '生成视频'
+            )}
+          </button>
         </div>
 
-        {/* Video Preview - 左右结构 */}
-        <div className="w-44 flex-shrink-0 relative">
+        {/* Video Preview - 左右结构，整体宽高比18:16 */}
+        <div className="flex-shrink-0 relative">
           {hasVideo ? (
-            <div className="flex gap-1.5 h-full">
-              {/* Main video preview - 左侧 */}
+            <div className="flex gap-1.5 h-[180px]">
+              {/* Main video preview - 左侧，9:16 */}
               <div
-                className="relative flex-1 rounded-lg overflow-hidden bg-slate-700 cursor-pointer group flex items-center justify-center"
+                className="relative w-[101px] h-full rounded-lg overflow-hidden bg-slate-700 cursor-pointer group"
                 onClick={() => selectedVideo && onPreviewVideo(selectedVideo, `镜头 #${shot.sequence} 视频`)}
               >
                 {selectedVideo && (
                   <>
                     <video
                       src={selectedVideo}
-                      className="max-w-full max-h-full object-contain pointer-events-none"
+                      className="w-full h-full object-cover"
                       preload="metadata"
                       muted
                       playsInline
@@ -858,35 +946,16 @@ function ShotRow({
                     </div>
                   </>
                 )}
-                {/* Generate button overlay */}
-                {isGeneratingVideo ? (
-                  <div className="absolute top-1 right-1 z-10 px-2 py-1 bg-emerald-600 rounded text-[10px] text-white flex items-center gap-1">
-                    <Loader2 className="w-3 h-3 animate-spin" />
-                    <span>生成中</span>
-                  </div>
-                ) : (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); onGenerateVideo(); }}
-                    disabled={!hasImages || isGeneratingImages}
-                    className={`absolute top-1 right-1 z-10 px-2 py-1 rounded text-[10px] transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                      hasVideo 
-                        ? 'bg-slate-800/90 hover:bg-emerald-600 text-emerald-400 hover:text-white' 
-                        : 'bg-emerald-600 hover:bg-emerald-500 text-white'
-                    }`}
-                  >
-                    {hasVideo ? '重新生成' : '生成视频'}
-                  </button>
-                )}
               </div>
-              {/* Thumbnails - 右侧垂直排列，预置4个坑位 */}
-              <div className="flex flex-col gap-1 w-8">
+              {/* Thumbnails - 2x2 grid layout，右侧也是9:16 */}
+              <div className="grid grid-cols-2 grid-rows-2 gap-1 w-[101px]">
                 {[0, 1, 2, 3].map((idx) => {
                   const video = shot.videos[idx];
                   return video ? (
                     <button
                       key={idx}
                       onClick={() => onSelectVideo(idx)}
-                      className={`relative flex-1 rounded overflow-hidden transition-all bg-slate-800 flex items-center justify-center ${
+                      className={`relative rounded overflow-hidden transition-all bg-slate-800 flex items-center justify-center aspect-[9/16] ${
                         idx === shot.selectedVideoIndex
                           ? 'ring-2 ring-emerald-500'
                           : 'ring-1 ring-slate-600 hover:ring-slate-500'
@@ -894,7 +963,7 @@ function ShotRow({
                     >
                       <video
                         src={video}
-                        className="max-w-full max-h-full object-contain pointer-events-none"
+                        className="object-cover w-full h-full"
                         preload="metadata"
                         muted
                         playsInline
@@ -912,7 +981,7 @@ function ShotRow({
                   ) : (
                     <div
                       key={idx}
-                      className="flex-1 rounded bg-slate-700/50 flex items-center justify-center text-slate-500 text-[10px]"
+                      className="rounded bg-slate-700/50 flex items-center justify-center text-slate-500 text-[10px] aspect-[9/16]"
                     >
                       {idx + 1}
                     </div>
@@ -921,33 +990,20 @@ function ShotRow({
               </div>
             </div>
           ) : (
-            <div className="flex gap-1.5 h-full">
-              {/* Empty main preview - 左侧 */}
-              <div className="relative flex-1 rounded-lg bg-slate-700/50 flex flex-col items-center justify-center text-slate-500">
+            <div className="flex gap-1.5 h-[180px]">
+              {/* Empty main preview - 左侧，9:16 */}
+              <div
+                className="relative w-[101px] h-full rounded-lg bg-slate-700/50 flex flex-col items-center justify-center text-slate-500"
+              >
                 <Film className="w-6 h-6 mb-1" />
                 <span className="text-[10px]">暂无视频</span>
-                {/* Generate button overlay */}
-                {isGeneratingVideo ? (
-                  <div className="absolute top-1 right-1 z-10 px-2 py-1 bg-emerald-600 rounded text-[10px] text-white flex items-center gap-1">
-                    <Loader2 className="w-3 h-3 animate-spin" />
-                    <span>生成中</span>
-                  </div>
-                ) : (
-                  <button
-                    onClick={onGenerateVideo}
-                    disabled={!hasImages || isGeneratingImages}
-                    className="absolute top-1 right-1 z-10 px-2 py-1 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed rounded text-[10px] text-white transition-colors"
-                  >
-                    生成视频
-                  </button>
-                )}
               </div>
-              {/* Empty thumbnails - 右侧垂直排列 */}
-              <div className="flex flex-col gap-1 w-8">
+              {/* Empty thumbnails - 2x2 grid layout，右侧也是9:16 */}
+              <div className="grid grid-cols-2 grid-rows-2 gap-1 w-[101px]">
                 {[1, 2, 3, 4].map((num) => (
                   <div
                     key={num}
-                    className="flex-1 rounded bg-slate-700/50 flex items-center justify-center text-slate-500 text-[10px]"
+                    className="rounded bg-slate-700/50 flex items-center justify-center text-slate-500 text-[10px] aspect-[9/16]"
                   >
                     {num}
                   </div>
@@ -958,14 +1014,15 @@ function ShotRow({
         </div>
       </div>
 
-      {/* Error message - 固定高度区域避免布局变化 */}
-      <div className="h-[30px] mt-2 ml-16">
-        {shot.status === 'error' && shot.errorMessage && (
+      {/* Error message - 叠加在行底部，不影响行高 */}
+      {shot.status === 'error' && shot.errorMessage && (
+        <div className="absolute bottom-0 left-16 mb-1">
           <div className="text-xs text-red-400 bg-red-400/10 px-2 py-1 rounded truncate">
             {shot.errorMessage}
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
     </div>
   );
 }

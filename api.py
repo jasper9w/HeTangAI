@@ -241,6 +241,13 @@ class Api:
                         character["status"] = "pending"
                         logger.info(f"Cleared generating status for character {character.get('name')}")
 
+                # Backward compatibility: migrate old format to new format
+                for shot in self.project_data.get("shots", []):
+                    if "dialogues" not in shot or not shot["dialogues"]:
+                        if shot.get("script") and shot.get("voiceActor"):
+                            shot["dialogues"] = [{"role": shot["voiceActor"], "text": shot["script"]}]
+                            logger.info(f"Migrated shot {shot.get('id')} to new dialogue format")
+
                 # Load all alternative images for each shot (slots 1-4)
                 for shot in self.project_data.get("shots", []):
                     shot_id = shot.get("id")
@@ -380,6 +387,14 @@ class Api:
             with open(file_path, "r", encoding="utf-8") as f:
                 self.project_data = json.load(f)
             self.project_path = file_path
+
+            # Backward compatibility: migrate old format to new format
+            for shot in self.project_data.get("shots", []):
+                if "dialogues" not in shot or not shot["dialogues"]:
+                    if shot.get("script") and shot.get("voiceActor"):
+                        shot["dialogues"] = [{"role": shot["voiceActor"], "text": shot["script"]}]
+                        logger.info(f"Migrated shot {shot.get('id')} to new dialogue format")
+
             return {"success": True, "data": self.project_data, "path": str(file_path)}
         except Exception as e:
             logger.error(f"Failed to open project: {e}")
@@ -454,11 +469,11 @@ class Api:
 
     # ========== Import/Export ==========
 
-    def import_excel(self) -> dict:
-        """Import shots from Excel/CSV file"""
+    def import_jsonl(self) -> dict:
+        """Import shots from JSONL file"""
         if not self._window:
             return {"success": False, "error": "Window not initialized"}
-        file_types = ("Excel Files (*.xlsx;*.xls;*.csv)",)
+        file_types = ("JSONL Files (*.jsonl)",)
         result = self._window.create_file_dialog(
             webview.FileDialog.OPEN,
             allow_multiple=False,
@@ -472,9 +487,9 @@ class Api:
         logger.info(f"Importing from: {file_path}")
 
         try:
-            from services.excel_parser import ExcelParser
+            from services.jsonl_parser import JsonlParser
 
-            parser = ExcelParser()
+            parser = JsonlParser()
             shots, characters, errors = parser.parse(file_path)
 
             if not self.project_data:
@@ -507,29 +522,29 @@ class Api:
             logger.error(f"Failed to import: {e}")
             return {"success": False, "error": str(e), "errors": [str(e)]}
 
-    def export_template(self) -> dict:
-        """Export Excel template file"""
+    def export_jsonl_template(self) -> dict:
+        """Export JSONL template file"""
         if not self._window:
             return {"success": False, "error": "Window not initialized"}
 
         result = self._window.create_file_dialog(
             webview.FileDialog.SAVE,
-            save_filename="template.xlsx",
-            file_types=("Excel Files (*.xlsx)",),
+            save_filename="template.jsonl",
+            file_types=("JSONL Files (*.jsonl)",),
         )
 
         if not result:
             return {"success": False, "error": "No file selected"}
 
         try:
-            from services.excel_parser import ExcelParser
+            from services.jsonl_parser import JsonlParser
 
-            parser = ExcelParser()
+            parser = JsonlParser()
             parser.export_template(Path(result))
-            logger.info(f"Template exported to: {result}")
+            logger.info(f"JSONL template exported to: {result}")
             return {"success": True, "path": result}
         except Exception as e:
-            logger.error(f"Failed to export template: {e}")
+            logger.error(f"Failed to export JSONL template: {e}")
             return {"success": False, "error": str(e)}
 
     # ========== Character Management ==========
@@ -772,6 +787,19 @@ class Api:
         characters = []
         errors = []
         lines = text.strip().split("\n")
+        non_empty_lines = [line.strip() for line in lines if line.strip()]
+        existing_name_map = {c["name"]: c["id"] for c in self.project_data["characters"]}
+        seen_names = set()
+
+        # JSONL import support
+        if non_empty_lines and all(line.lstrip().startswith("{") for line in non_empty_lines):
+            characters, errors = self._parse_characters_from_jsonl_text("\n".join(non_empty_lines))
+            logger.info(f"Parsed {len(characters)} characters from JSONL text, {len(errors)} errors")
+            return {
+                "success": True,
+                "characters": characters,
+                "errors": errors,
+            }
 
         for line_num, line in enumerate(lines, 1):
             line = line.strip()
@@ -806,17 +834,12 @@ class Api:
                 errors.append(f"Line {line_num}: character name is empty")
                 continue
 
-            # Check for duplicate names in existing characters
-            existing_names = {c["name"] for c in self.project_data["characters"]}
-            if name in existing_names:
-                errors.append(f"Line {line_num}: character '{name}' already exists")
-                continue
-
             # Check for duplicate names in current import batch
-            if any(c["name"] == name for c in characters):
+            if name in seen_names:
                 errors.append(f"Line {line_num}: duplicate character name '{name}' in import")
                 continue
 
+            existing_id = existing_name_map.get(name)
             character = {
                 "id": f"char_{uuid.uuid4().hex[:8]}",
                 "name": name,
@@ -826,8 +849,11 @@ class Api:
                 "speed": 1.0,
                 "isNarrator": False,
                 "status": "pending",
+                "existingId": existing_id,
+                "isDuplicate": existing_id is not None,
             }
             characters.append(character)
+            seen_names.add(name)
 
         logger.info(f"Parsed {len(characters)} characters from text, {len(errors)} errors")
         return {
@@ -848,7 +874,7 @@ class Api:
         if not self.project_data:
             return {"success": False, "error": "No project data", "characters": [], "errors": []}
 
-        file_types = ("Excel Files (*.xlsx)", "Excel Files (*.xls)", "CSV Files (*.csv)")
+        file_types = ("Excel Files (*.xlsx)", "Excel Files (*.xls)", "CSV Files (*.csv)", "JSONL Files (*.jsonl)")
         result = self._window.create_file_dialog(
             webview.FileDialog.OPEN,
             allow_multiple=False,
@@ -868,6 +894,15 @@ class Api:
             errors = []
 
             # Read file based on extension
+            if file_path.suffix.lower() == ".jsonl":
+                jsonl_text = file_path.read_text(encoding="utf-8")
+                characters, errors = self._parse_characters_from_jsonl_text(jsonl_text)
+                logger.info(f"Parsed {len(characters)} characters from JSONL file, {len(errors)} errors")
+                return {
+                    "success": True,
+                    "characters": characters,
+                    "errors": errors,
+                }
             if file_path.suffix.lower() == ".csv":
                 df = pd.read_csv(file_path, encoding="utf-8")
             else:
@@ -951,7 +986,8 @@ class Api:
             logger.info(f"Column mapping - name: {name_col}, desc: {desc_col}, audio: {audio_col}")
 
             # Get existing character names
-            existing_names = {c["name"] for c in self.project_data["characters"]}
+            existing_name_map = {c["name"]: c["id"] for c in self.project_data["characters"]}
+            seen_names = set()
 
             # Process rows
             for idx, row in df.iterrows():
@@ -964,14 +1000,11 @@ class Api:
                 if not name:
                     continue  # Skip empty rows
 
-                if name in existing_names:
-                    errors.append(f"Row {row_num}: character '{name}' already exists")
-                    continue
-
-                if any(c["name"] == name for c in characters):
+                if name in seen_names:
                     errors.append(f"Row {row_num}: duplicate character name '{name}' in import")
                     continue
 
+                existing_id = existing_name_map.get(name)
                 character = {
                     "id": f"char_{uuid.uuid4().hex[:8]}",
                     "name": name,
@@ -981,8 +1014,11 @@ class Api:
                     "speed": 1.0,
                     "isNarrator": False,
                     "status": "pending",
+                    "existingId": existing_id,
+                    "isDuplicate": existing_id is not None,
                 }
                 characters.append(character)
+                seen_names.add(name)
 
             logger.info(f"Parsed {len(characters)} characters from file, {len(errors)} errors")
             return {
@@ -994,6 +1030,87 @@ class Api:
         except Exception as e:
             logger.error(f"Failed to import characters from file: {e}")
             return {"success": False, "error": str(e), "characters": [], "errors": []}
+
+    def _build_character_description_from_json(self, obj: dict) -> str:
+        """Build character description from JSONL fields (TTI only)"""
+        if not isinstance(obj, dict):
+            return ""
+
+        parts = []
+
+        tti = obj.get("tti")
+        if isinstance(tti, dict):
+            tti_parts = []
+            for key in ("prompt", "attire", "physique", "expression", "style"):
+                value = tti.get(key)
+                if value:
+                    tti_parts.append(f"{key}: {value}")
+            if tti_parts:
+                parts.append("tti: " + "; ".join(tti_parts))
+
+        return "; ".join([p for p in parts if p]).strip()
+
+    def _parse_characters_from_jsonl_text(self, text: str) -> tuple[list, list]:
+        """Parse JSONL text into character objects"""
+        if not self.project_data:
+            return [], ["No project data"]
+
+        characters = []
+        errors = []
+        existing_name_map = {c["name"]: c["id"] for c in self.project_data["characters"]}
+        seen_names = set()
+
+        for line_num, line in enumerate(text.splitlines(), 1):
+            line = line.strip()
+            if not line:
+                continue
+
+            try:
+                obj = json.loads(line)
+            except json.JSONDecodeError as e:
+                errors.append(f"Line {line_num}: Invalid JSON - {str(e)}")
+                continue
+            except Exception as e:
+                errors.append(f"Line {line_num}: {str(e)}")
+                continue
+
+            name = str(obj.get("name", "")).strip()
+            if not name:
+                errors.append(f"Line {line_num}: character name is empty")
+                continue
+
+            if name in seen_names:
+                errors.append(f"Line {line_num}: duplicate character name '{name}' in import")
+                continue
+
+            description = self._build_character_description_from_json(obj)
+            if not description:
+                description = name
+
+            reference_audio = ""
+            for key in ("referenceAudioPath", "reference_audio", "referenceAudio", "audio", "reference"):
+                value = obj.get(key)
+                if isinstance(value, str) and value.strip():
+                    reference_audio = value.strip()
+                    break
+
+            existing_id = existing_name_map.get(name)
+            character = {
+                "id": f"char_{uuid.uuid4().hex[:8]}",
+                "name": name,
+                "description": description,
+                "imageUrl": "",
+                "referenceAudioPath": reference_audio,
+                "speed": 1.0,
+                "isNarrator": False,
+                "status": "pending",
+                "existingId": existing_id,
+                "isDuplicate": existing_id is not None,
+            }
+            characters.append(character)
+            seen_names.add(name)
+
+        return characters, errors
 
     def confirm_import_characters(self, characters: list) -> dict:
         """Confirm and add imported characters to project"""
@@ -1069,7 +1186,29 @@ class Api:
 
         for shot in self.project_data["shots"]:
             if shot["id"] == shot_id:
-                shot[field] = value
+                # Special handling for dialogues field
+                if field == "dialogues":
+                    shot["dialogues"] = value
+
+                    # Update the script field to reflect all dialogues
+                    script_parts = []
+                    for dialogue in value:
+                        if isinstance(dialogue, dict) and "role" in dialogue and "text" in dialogue:
+                            script_parts.append(f"{dialogue['role']}: {dialogue['text']}")
+                    shot["script"] = "\n".join(script_parts)
+
+                    # Update characters list to include all characters from dialogues
+                    dialogue_characters = {d["role"] for d in value if isinstance(d, dict) and "role" in d}
+                    shot["characters"] = list(set(shot.get("characters", [])).union(dialogue_characters))
+
+                    # Update voiceActor to first dialogue role for backward compatibility
+                    if value and isinstance(value, list) and len(value) > 0:
+                        first_dialogue = value[0]
+                        if isinstance(first_dialogue, dict) and "role" in first_dialogue:
+                            shot["voiceActor"] = first_dialogue["role"]
+                else:
+                    shot[field] = value
+
                 logger.debug(f"Updated shot {shot_id}.{field}")
                 return {"success": True, "shot": shot}
 
@@ -1199,13 +1338,23 @@ class Api:
                         raise ValueError("Please save the project first before generating shot images")
 
                     # Get character references for this shot
-                    shot_characters = shot.get("characters", [])
+                    # Parse characters from imagePrompt instead of using shot["characters"]
+                    # This ensures we only require references for characters actually in the prompt
+                    image_prompt = shot.get("imagePrompt", "")
+                    all_character_names = [c["name"] for c in self.project_data.get("characters", []) if c.get("name")]
+                    
+                    # Find which characters are mentioned in the prompt
+                    shot_characters = []
+                    for char_name in all_character_names:
+                        if char_name and char_name in image_prompt:
+                            shot_characters.append(char_name)
+                    
                     reference_images = []
                     character_references = []  # Store character name and image data pairs
                     missing_characters = []  # Track characters without reference images
 
                     if shot_characters:
-                        logger.info(f"Shot involves characters: {shot_characters}")
+                        logger.info(f"Characters found in imagePrompt: {shot_characters}")
 
                         # Find characters with images
                         for char_name in shot_characters:
@@ -1592,7 +1741,7 @@ class Api:
     # ========== Audio Generation ==========
 
     def generate_audio_for_shot(self, shot_id: str) -> dict:
-        """Generate audio for a single shot"""
+        """Generate audio for a single shot (supports multiple dialogues)"""
         if not self.project_data:
             return {"success": False, "error": "No project data"}
 
@@ -1601,6 +1750,7 @@ class Api:
                 try:
                     import asyncio
                     from services.generator import GenerationClient
+                    from pydub import AudioSegment
 
                     shot["status"] = "generating_audio"
 
@@ -1615,23 +1765,6 @@ class Api:
                     if not self.project_name:
                         raise ValueError("Please save the project first before generating audio")
 
-                    # Get voice actor and reference audio
-                    voice_actor = shot.get("voiceActor", "")
-                    if not voice_actor:
-                        raise ValueError("No voice actor specified for this shot")
-
-                    # Find character with matching name
-                    reference_audio = None
-                    character_speed = 1.0
-                    for char in self.project_data["characters"]:
-                        if char["name"] == voice_actor:
-                            reference_audio = char.get("referenceAudioPath")
-                            character_speed = char.get("speed", 1.0)
-                            break
-
-                    if not reference_audio:
-                        raise ValueError(f"No reference audio found for character: {voice_actor}")
-
                     # Create client
                     client = GenerationClient(
                         api_url=tts_config["apiUrl"],
@@ -1639,42 +1772,109 @@ class Api:
                         model=tts_config.get("model", "tts-1"),
                     )
 
-                    # Get script text
-                    script = shot.get("script", "")
-                    if not script:
-                        raise ValueError("No script text for this shot")
+                    # Check if shot has dialogues (new format) or script (old format)
+                    dialogues = shot.get("dialogues", [])
 
-                    # Get emotion and intensity
-                    emotion = shot.get("emotion", "")
-                    intensity = shot.get("intensity", "")
+                    # Backward compatibility: convert old format to new format
+                    if not dialogues and shot.get("script"):
+                        voice_actor = shot.get("voiceActor", "")
+                        if voice_actor:
+                            dialogues = [{"role": voice_actor, "text": shot["script"]}]
+                            shot["dialogues"] = dialogues
+                        else:
+                            raise ValueError("No voice actor or dialogues specified")
 
-                    # Generate audio
-                    audio_bytes = asyncio.run(
-                        client.generate_audio(
-                            text=script,
-                            reference_audio=reference_audio,
-                            speed=character_speed,
-                            emotion=emotion,
-                            intensity=intensity,
+                    if not dialogues:
+                        raise ValueError("No dialogues found for this shot")
+
+                    # Generate audio for each dialogue
+                    audio_segments = []
+                    temp_files = []
+
+                    for idx, dialogue in enumerate(dialogues):
+                        role = dialogue.get("role", "")
+                        text = dialogue.get("text", "")
+
+                        if not role or not text:
+                            logger.warning(f"Skipping empty dialogue at index {idx}")
+                            continue
+
+                        # Find character with matching name
+                        reference_audio = None
+                        character_speed = 1.0
+                        for char in self.project_data["characters"]:
+                            if char["name"] == role:
+                                reference_audio = char.get("referenceAudioPath")
+                                character_speed = char.get("speed", 1.0)
+                                break
+
+                        if not reference_audio:
+                            raise ValueError(f"No reference audio found for character: {role}")
+
+                        # Get emotion and intensity
+                        emotion = shot.get("emotion", "")
+                        intensity = shot.get("intensity", "")
+
+                        # Generate audio for this dialogue
+                        logger.info(f"Generating audio for dialogue {idx + 1}/{len(dialogues)}: {role}")
+                        audio_bytes = asyncio.run(
+                            client.generate_audio(
+                                text=text,
+                                reference_audio=reference_audio,
+                                speed=character_speed,
+                                emotion=emotion,
+                                intensity=intensity,
+                            )
                         )
-                    )
 
-                    if not audio_bytes:
-                        raise ValueError("No audio generated")
+                        if not audio_bytes:
+                            raise ValueError(f"No audio generated for dialogue {idx}")
 
-                    # Save audio to project directory
-                    audio_path = self._project_manager.get_shot_audio_path(
+                        # Save temporary audio file
+                        temp_path = self._project_manager.get_shot_audio_path(
+                            self.project_name, f"{shot_id}_dialogue_{idx}"
+                        )
+                        temp_path.parent.mkdir(parents=True, exist_ok=True)
+                        with open(temp_path, "wb") as f:
+                            f.write(audio_bytes)
+
+                        temp_files.append(temp_path)
+
+                        # Load audio segment
+                        segment = AudioSegment.from_file(str(temp_path))
+                        audio_segments.append(segment)
+
+                        # Add 300ms silence between dialogues
+                        if idx < len(dialogues) - 1:
+                            silence = AudioSegment.silent(duration=300)
+                            audio_segments.append(silence)
+
+                    # Combine all audio segments
+                    if not audio_segments:
+                        raise ValueError("No audio segments generated")
+
+                    combined = audio_segments[0]
+                    for segment in audio_segments[1:]:
+                        combined += segment
+
+                    # Save combined audio
+                    final_audio_path = self._project_manager.get_shot_audio_path(
                         self.project_name, shot_id
                     )
-                    audio_path.parent.mkdir(parents=True, exist_ok=True)
-                    with open(audio_path, "wb") as f:
-                        f.write(audio_bytes)
+                    combined.export(str(final_audio_path), format="wav")
+
+                    # Clean up temporary files
+                    for temp_file in temp_files:
+                        try:
+                            temp_file.unlink()
+                        except Exception as e:
+                            logger.warning(f"Failed to delete temp file {temp_file}: {e}")
 
                     # Update shot with audio URL
-                    shot["audioUrl"] = self._path_to_url(str(audio_path))
+                    shot["audioUrl"] = self._path_to_url(str(final_audio_path))
                     shot["status"] = "audio_ready"
 
-                    logger.info(f"Generated audio for shot {shot_id}")
+                    logger.info(f"Generated audio for shot {shot_id} with {len(dialogues)} dialogues")
                     return {"success": True, "audioUrl": shot["audioUrl"], "shot": shot}
 
                 except Exception as e:

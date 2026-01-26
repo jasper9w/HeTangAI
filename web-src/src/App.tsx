@@ -24,7 +24,7 @@ import { CharactersPage } from './pages/CharactersPage';
 import { DubbingPage } from './pages/DubbingPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { Toast, type ToastMessage } from './components/ui/Toast';
-import type { ProjectData, Shot, PageType, Character } from './types';
+import type { ProjectData, Shot, PageType, Character, ImportedCharacter } from './types';
 
 function App() {
   const { api, ready } = useApi();
@@ -184,9 +184,9 @@ function App() {
 
   // ========== Import/Export ==========
 
-  const handleImportExcel = async () => {
+  const handleImportJsonl = async () => {
     if (!api) return;
-    const result = await api.import_excel();
+    const result = await api.import_jsonl();
     if (result.success && result.data) {
       setProject(result.data);
       setIsDirty(true);
@@ -199,9 +199,9 @@ function App() {
     }
   };
 
-  const handleExportTemplate = async () => {
+  const handleExportJsonlTemplate = async () => {
     if (!api) return;
-    await api.export_template();
+    await api.export_jsonl_template();
   };
 
   // ========== Character Operations ==========
@@ -361,19 +361,77 @@ function App() {
     };
   };
 
-  const handleConfirmImportCharacters = async (characters: Partial<Character>[]) => {
+  const handleConfirmImportCharacters = async (
+    characters: ImportedCharacter[],
+    options?: { duplicateAction?: 'overwrite' | 'skip' },
+  ) => {
     if (!api || !project) return { success: false, error: 'No project data' };
 
-    const result = await api.confirm_import_characters(characters);
-    if (result.success) {
-      // Reload project data to get updated characters
-      const projectResult = await api.get_project_data();
-      if (projectResult.success && projectResult.data) {
-        setProject(projectResult.data);
+    const duplicateAction = options?.duplicateAction;
+    const duplicates = characters.filter((char) => !!char.existingId);
+    const newCharacters = characters.filter((char) => !char.existingId);
+    let addedCount = 0;
+    let overwrittenCount = 0;
+
+    if (duplicates.length > 0 && duplicateAction === 'overwrite') {
+      const errors: string[] = [];
+      for (const char of duplicates) {
+        if (!char.existingId) continue;
+        const name = char.name || '';
+        const description = char.description || '';
+        const updateResult = await api.update_character(char.existingId, name, description);
+        if (!updateResult.success) {
+          errors.push(updateResult.error || `更新角色失败: ${name || char.existingId}`);
+          continue;
+        }
+        overwrittenCount += 1;
+
+        if (char.referenceAudioPath) {
+          const audioResult = await api.set_character_reference_audio(char.existingId, char.referenceAudioPath);
+          if (!audioResult.success) {
+            errors.push(audioResult.error || `更新参考音频失败: ${name || char.existingId}`);
+          }
+        }
       }
-      setIsDirty(true);
-      showToast('success', `成功导入 ${result.addedCount || 0} 个角色`);
+
+      if (errors.length > 0) {
+        showToast('error', errors[0]);
+        return { success: false, error: errors.join('; ') };
+      }
     }
+
+    if (duplicates.length > 0 && duplicateAction === 'skip') {
+      // Only import non-duplicate characters
+      if (newCharacters.length === 0) {
+        showToast('success', `已跳过 ${duplicates.length} 个重复角色`);
+        return { success: true, addedCount: 0 };
+      }
+    }
+
+    let result = { success: true, addedCount: 0 };
+    if (newCharacters.length > 0) {
+      const importResult = await api.confirm_import_characters(newCharacters);
+      if (!importResult.success) {
+        return importResult;
+      }
+      addedCount = importResult.addedCount || 0;
+      result = importResult;
+    }
+
+    if (duplicates.length > 0 && duplicateAction === 'overwrite') {
+      showToast('success', `覆盖 ${overwrittenCount} 个角色，新增 ${addedCount} 个`);
+    } else if (duplicates.length > 0 && duplicateAction === 'skip') {
+      showToast('success', `新增 ${addedCount} 个，已跳过 ${duplicates.length} 个重复角色`);
+    } else if (newCharacters.length > 0) {
+      showToast('success', `成功导入 ${addedCount} 个角色`);
+    }
+
+    // Reload project data to get updated characters
+    const projectResult = await api.get_project_data();
+    if (projectResult.success && projectResult.data) {
+      setProject(projectResult.data);
+    }
+    setIsDirty(true);
     return result;
   };
 
@@ -487,7 +545,7 @@ function App() {
     }
   };
 
-  const handleUpdateShot = async (shotId: string, field: string, value: string | string[]) => {
+  const handleUpdateShot = async (shotId: string, field: string, value: string | string[] | { role: string; text: string }[]) => {
     if (!api || !project) return;
     // Update locally first for responsiveness
     setProject({
@@ -750,18 +808,18 @@ function App() {
         return (
           <div className="flex items-center gap-2">
             <button
-              onClick={handleImportExcel}
+              onClick={handleImportJsonl}
               className="flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-200 transition-colors"
             >
               <FileUp className="w-4 h-4" />
-              导入
+              导入JSONL
             </button>
             <button
-              onClick={handleExportTemplate}
+              onClick={handleExportJsonlTemplate}
               className="flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-200 transition-colors"
             >
               <Download className="w-4 h-4" />
-              模板
+              JSONL模板
             </button>
             <div className="w-px h-6 bg-slate-700 mx-2" />
                         <button

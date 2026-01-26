@@ -17,14 +17,22 @@ export type ShotStatus =
   | 'completed'
   | 'error';
 
+export interface Dialogue {
+  role: string;      // 角色名称
+  text: string;      // 对话文本
+  audioUrl?: string; // 该对话的配音URL（可选）
+}
+
 export interface Shot {
   id: string;  // 6位随机字符，用于文件命名
   sequence: number;
+  scene?: string;    // 场景名称（新增）
   voiceActor: string;
   characters: string[];
   emotion: string;
   intensity: string;
   script: string;
+  dialogues?: Dialogue[];  // 对话数组（新增）
   imagePrompt: string;
   videoPrompt: string;
   images: string[];  // 备选图URL数组，最多4个
@@ -51,6 +59,11 @@ export interface Character {
   isNarrator: boolean;  // 是否为旁白角色
   status: CharacterStatus;
   errorMessage?: string;
+}
+
+export interface ImportedCharacter extends Partial<Character> {
+  existingId?: string;
+  isDuplicate?: boolean;
 }
 
 // ========== Project Types ==========
@@ -128,8 +141,8 @@ export interface PyWebViewApi {
   rename_project_in_workdir: (oldName: string, newName: string) => Promise<ApiResponse & { name?: string }>;
 
   // Import/Export
-  import_excel: () => Promise<ImportResult>;
-  export_template: () => Promise<ApiResponse & { path?: string }>;
+  import_jsonl: () => Promise<ImportResult>;
+  export_jsonl_template: () => Promise<ApiResponse & { path?: string }>;
 
   // Character management
   add_character: (name: string, description?: string) => Promise<ApiResponse & { character?: Character }>;
@@ -142,9 +155,9 @@ export interface PyWebViewApi {
   set_character_reference_audio: (characterId: string, audioPath: string) => Promise<ApiResponse & { character?: Character }>;
 
   // Character import
-  import_characters_from_text: (text: string) => Promise<ApiResponse & { characters?: Partial<Character>[]; errors?: string[] }>;
-  import_characters_from_file: () => Promise<ApiResponse & { characters?: Partial<Character>[]; errors?: string[] }>;
-  confirm_import_characters: (characters: Partial<Character>[]) => Promise<ApiResponse & { addedCount?: number }>;
+  import_characters_from_text: (text: string) => Promise<ApiResponse & { characters?: ImportedCharacter[]; errors?: string[] }>;
+  import_characters_from_file: () => Promise<ApiResponse & { characters?: ImportedCharacter[]; errors?: string[] }>;
+  confirm_import_characters: (characters: ImportedCharacter[]) => Promise<ApiResponse & { addedCount?: number }>;
   export_character_template: () => Promise<ApiResponse & { path?: string }>;
 
   // Shot management
