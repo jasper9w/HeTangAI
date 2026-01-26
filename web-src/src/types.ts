@@ -4,7 +4,7 @@
 
 // ========== Page Types ==========
 
-export type PageType = 'projects' | 'home' | 'shots' | 'characters' | 'dubbing' | 'settings';
+export type PageType = 'projects' | 'home' | 'storyboard' | 'shots' | 'characters' | 'dubbing' | 'settings';
 
 // ========== Shot Types ==========
 
@@ -36,6 +36,8 @@ export interface Shot {
   imagePrompt: string;
   videoPrompt: string;
   images: string[];  // 备选图URL数组，最多4个
+  imageSourceUrls?: string[]; // 备选图原始URL数组，最多4个
+  imageMediaGenerationIds?: string[]; // Whisk返回的media_generation_id数组
   selectedImageIndex: number;  // 选中的备选图索引
   videos: string[];  // 备选视频URL数组，最多4个
   selectedVideoIndex: number;  // 选中的备选视频索引
@@ -54,6 +56,8 @@ export interface Character {
   name: string;
   description: string;  // 用于生成3视图的提示词
   imageUrl: string;     // 3视图图片URL
+  imageSourceUrl?: string; // 3视图图片原始URL
+  imageMediaGenerationId?: string; // Whisk返回的media_generation_id
   referenceAudioPath?: string;  // 参考音文件路径
   speed: number;        // 配音倍速，默认1.0
   isNarrator: boolean;  // 是否为旁白角色
@@ -82,6 +86,11 @@ export interface ProjectData {
   name: string;
   createdAt: string;
   updatedAt: string;
+  promptPrefixes?: {
+    shotImagePrefix: string;
+    shotVideoPrefix: string;
+    characterPrefix: string;
+  };
   characters: Character[];
   shots: Shot[];
 }
@@ -94,6 +103,40 @@ export interface ApiResponse<T = unknown> {
   data?: T;
   name?: string;
   path?: string;
+}
+
+export interface ShotBuilderPrompts {
+  role: string;
+  scene: string;
+  shot: string;
+}
+
+export interface ShotBuilderRunResult {
+  success: boolean;
+  error?: string;
+  step?: 'role' | 'scene' | 'shot';
+  running?: boolean;
+  outputDir?: string;
+}
+
+export interface ShotBuilderStatus {
+  success: boolean;
+  error?: string;
+  step?: 'role' | 'scene' | 'shot' | null;
+  running: boolean;
+  outputDir?: string;
+  counts?: {
+    roles: number;
+    scenes: number;
+    shots: number;
+  };
+}
+
+export interface ShotBuilderOutputs {
+  roles: string;
+  scenes: string;
+  shots: string;
+  outputDir?: string;
 }
 
 export interface ImportResult {
@@ -188,6 +231,17 @@ export interface PyWebViewApi {
   scan_reference_audios: (directory: string) => Promise<ApiResponse & { audios?: Array<{ path: string; name: string; relativePath: string }> }>;
   select_reference_audio_dir: () => Promise<ApiResponse & { path?: string }>;
   get_reference_audio_data: (filePath: string) => Promise<ApiResponse & { data?: string; mimeType?: string }>;
+
+  // Shot Builder
+  get_shot_builder_prompts: () => Promise<ApiResponse & { prompts?: ShotBuilderPrompts }>;
+  save_shot_builder_prompts: (prompts: ShotBuilderPrompts) => Promise<ApiResponse>;
+  get_shot_builder_novel: () => Promise<ApiResponse & { text?: string }>;
+  save_shot_builder_novel: (text: string) => Promise<ApiResponse>;
+  run_shot_builder_step: (step: 'role' | 'scene' | 'shot', force: boolean) => Promise<ShotBuilderRunResult>;
+  get_shot_builder_status: () => Promise<ShotBuilderStatus>;
+  clear_shot_builder_output: () => Promise<ApiResponse & { outputDir?: string }>;
+  get_shot_builder_outputs: () => Promise<ApiResponse & { outputs?: ShotBuilderOutputs }>;
+  save_shot_builder_outputs: (outputs: ShotBuilderOutputs) => Promise<ApiResponse & { outputDir?: string }>;
 }
 
 // ========== Settings Types ==========
@@ -203,16 +257,33 @@ export interface AppSettings {
     concurrency: number;
   };
   tti: {
+    provider: 'openai' | 'whisk';  // 接口类型
+    // OpenAI 模式配置
     apiUrl: string;
-    model: string;
     apiKey: string;
+    characterModel: string;
+    sceneModel: string;
+    shotModel: string;
+    // Whisk 模式配置
+    whiskToken: string;
+    whiskWorkflowId: string;
     concurrency: number;
   };
   ttv: {
+    provider: 'openai' | 'whisk';  // 接口类型
+    // OpenAI 模式配置
     apiUrl: string;
-    model: string;
     apiKey: string;
+    model: string;
+    // Whisk 模式配置
+    whiskToken: string;
+    whiskWorkflowId: string;
     concurrency: number;
+  };
+  shotBuilder: {
+    apiUrl: string;
+    apiKey: string;
+    model: string;
   };
 }
 

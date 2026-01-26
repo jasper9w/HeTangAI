@@ -21,6 +21,7 @@ import { Sidebar } from './components/layout/Sidebar';
 import { ProjectListPage } from './pages/ProjectListPage';
 import { HomePage } from './pages/HomePage';
 import { ShotsPage } from './pages/ShotsPage';
+import { ShotBuilderPage } from './pages/ShotBuilderPage.tsx';
 import { CharactersPage } from './pages/CharactersPage';
 import { DubbingPage } from './pages/DubbingPage';
 import { SettingsPage } from './pages/SettingsPage';
@@ -61,8 +62,11 @@ function App() {
   const [importCharacterModalOpen, setImportCharacterModalOpen] = useState(false);
 
   // Prefix modal state
-  const [prefixModalOpen, setPrefixModalOpen] = useState(false);
-  const [promptPrefix, setPromptPrefix] = useState('');
+  const [shotPrefixModalOpen, setShotPrefixModalOpen] = useState(false);
+  const [characterPrefixModalOpen, setCharacterPrefixModalOpen] = useState(false);
+  const [shotImagePrefix, setShotImagePrefix] = useState('');
+  const [shotVideoPrefix, setShotVideoPrefix] = useState('');
+  const [characterPromptPrefix, setCharacterPromptPrefix] = useState('');
 
   // Toast notifications
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -809,43 +813,42 @@ function App() {
     setGenerationProgress(null);
   };
 
-  // ========== Add Prefix to Image Prompts ==========
+  // ========== Save Prompt Prefixes ==========
 
-  const handleAddPrefix = () => {
-    if (!project || !promptPrefix.trim()) return;
-
-    const targetShots = selectedShotIds.length > 0
-      ? project.shots.filter(s => selectedShotIds.includes(s.id))
-      : project.shots;
-
-    if (targetShots.length === 0) {
-      showToast('error', '没有可添加前缀的镜头');
-      return;
-    }
-
+  const handleSaveShotPrefixes = () => {
+    if (!project) return;
     setProject((prev) => {
       if (!prev) return prev;
       return {
         ...prev,
-        shots: prev.shots.map((shot) => {
-          const shouldUpdate = selectedShotIds.length > 0
-            ? selectedShotIds.includes(shot.id)
-            : true;
-          if (shouldUpdate && shot.imagePrompt) {
-            return {
-              ...shot,
-              imagePrompt: `${promptPrefix.trim()} ${shot.imagePrompt}`,
-            };
-          }
-          return shot;
-        }),
+        promptPrefixes: {
+          shotImagePrefix: shotImagePrefix.trim(),
+          shotVideoPrefix: shotVideoPrefix.trim(),
+          characterPrefix: prev.promptPrefixes?.characterPrefix || '',
+        },
       };
     });
-
     setIsDirty(true);
-    setPrefixModalOpen(false);
-    setPromptPrefix('');
-    showToast('success', `已为 ${targetShots.length} 个镜头添加图片提示词前缀`);
+    setShotPrefixModalOpen(false);
+    showToast('success', '已更新镜头提示词前缀');
+  };
+
+  const handleSaveCharacterPrefix = () => {
+    if (!project) return;
+    setProject((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        promptPrefixes: {
+          shotImagePrefix: prev.promptPrefixes?.shotImagePrefix || '',
+          shotVideoPrefix: prev.promptPrefixes?.shotVideoPrefix || '',
+          characterPrefix: characterPromptPrefix.trim(),
+        },
+      };
+    });
+    setIsDirty(true);
+    setCharacterPrefixModalOpen(false);
+    showToast('success', '已更新角色提示词前缀');
   };
 
   // ========== Render Page Actions ==========
@@ -873,7 +876,11 @@ function App() {
               JSONL模板
             </button>
             <button
-              onClick={() => setPrefixModalOpen(true)}
+              onClick={() => {
+                setShotImagePrefix(project?.promptPrefixes?.shotImagePrefix || '');
+                setShotVideoPrefix(project?.promptPrefixes?.shotVideoPrefix || '');
+                setShotPrefixModalOpen(true);
+              }}
               className="flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-200 transition-colors"
             >
               <Type className="w-4 h-4" />
@@ -978,6 +985,16 @@ function App() {
               </div>
             )}
             <button
+              onClick={() => {
+                setCharacterPromptPrefix(project?.promptPrefixes?.characterPrefix || '');
+                setCharacterPrefixModalOpen(true);
+              }}
+              className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-200 transition-colors"
+            >
+              <Type className="w-4 h-4" />
+              角色前缀
+            </button>
+            <button
               onClick={() => setImportCharacterModalOpen(true)}
               className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-200 transition-colors"
             >
@@ -1031,6 +1048,13 @@ function App() {
             batchModalType={batchModalType}
             onBatchModalClose={() => setBatchModalOpen(false)}
             onBatchGenerate={handleBatchGenerate}
+          />
+        );
+      case 'storyboard':
+        return (
+          <ShotBuilderPage
+            projectName={projectName}
+            showToast={showToast}
           />
         );
       case 'characters':
@@ -1177,39 +1201,87 @@ function App() {
         </div>
       </main>
 
-      {/* Prefix Modal */}
-      {prefixModalOpen && (
+      {/* Shot Prefix Modal */}
+      {shotPrefixModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-slate-800 rounded-xl p-6 w-[500px] max-w-[90vw]">
-            <h2 className="text-lg font-semibold text-white mb-4">添加图片提示词前缀</h2>
+          <div className="bg-slate-800 rounded-xl p-6 w-[520px] max-w-[90vw]">
+            <h2 className="text-lg font-semibold text-white mb-4">镜头提示词前缀</h2>
             <p className="text-sm text-slate-400 mb-4">
-              {selectedShotIds.length > 0
-                ? `将为选中的 ${selectedShotIds.length} 个镜头添加前缀`
-                : `将为所有 ${project?.shots.length || 0} 个镜头添加前缀`}
+              这里设置的是项目级前缀，生成时拼接，不会改写镜头原始提示词。
             </p>
-            <textarea
-              value={promptPrefix}
-              onChange={(e) => setPromptPrefix(e.target.value)}
-              placeholder="输入要添加的前缀，例如：高清电影画质，"
-              className="w-full h-24 px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500 resize-none"
-              autoFocus
-            />
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm text-slate-400 mb-2">图片提示词前缀</label>
+                <textarea
+                  value={shotImagePrefix}
+                  onChange={(e) => setShotImagePrefix(e.target.value)}
+                  placeholder="例如：高清电影画质，"
+                  className="w-full h-20 px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500 resize-none"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-slate-400 mb-2">视频提示词前缀</label>
+                <textarea
+                  value={shotVideoPrefix}
+                  onChange={(e) => setShotVideoPrefix(e.target.value)}
+                  placeholder="例如：镜头运动顺滑，"
+                  className="w-full h-20 px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
+                />
+              </div>
+            </div>
             <div className="flex justify-end gap-3 mt-4">
               <button
                 onClick={() => {
-                  setPrefixModalOpen(false);
-                  setPromptPrefix('');
+                  setShotPrefixModalOpen(false);
+                  setShotImagePrefix(project?.promptPrefixes?.shotImagePrefix || '');
+                  setShotVideoPrefix(project?.promptPrefixes?.shotVideoPrefix || '');
                 }}
                 className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-200 transition-colors"
               >
                 取消
               </button>
               <button
-                onClick={handleAddPrefix}
-                disabled={!promptPrefix.trim()}
-                className="px-4 py-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm text-white transition-colors"
+                onClick={handleSaveShotPrefixes}
+                className="px-4 py-2 bg-violet-600 hover:bg-violet-500 rounded-lg text-sm text-white transition-colors"
               >
-                添加前缀
+                保存
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Character Prefix Modal */}
+      {characterPrefixModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-slate-800 rounded-xl p-6 w-[520px] max-w-[90vw]">
+            <h2 className="text-lg font-semibold text-white mb-4">角色提示词前缀</h2>
+            <p className="text-sm text-slate-400 mb-4">
+              这里设置的是项目级前缀，生成角色图时会拼接到角色描述前。
+            </p>
+            <textarea
+              value={characterPromptPrefix}
+              onChange={(e) => setCharacterPromptPrefix(e.target.value)}
+              placeholder="例如：电影级细节，"
+              className="w-full h-24 px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500 resize-none"
+              autoFocus
+            />
+            <div className="flex justify-end gap-3 mt-4">
+              <button
+                onClick={() => {
+                  setCharacterPrefixModalOpen(false);
+                  setCharacterPromptPrefix(project?.promptPrefixes?.characterPrefix || '');
+                }}
+                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-200 transition-colors"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleSaveCharacterPrefix}
+                className="px-4 py-2 bg-violet-600 hover:bg-violet-500 rounded-lg text-sm text-white transition-colors"
+              >
+                保存
               </button>
             </div>
           </div>

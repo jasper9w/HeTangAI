@@ -2,22 +2,23 @@
  * SettingsPage - Application settings page
  */
 import { useState, useEffect, useCallback } from 'react';
-import { FolderOpen, Loader2, Mic, Image, Video } from 'lucide-react';
+import { FolderOpen, Loader2, Mic, Image, Video, Clapperboard } from 'lucide-react';
 import type { AppSettings } from '../types';
 
 interface SettingsPageProps {
   // No props needed anymore
 }
 
-type TabType = 'tts' | 'tti' | 'ttv';
+type TabType = 'tts' | 'tti' | 'ttv' | 'shotBuilder';
 
 const defaultSettings: AppSettings = {
   workDir: '',
   jianyingDraftDir: '',
   referenceAudioDir: '',
   tts: { apiUrl: 'https://9u7acouw9j7q8f5o-6006.container.x-gpu.com/tts_url', model: 'indextts2', apiKey: '', concurrency: 1 },
-  tti: { apiUrl: '', model: '', apiKey: '', concurrency: 1 },
-  ttv: { apiUrl: '', model: '', apiKey: '', concurrency: 1 },
+  tti: { provider: 'openai', apiUrl: '', apiKey: '', characterModel: '', sceneModel: '', shotModel: '', whiskToken: '', whiskWorkflowId: '', concurrency: 1 },
+  ttv: { provider: 'openai', apiUrl: '', apiKey: '', model: '', whiskToken: '', whiskWorkflowId: '', concurrency: 1 },
+  shotBuilder: { apiUrl: '', apiKey: '', model: '' },
 };
 
 export function SettingsPage({}: SettingsPageProps) {
@@ -37,7 +38,43 @@ export function SettingsPage({}: SettingsPageProps) {
     try {
       const result = await (window.pywebview.api as any).get_settings();
       if (result.success && result.settings) {
-        setSettings(result.settings);
+        const legacyTtiModel = (result.settings as { tti?: { model?: string } })?.tti?.model || '';
+        const mergedSettings: AppSettings = {
+          ...defaultSettings,
+          ...result.settings,
+          tts: {
+            ...defaultSettings.tts,
+            ...result.settings.tts,
+          },
+          tti: {
+            ...defaultSettings.tti,
+            ...result.settings.tti,
+          },
+          ttv: {
+            ...defaultSettings.ttv,
+            ...result.settings.ttv,
+          },
+          shotBuilder: {
+            ...defaultSettings.shotBuilder,
+            ...result.settings.shotBuilder,
+          },
+        };
+
+        if (legacyTtiModel) {
+          if (!mergedSettings.tti.characterModel) mergedSettings.tti.characterModel = legacyTtiModel;
+          if (!mergedSettings.tti.sceneModel) mergedSettings.tti.sceneModel = legacyTtiModel;
+          if (!mergedSettings.tti.shotModel) mergedSettings.tti.shotModel = legacyTtiModel;
+        }
+
+        // Default provider to 'openai' if not set
+        if (!mergedSettings.tti.provider) {
+          mergedSettings.tti.provider = 'openai';
+        }
+        if (!mergedSettings.ttv.provider) {
+          mergedSettings.ttv.provider = 'openai';
+        }
+
+        setSettings(mergedSettings);
       }
     } catch (error) {
       console.error('Failed to load settings:', error);
@@ -121,7 +158,7 @@ export function SettingsPage({}: SettingsPageProps) {
     }
   };
 
-  const updateSetting = (category: 'tts' | 'tti' | 'ttv', field: string, value: string | number) => {
+  const updateSetting = (category: 'tts' | 'tti' | 'ttv' | 'shotBuilder', field: string, value: string | number) => {
     setSettings({
       ...settings,
       [category]: {
@@ -135,6 +172,7 @@ export function SettingsPage({}: SettingsPageProps) {
     { id: 'tts' as TabType, label: '配音接口', icon: Mic, color: 'orange' },
     { id: 'tti' as TabType, label: '生图接口', icon: Image, color: 'violet' },
     { id: 'ttv' as TabType, label: '生视频接口', icon: Video, color: 'emerald' },
+    { id: 'shotBuilder' as TabType, label: '分镜接口', icon: Clapperboard, color: 'blue' },
   ];
 
   const renderTabContent = () => {
@@ -146,11 +184,17 @@ export function SettingsPage({}: SettingsPageProps) {
       },
       tti: {
         apiUrl: 'https://api.example.com/v1/images/generations',
-        model: 'dall-e-3',
+        characterModel: 'gemini-3.0-pro-image-landscape',
+        sceneModel: 'gemini-2.5-flash-image-landscape',
+        shotModel: 'gemini-2.5-flash-image-landscape',
       },
       ttv: {
         apiUrl: 'https://api.example.com/v1/video/generations',
         model: 'video-1',
+      },
+      shotBuilder: {
+        apiUrl: 'https://api.example.com/v1/chat/completions',
+        model: 'gemini-3-pro-preview',
       },
     };
 
@@ -188,37 +232,316 @@ export function SettingsPage({}: SettingsPageProps) {
             className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
           />
         </div>
-        <div>
-          <label className="block text-sm text-slate-400 mb-2">模型名称</label>
-          <input
-            type="text"
-            value={config.model}
-            onChange={(e) => updateSetting(activeTab, 'model', e.target.value)}
-            placeholder={placeholders[activeTab].model}
-            className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
-          />
-        </div>
-        <div>
-          <label className="block text-sm text-slate-400 mb-2">API 密钥</label>
-          <input
-            type="password"
-            value={config.apiKey}
-            onChange={(e) => updateSetting(activeTab, 'apiKey', e.target.value)}
-            placeholder="sk-..."
-            className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
-          />
-        </div>
-        <div>
-          <label className="block text-sm text-slate-400 mb-2">并发数</label>
-          <input
-            type="number"
-            min="1"
-            max="10"
-            value={config.concurrency}
-            onChange={(e) => updateSetting(activeTab, 'concurrency', parseInt(e.target.value) || 1)}
-            className="w-32 px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 focus:outline-none focus:ring-1 focus:ring-violet-500"
-          />
-        </div>
+        {activeTab === 'tti' ? (
+          <div className="space-y-4">
+            {/* Provider Selection */}
+            <div>
+              <label className="block text-sm text-slate-400 mb-2">接口类型</label>
+              <div className="flex gap-4">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="tti-provider"
+                    checked={settings.tti.provider === 'openai'}
+                    onChange={() => updateSetting('tti', 'provider', 'openai')}
+                    className="w-4 h-4 text-violet-600 bg-slate-700 border-slate-500 focus:ring-violet-500"
+                  />
+                  <span className="text-sm text-slate-300">OpenAI 兼容</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="tti-provider"
+                    checked={settings.tti.provider === 'whisk'}
+                    onChange={() => updateSetting('tti', 'provider', 'whisk')}
+                    className="w-4 h-4 text-violet-600 bg-slate-700 border-slate-500 focus:ring-violet-500"
+                  />
+                  <span className="text-sm text-slate-300">Whisk</span>
+                </label>
+              </div>
+            </div>
+
+            {settings.tti.provider === 'openai' ? (
+              <>
+                {/* OpenAI Mode Settings */}
+                <div>
+                  <label className="block text-sm text-slate-400 mb-2">API 地址</label>
+                  <input
+                    type="text"
+                    value={settings.tti.apiUrl}
+                    onChange={(e) => updateSetting('tti', 'apiUrl', e.target.value)}
+                    placeholder={placeholders.tti.apiUrl}
+                    className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-slate-400 mb-2">API 密钥</label>
+                  <input
+                    type="password"
+                    value={settings.tti.apiKey}
+                    onChange={(e) => updateSetting('tti', 'apiKey', e.target.value)}
+                    placeholder="sk-..."
+                    className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                  />
+                </div>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-sm text-slate-400 mb-2">角色图片模型</label>
+                    <input
+                      type="text"
+                      value={settings.tti.characterModel}
+                      onChange={(e) => updateSetting('tti', 'characterModel', e.target.value)}
+                      placeholder={placeholders.tti.characterModel}
+                      className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-slate-400 mb-2">场景图片模型</label>
+                    <input
+                      type="text"
+                      value={settings.tti.sceneModel}
+                      onChange={(e) => updateSetting('tti', 'sceneModel', e.target.value)}
+                      placeholder={placeholders.tti.sceneModel}
+                      className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-slate-400 mb-2">镜头图片模型</label>
+                    <input
+                      type="text"
+                      value={settings.tti.shotModel}
+                      onChange={(e) => updateSetting('tti', 'shotModel', e.target.value)}
+                      placeholder={placeholders.tti.shotModel}
+                      className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                    />
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                {/* Whisk Mode Settings */}
+                <div className="bg-violet-600/10 border border-violet-600/20 rounded-lg p-4">
+                  <h4 className="font-medium text-violet-300 mb-2 flex items-center gap-2">
+                    <Image className="w-4 h-4" />
+                    Whisk 接口说明
+                  </h4>
+                  <p className="text-sm text-slate-300">
+                    Whisk 是 Google Labs 的图片生成接口，支持角色/场景/风格组合生成。
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-sm text-slate-400 mb-2">Token</label>
+                  <input
+                    type="password"
+                    value={settings.tti.whiskToken}
+                    onChange={(e) => updateSetting('tti', 'whiskToken', e.target.value)}
+                    placeholder="ya29.xxx..."
+                    className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-slate-400 mb-2">Workflow ID</label>
+                  <input
+                    type="text"
+                    value={settings.tti.whiskWorkflowId}
+                    onChange={(e) => updateSetting('tti', 'whiskWorkflowId', e.target.value)}
+                    placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                    className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                  />
+                </div>
+              </>
+            )}
+
+            <div>
+              <label className="block text-sm text-slate-400 mb-2">并发数</label>
+              <input
+                type="number"
+                min="1"
+                max="10"
+                value={settings.tti.concurrency}
+                onChange={(e) => updateSetting('tti', 'concurrency', parseInt(e.target.value) || 1)}
+                className="w-32 px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 focus:outline-none focus:ring-1 focus:ring-violet-500"
+              />
+            </div>
+          </div>
+        ) : activeTab === 'ttv' ? (
+          <div className="space-y-4">
+            {/* Provider Selection for TTV */}
+            <div>
+              <label className="block text-sm text-slate-400 mb-2">接口类型</label>
+              <div className="flex gap-4">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="ttv-provider"
+                    checked={settings.ttv.provider === 'openai'}
+                    onChange={() => updateSetting('ttv', 'provider', 'openai')}
+                    className="w-4 h-4 text-emerald-600 bg-slate-700 border-slate-500 focus:ring-emerald-500"
+                  />
+                  <span className="text-sm text-slate-300">OpenAI 兼容</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="ttv-provider"
+                    checked={settings.ttv.provider === 'whisk'}
+                    onChange={() => updateSetting('ttv', 'provider', 'whisk')}
+                    className="w-4 h-4 text-emerald-600 bg-slate-700 border-slate-500 focus:ring-emerald-500"
+                  />
+                  <span className="text-sm text-slate-300">Whisk</span>
+                </label>
+              </div>
+            </div>
+
+            {settings.ttv.provider === 'openai' ? (
+              <>
+                {/* OpenAI Mode Settings */}
+                <div>
+                  <label className="block text-sm text-slate-400 mb-2">API 地址</label>
+                  <input
+                    type="text"
+                    value={settings.ttv.apiUrl}
+                    onChange={(e) => updateSetting('ttv', 'apiUrl', e.target.value)}
+                    placeholder={placeholders.ttv.apiUrl}
+                    className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-slate-400 mb-2">API 密钥</label>
+                  <input
+                    type="password"
+                    value={settings.ttv.apiKey}
+                    onChange={(e) => updateSetting('ttv', 'apiKey', e.target.value)}
+                    placeholder="sk-..."
+                    className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-slate-400 mb-2">模型名称</label>
+                  <input
+                    type="text"
+                    value={settings.ttv.model}
+                    onChange={(e) => updateSetting('ttv', 'model', e.target.value)}
+                    placeholder={placeholders.ttv.model}
+                    className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  />
+                </div>
+              </>
+            ) : (
+              <>
+                {/* Whisk Mode Settings */}
+                <div className="bg-emerald-600/10 border border-emerald-600/20 rounded-lg p-4">
+                  <h4 className="font-medium text-emerald-300 mb-2 flex items-center gap-2">
+                    <Video className="w-4 h-4" />
+                    Whisk 视频接口说明
+                  </h4>
+                  <p className="text-sm text-slate-300">
+                    Whisk 视频生成基于图片生成视频，支持 VEO 模型。
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-sm text-slate-400 mb-2">Token</label>
+                  <input
+                    type="password"
+                    value={settings.ttv.whiskToken}
+                    onChange={(e) => updateSetting('ttv', 'whiskToken', e.target.value)}
+                    placeholder="ya29.xxx..."
+                    className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-slate-400 mb-2">Workflow ID</label>
+                  <input
+                    type="text"
+                    value={settings.ttv.whiskWorkflowId}
+                    onChange={(e) => updateSetting('ttv', 'whiskWorkflowId', e.target.value)}
+                    placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                    className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  />
+                </div>
+              </>
+            )}
+
+            <div>
+              <label className="block text-sm text-slate-400 mb-2">并发数</label>
+              <input
+                type="number"
+                min="1"
+                max="10"
+                value={settings.ttv.concurrency}
+                onChange={(e) => updateSetting('ttv', 'concurrency', parseInt(e.target.value) || 1)}
+                className="w-32 px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              />
+            </div>
+          </div>
+        ) : activeTab === 'shotBuilder' ? (
+          <div className="space-y-4">
+            <div className="bg-blue-600/10 border border-blue-600/20 rounded-lg p-4">
+              <h4 className="font-medium text-blue-300 mb-2 flex items-center gap-2">
+                <Clapperboard className="w-4 h-4" />
+                分镜接口说明
+              </h4>
+              <p className="text-sm text-slate-300">
+                分镜生成使用该模型配置进行角色/场景/分镜结构化输出。
+              </p>
+            </div>
+            <div>
+              <label className="block text-sm text-slate-400 mb-2">API 密钥</label>
+              <input
+                type="password"
+                value={settings.shotBuilder.apiKey}
+                onChange={(e) => updateSetting('shotBuilder', 'apiKey', e.target.value)}
+                placeholder="sk-..."
+                className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-slate-400 mb-2">模型名称</label>
+              <input
+                type="text"
+                value={settings.shotBuilder.model}
+                onChange={(e) => updateSetting('shotBuilder', 'model', e.target.value)}
+                placeholder={placeholders.shotBuilder.model}
+                className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* TTS fields */}
+            <div>
+              <label className="block text-sm text-slate-400 mb-2">模型名称</label>
+              <input
+                type="text"
+                value={settings.tts.model}
+                onChange={(e) => updateSetting('tts', 'model', e.target.value)}
+                placeholder={placeholders.tts.model}
+                className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-slate-400 mb-2">API 密钥</label>
+              <input
+                type="password"
+                value={settings.tts.apiKey}
+                onChange={(e) => updateSetting('tts', 'apiKey', e.target.value)}
+                placeholder="sk-..."
+                className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-slate-400 mb-2">并发数</label>
+              <input
+                type="number"
+                min="1"
+                max="10"
+                value={settings.tts.concurrency}
+                onChange={(e) => updateSetting('tts', 'concurrency', parseInt(e.target.value) || 1)}
+                className="w-32 px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 focus:outline-none focus:ring-1 focus:ring-orange-500"
+              />
+            </div>
+          </>
+        )}
       </div>
     );
   };
@@ -307,6 +630,9 @@ export function SettingsPage({}: SettingsPageProps) {
                     break;
                   case 'emerald':
                     activeClass = 'bg-emerald-600 text-white';
+                    break;
+                  case 'blue':
+                    activeClass = 'bg-blue-600 text-white';
                     break;
                 }
               }

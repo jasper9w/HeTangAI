@@ -38,7 +38,8 @@ class Api:
         # Initialize project manager with work directory from settings
         settings = self._load_settings()
         default_work_dir = Path.home() / "Desktop" / "荷塘AI"
-        work_dir = Path(settings.get("workDir", str(default_work_dir)))
+        work_dir_str = settings.get("workDir", "") or str(default_work_dir)
+        work_dir = Path(work_dir_str)
         self._project_manager = ProjectManager(work_dir)
 
         # Initialize unified thread pool with semaphores for concurrency control
@@ -61,6 +62,9 @@ class Api:
         self._ttv_concurrency = ttv_concurrency
         
         logger.info(f"Thread pool initialized: total_workers={total_max_workers}, TTS={tts_concurrency}, TTI={tti_concurrency}, TTV={ttv_concurrency}")
+
+        # Shot builder task state
+        self._shot_builder_task: Optional[dict] = None  # {"step": str, "running": bool, "error": str|None}
 
         logger.info("API initialized")
 
@@ -140,16 +144,29 @@ class Api:
                     "concurrency": 1,
                 },
                 "tti": {
+                    "provider": "openai",
                     "apiUrl": "",
-                    "model": "gemini-2.5-flash-image-landscape",
                     "apiKey": "",
+                    "characterModel": "gemini-3.0-pro-image-landscape",
+                    "sceneModel": "gemini-2.5-flash-image-landscape",
+                    "shotModel": "gemini-2.5-flash-image-landscape",
+                    "whiskToken": "",
+                    "whiskWorkflowId": "",
                     "concurrency": 1,
                 },
                 "ttv": {
+                    "provider": "openai",
                     "apiUrl": "",
-                    "model": "veo_3_1_i2v_s_fast_fl_landscape",
                     "apiKey": "",
+                    "model": "veo_3_1_i2v_s_fast_fl_landscape",
+                    "whiskToken": "",
+                    "whiskWorkflowId": "",
                     "concurrency": 1,
+                },
+                "shotBuilder": {
+                    "apiUrl": "",
+                    "apiKey": "",
+                    "model": "gemini-3-pro-preview",
                 },
             }
             self._settings_file.parent.mkdir(parents=True, exist_ok=True)
@@ -167,6 +184,40 @@ class Api:
                 logger.error(f"Failed to load settings: {e}")
         return {}
 
+    def _ensure_prompt_prefixes(self, project_data: dict) -> None:
+        """Ensure prompt prefixes exist in project data"""
+        if "promptPrefixes" not in project_data or not isinstance(project_data.get("promptPrefixes"), dict):
+            project_data["promptPrefixes"] = {}
+        prefix_config = project_data["promptPrefixes"]
+        prefix_config.setdefault("shotImagePrefix", "")
+        prefix_config.setdefault("shotVideoPrefix", "")
+        prefix_config.setdefault("characterPrefix", "")
+
+    def _get_shot_builder_prompt_dir(self) -> Path:
+        return Path.home() / ".hetangai" / "prompts"
+
+    def _ensure_shot_builder_prompts(self) -> None:
+        prompt_dir = self._get_shot_builder_prompt_dir()
+        prompt_dir.mkdir(parents=True, exist_ok=True)
+        source_dir = Path(__file__).resolve().parent / "services" / "prompts"
+        for name in ("role.txt", "scene.txt", "shot.txt"):
+            target_path = prompt_dir / name
+            if not target_path.exists():
+                source_path = source_dir / name
+                if source_path.exists():
+                    import shutil
+                    shutil.copy2(source_path, target_path)
+                else:
+                    target_path.write_text("", encoding="utf-8")
+
+    def _get_shot_builder_output_dir(self) -> Path:
+        if not self.project_name:
+            raise ValueError("Please save the project first before using shot builder")
+        project_dir = self._project_manager.get_project_dir(self.project_name)
+        output_dir = project_dir / "shot_builder"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        return output_dir
+
     # ========== Project Management ==========
 
     def new_project(self) -> dict:
@@ -177,6 +228,11 @@ class Api:
             "name": "Untitled Project",
             "createdAt": datetime.now().isoformat(),
             "updatedAt": datetime.now().isoformat(),
+            "promptPrefixes": {
+                "shotImagePrefix": "",
+                "shotVideoPrefix": "",
+                "characterPrefix": "",
+            },
             "characters": [
                 {
                     "id": "narrator",
@@ -247,6 +303,8 @@ class Api:
                         if shot.get("script") and shot.get("voiceActor"):
                             shot["dialogues"] = [{"role": shot["voiceActor"], "text": shot["script"]}]
                             logger.info(f"Migrated shot {shot.get('id')} to new dialogue format")
+
+                self._ensure_prompt_prefixes(self.project_data)
 
                 # Load all alternative images for each shot (slots 1-4)
                 for shot in self.project_data.get("shots", []):
@@ -394,6 +452,8 @@ class Api:
                     if shot.get("script") and shot.get("voiceActor"):
                         shot["dialogues"] = [{"role": shot["voiceActor"], "text": shot["script"]}]
                         logger.info(f"Migrated shot {shot.get('id')} to new dialogue format")
+
+            self._ensure_prompt_prefixes(self.project_data)
 
             return {"success": True, "data": self.project_data, "path": str(file_path)}
         except Exception as e:
@@ -624,69 +684,105 @@ class Api:
             if char["id"] == character_id:
                 try:
                     import asyncio
-                    from services.generator import GenerationClient, download_file
+                    import time
 
                     char["status"] = "generating"
 
                     # Get settings
                     settings = self._load_settings()
                     tti_config = settings.get("tti", {})
-
-                    if not tti_config.get("apiUrl") or not tti_config.get("apiKey"):
-                        raise ValueError("TTI API not configured in settings")
-
-                    # Create client - use fixed model for character generation
-                    client = GenerationClient(
-                        api_url=tti_config["apiUrl"],
-                        api_key=tti_config["apiKey"],
-                        model="gemini-3.0-pro-image-landscape",  # Fixed model for character images
-                    )
-
-                    # Generate image (returns URL)
-                    # Build professional 3-view character design prompt
-                    character_desc = char.get('description', '').strip()
-
-                    prompt_template = """
-**一张专业角色设计参考图，横向3等分布局展示同一角色的三个视角。**
-
-画面比例16:9，纯白背景，从左到右依次为：正面全身视角、侧面全身视角、背面全身视角。
-
-**全局要求：**
-- 三个视角必须是同一角色：相同的面容、服装、体型、比例
-- 角色占每个区域高度的85%，头顶和脚底保留适当留白，不得裁切
-- 统一姿态：自然站立，双臂自然下垂于身体两侧，双脚并拢，身体放松
-- **画质标准：电影级别的超高清画质，细节丰富精细，光影自然真实，质感层次分明，达到专业影视制作的视觉水准（除非角色描述中有特殊风格要求）**
-- **角色类型默认设定：真人风格，亚洲面孔（中国人），写实呈现（除非角色描述中另有说明）**
-- **外貌品质标准：角色必须具备主角级别的出众外貌，五官精致立体，面部比例完美，气质超凡，具有强烈的视觉美感和吸引力。皮肤质感细腻，整体呈现应达到专业演员/模特的高水准颜值（除非角色描述中有特殊设定）**
-
-**三个视角的具体要求：**
-1. **左侧区域 - 正面视角**：角色正面朝向观察者，身体对称，完整展示面部特征和服装正面细节
-2. **中间区域 - 侧面视角**：角色右侧身90度朝向观察者，清晰展示身体轮廓线条和服装侧面结构
-3. **右侧区域 - 背面视角**：角色背部朝向观察者，完整呈现发型背面和服装后部设计
-
-**角色描述：**
-{character_desc}
-"""
-
-                    prompt = prompt_template.format(character_desc=character_desc if character_desc else char['name'])
-                    image_urls = asyncio.run(client.generate_image(prompt, count=1))
-
-                    if not image_urls:
-                        raise ValueError("No images generated")
-
-                    image_url = image_urls[0]
+                    provider = tti_config.get("provider", "openai")
 
                     # Require project to be saved before generating images
                     if not self.project_name:
                         raise ValueError("Please save the project first before generating character images")
 
-                    # Download and save to project directory
+                    # Build professional 3-view character design prompt
+                    character_desc = char.get('description', '').strip()
+                    prefix_config = (self.project_data or {}).get("promptPrefixes", {})
+                    character_prefix = str(prefix_config.get("characterPrefix", "")).strip()
+                    base_desc = character_desc if character_desc else char['name']
+                    if character_prefix:
+                        base_desc = f"{character_prefix} {base_desc}".strip()
+
+                    prompt_template = """
+专业角色设计参考图，16:9横向三等分构图，纯白背景。
+
+左/中/右分别展示：正面全身、右侧面全身、背面全身。
+
+要求：
+
+同一角色三个视角：面容/服装/体型完全一致
+自然站立姿态，双臂下垂，双脚并拢
+角色占区域高度85%，头脚留白，不裁切
+电影级超高清画质，光影真实，细节精细
+默认：写实真人风格，亚洲面孔，主角级精致外貌（除非另有说明）
+角色描述：
+{character_desc}
+"""
+
+                    prompt = prompt_template.format(character_desc=base_desc)
+
+                    # Get image path
                     image_path = self._project_manager.get_character_image_path(
                         self.project_name, character_id
                     )
-                    asyncio.run(download_file(image_url, image_path))
+
+                    if provider == "whisk":
+                        # Whisk mode
+                        from services.whisk import Whisk
+
+                        if not tti_config.get("whiskToken") or not tti_config.get("whiskWorkflowId"):
+                            raise ValueError("Whisk Token and Workflow ID not configured in settings")
+
+                        whisk = Whisk(
+                            token=tti_config["whiskToken"],
+                            workflow_id=tti_config["whiskWorkflowId"]
+                        )
+
+                        # Generate using Whisk - MEDIA_CATEGORY_SUBJECT for character
+                        whisk_image = whisk.generate_image(
+                            prompt=prompt,
+                            media_category="MEDIA_CATEGORY_SUBJECT",
+                            aspect_ratio="IMAGE_ASPECT_RATIO_LANDSCAPE"
+                        )
+
+                        # Save base64 image to file
+                        whisk_image.save(str(image_path))
+
+                        # Save media_generation_id for later use in scene generation
+                        char["imageMediaGenerationId"] = whisk_image.media_generation_id
+                        char["imageSourceUrl"] = ""  # Whisk doesn't return URL
+
+                        logger.info(f"Generated character image via Whisk, media_generation_id: {whisk_image.media_generation_id}")
+
+                    else:
+                        # OpenAI compatible mode
+                        from services.generator import GenerationClient, download_file
+
+                        if not tti_config.get("apiUrl") or not tti_config.get("apiKey"):
+                            raise ValueError("TTI API not configured in settings")
+
+                        model_name = tti_config.get("characterModel") or tti_config.get("model", "gemini-3.0-pro-image-landscape")
+                        client = GenerationClient(
+                            api_url=tti_config["apiUrl"],
+                            api_key=tti_config["apiKey"],
+                            model=model_name,
+                        )
+
+                        image_urls = asyncio.run(client.generate_image(prompt, count=1, task_type="character"))
+
+                        if not image_urls:
+                            raise ValueError("No images generated")
+
+                        image_url = image_urls[0]
+
+                        # Download and save to project directory
+                        asyncio.run(download_file(image_url, image_path))
+                        char["imageSourceUrl"] = image_url
+                        char["imageMediaGenerationId"] = ""  # OpenAI mode doesn't have this
+
                     # Convert to HTTP URL for frontend with cache-busting timestamp
-                    import time
                     timestamp = int(time.time() * 1000)  # milliseconds timestamp
                     char["imageUrl"] = f"{self._path_to_url(str(image_path))}?t={timestamp}"
 
@@ -751,6 +847,7 @@ class Api:
                     import time
                     timestamp = int(time.time() * 1000)  # milliseconds timestamp
                     char["imageUrl"] = f"{self._path_to_url(str(output_path))}?t={timestamp}"
+                    char["imageSourceUrl"] = ""
                     char["status"] = "ready"
                     logger.info(f"Uploaded character image for {character_id}")
                     return {"success": True, "imageUrl": char["imageUrl"], "character": char}
@@ -1322,16 +1419,14 @@ class Api:
             if shot["id"] == shot_id:
                 try:
                     import asyncio
-                    from services.generator import GenerationClient, download_file, compress_image_if_needed
+                    import time
 
                     shot["status"] = "generating_images"
 
                     # Get settings
                     settings = self._load_settings()
                     tti_config = settings.get("tti", {})
-
-                    if not tti_config.get("apiUrl") or not tti_config.get("apiKey"):
-                        raise ValueError("TTI API not configured in settings")
+                    provider = tti_config.get("provider", "openai")
 
                     # Require project to be saved before generating images
                     if not self.project_name:
@@ -1339,7 +1434,6 @@ class Api:
 
                     # Get character references for this shot
                     # Parse characters from imagePrompt instead of using shot["characters"]
-                    # This ensures we only require references for characters actually in the prompt
                     image_prompt = shot.get("imagePrompt", "")
                     all_character_names = [c["name"] for c in self.project_data.get("characters", []) if c.get("name")]
                     
@@ -1348,77 +1442,198 @@ class Api:
                     for char_name in all_character_names:
                         if char_name and char_name in image_prompt:
                             shot_characters.append(char_name)
-                    
-                    reference_images = []
-                    character_references = []  # Store character name and image data pairs
-                    missing_characters = []  # Track characters without reference images
 
-                    if shot_characters:
-                        logger.info(f"Characters found in imagePrompt: {shot_characters}")
+                    base_prompt = shot.get("imagePrompt", "")
+                    prefix_config = (self.project_data or {}).get("promptPrefixes", {})
+                    shot_image_prefix = str(prefix_config.get("shotImagePrefix", "")).strip()
+                    prompt_with_prefix = f"{shot_image_prefix} {base_prompt}".strip() if shot_image_prefix else base_prompt
+                    current_shot_id = shot["id"]
 
-                        # Find characters with images
-                        for char_name in shot_characters:
-                            char_found = False
-                            for char in self.project_data["characters"]:
-                                if char["name"] == char_name:
-                                    char_found = True
-                                    if not char.get("imageUrl"):
-                                        missing_characters.append(char_name)
-                                        break
+                    # Check which slots (1-4) are already occupied
+                    existing_slots = []
+                    for slot in range(1, 5):
+                        slot_path = self._project_manager.get_shot_image_path(self.project_name, current_shot_id, slot)
+                        if slot_path.exists():
+                            existing_slots.append((slot, slot_path.stat().st_mtime))
 
-                                    # Get local path from imageUrl
-                                    image_url = char["imageUrl"]
-                                    # Remove cache-busting timestamp
-                                    if "?t=" in image_url:
-                                        image_url = image_url.split("?t=")[0]
+                    # Sort by modification time (oldest first)
+                    existing_slots.sort(key=lambda x: x[1])
 
-                                    # Convert HTTP URL back to local path
-                                    if image_url.startswith(f"http://127.0.0.1:{self._file_server_port}/"):
-                                        local_path = image_url.replace(f"http://127.0.0.1:{self._file_server_port}/", "")
-                                        # Handle both relative and absolute paths
-                                        if not local_path.startswith("/"):
-                                            local_path = str(Path.cwd() / local_path)
+                    # Determine which slots to use for new images
+                    slots_to_use = []
+                    if len(existing_slots) < 4:
+                        occupied = {slot for slot, _ in existing_slots}
+                        for slot in range(1, 5):
+                            if slot not in occupied:
+                                slots_to_use.append(slot)
+                                if len(slots_to_use) == 4:
+                                    break
+                    else:
+                        slots_to_use = [slot for slot, _ in existing_slots[:4]]
 
-                                        if Path(local_path).exists():
-                                            # Compress the reference image
-                                            reference_image_data = compress_image_if_needed(local_path, max_size_kb=256)
-                                            reference_images.append(reference_image_data)
-                                            character_references.append(char_name)
-                                            logger.info(f"Added character reference: {char_name} -> {local_path}")
+                    existing_source_urls = shot.get("imageSourceUrls", [])
+                    existing_media_gen_ids = shot.get("imageMediaGenerationIds", [])
+                    source_url_by_slot = {
+                        slot: existing_source_urls[slot - 1]
+                        for slot in range(1, 5)
+                        if slot - 1 < len(existing_source_urls)
+                    }
+                    media_gen_id_by_slot = {
+                        slot: existing_media_gen_ids[slot - 1]
+                        for slot in range(1, 5)
+                        if slot - 1 < len(existing_media_gen_ids)
+                    }
+
+                    image_local_paths = []
+                    image_paths = []
+                    first_new_slot = None
+
+                    if provider == "whisk":
+                        # Whisk mode
+                        from services.whisk import Whisk
+
+                        if not tti_config.get("whiskToken") or not tti_config.get("whiskWorkflowId"):
+                            raise ValueError("Whisk Token and Workflow ID not configured in settings")
+
+                        whisk = Whisk(
+                            token=tti_config["whiskToken"],
+                            workflow_id=tti_config["whiskWorkflowId"]
+                        )
+
+                        # Collect subject_ids from characters with imageMediaGenerationId
+                        subject_ids = []
+                        missing_characters = []
+                        if shot_characters:
+                            logger.info(f"Characters found in imagePrompt: {shot_characters}")
+                            for char_name in shot_characters:
+                                char_found = False
+                                for char in self.project_data["characters"]:
+                                    if char["name"] == char_name:
+                                        char_found = True
+                                        media_gen_id = char.get("imageMediaGenerationId", "")
+                                        if media_gen_id:
+                                            subject_ids.append(media_gen_id)
+                                            logger.info(f"Added character subject_id: {char_name} -> {media_gen_id}")
                                         else:
                                             missing_characters.append(char_name)
-                                            logger.warning(f"Character image file not found: {local_path}")
-                                    break
+                                        break
+                                if not char_found:
+                                    missing_characters.append(char_name)
 
-                            if not char_found:
-                                missing_characters.append(char_name)
+                            if missing_characters:
+                                raise ValueError(f"Missing character images (need Whisk media_generation_id) for: {', '.join(missing_characters)}")
 
-                        # Check if any character is missing reference image
-                        if missing_characters:
-                            raise ValueError(f"Missing reference images for characters: {', '.join(missing_characters)}")
+                        # Generate 1 image using Whisk (user clicks multiple times to accumulate up to 4)
+                        slot = slots_to_use[0] if slots_to_use else 1
 
-                    # Create client
-                    client = GenerationClient(
-                        api_url=tti_config["apiUrl"],
-                        api_key=tti_config["apiKey"],
-                        model=tti_config.get("model", "gemini-2.5-flash-image-landscape"),
-                    )
+                        if subject_ids:
+                            # Use generate_with_references for scene with characters
+                            whisk_image = whisk.generate_with_references(
+                                prompt=prompt_with_prefix,
+                                subject_ids=subject_ids,
+                                aspect_ratio="IMAGE_ASPECT_RATIO_LANDSCAPE"
+                            )
+                            logger.info(f"Generated scene image via Whisk with {len(subject_ids)} subject references")
+                        else:
+                            # Use generate_image for scene without characters
+                            whisk_image = whisk.generate_image(
+                                prompt=prompt_with_prefix,
+                                media_category="MEDIA_CATEGORY_SCENE",
+                                aspect_ratio="IMAGE_ASPECT_RATIO_LANDSCAPE"
+                            )
+                            logger.info("Generated scene image via Whisk (no character references)")
 
-                    # Build enhanced prompt with character information
-                    base_prompt = shot.get("imagePrompt", "")
+                        # Save the image
+                        image_path = self._project_manager.get_shot_image_path(self.project_name, current_shot_id, slot)
+                        whisk_image.save(str(image_path))
 
-                    if reference_images:
-                        # Build character reference description
-                        character_descriptions = []
-                        for i, char_name in enumerate(character_references, 1):
-                            character_descriptions.append(f"第{i}张图：{char_name}")
+                        first_new_slot = slot
+                        image_local_paths.append(str(image_path))
+                        image_paths.append(self._path_to_url(str(image_path)))
+                        source_url_by_slot[slot] = ""  # Whisk doesn't return URL
+                        media_gen_id_by_slot[slot] = whisk_image.media_generation_id
 
-                        character_info = "、".join(character_descriptions)
+                    else:
+                        # OpenAI compatible mode
+                        from services.generator import GenerationClient, download_file, compress_image_if_needed
 
-                        # Use image-to-image generation with character references
-                        enhanced_prompt = f"""基于提供的角色参考图，生成以下场景：
+                        if not tti_config.get("apiUrl") or not tti_config.get("apiKey"):
+                            raise ValueError("TTI API not configured in settings")
 
-{base_prompt}
+                        reference_images = []
+                        reference_urls = []
+                        character_references = []
+                        missing_characters = []
+
+                        if shot_characters:
+                            logger.info(f"Characters found in imagePrompt: {shot_characters}")
+
+                            for char_name in shot_characters:
+                                char_found = False
+                                for char in self.project_data["characters"]:
+                                    if char["name"] == char_name:
+                                        char_found = True
+                                        if not char.get("imageUrl"):
+                                            missing_characters.append(char_name)
+                                            break
+
+                                        image_url = char["imageUrl"]
+                                        if "?t=" in image_url:
+                                            image_url = image_url.split("?t=")[0]
+
+                                        source_url = char.get("imageSourceUrl", "")
+                                        if source_url:
+                                            reference_urls.append(source_url)
+                                            if "mediaGenerationId" in source_url:
+                                                reference_images.append({"url": source_url})
+                                                character_references.append(char_name)
+                                                logger.info(f"Added character reference url: {char_name} -> {source_url}")
+                                                break
+
+                                        if image_url.startswith(f"http://127.0.0.1:{self._file_server_port}/"):
+                                            local_path = image_url.replace(f"http://127.0.0.1:{self._file_server_port}/", "")
+                                            if not local_path.startswith("/"):
+                                                local_path = str(Path.cwd() / local_path)
+
+                                            if Path(local_path).exists():
+                                                reference_image_data = compress_image_if_needed(local_path, max_size_kb=256)
+                                                reference_images.append({"base64": reference_image_data})
+                                                character_references.append(char_name)
+                                                logger.info(f"Added character reference: {char_name} -> {local_path}")
+                                            else:
+                                                missing_characters.append(char_name)
+                                                logger.warning(f"Character image file not found: {local_path}")
+                                        break
+
+                                if not char_found:
+                                    missing_characters.append(char_name)
+
+                            if missing_characters:
+                                raise ValueError(f"Missing reference images for characters: {', '.join(missing_characters)}")
+
+                        has_references = len(reference_images) > 0
+                        model_name = (
+                            tti_config.get("sceneModel")
+                            if has_references
+                            else tti_config.get("shotModel")
+                        ) or tti_config.get("model", "gemini-2.5-flash-image-landscape")
+                        
+                        client = GenerationClient(
+                            api_url=tti_config["apiUrl"],
+                            api_key=tti_config["apiKey"],
+                            model=model_name,
+                        )
+
+                        if reference_images:
+                            character_descriptions = []
+                            for i, char_name in enumerate(character_references, 1):
+                                character_descriptions.append(f"第{i}张图：{char_name}")
+
+                            character_info = "、".join(character_descriptions)
+
+                            enhanced_prompt = f"""基于提供的角色参考图，生成以下场景：
+
+{prompt_with_prefix}
 
 参考图说明：
 {character_info}
@@ -1430,86 +1645,59 @@ class Api:
 - 画质要求：电影级别的超高清画质，细节丰富精细
 - 如果场景中涉及多个角色，请确保每个角色都按照对应的参考图进行绘制"""
 
-                        logger.info(f"Using {len(reference_images)} character reference images: {character_references}")
-                        image_urls = asyncio.run(client.generate_image(
-                            enhanced_prompt,
-                            reference_images=reference_images,
-                            count=4
-                        ))
-                    else:
-                        # Use text-to-image generation (original behavior)
-                        logger.info("No character references found, using text-to-image generation")
-                        image_urls = asyncio.run(client.generate_image(base_prompt, count=4))
+                            logger.info(f"Using {len(reference_images)} character reference images: {character_references}")
+                            image_urls = asyncio.run(client.generate_image(
+                                enhanced_prompt,
+                                reference_images=reference_images,
+                                count=4,
+                                task_type="scene",
+                                reference_urls=reference_urls,
+                            ))
+                        else:
+                            logger.info("No character references found, using text-to-image generation")
+                            image_urls = asyncio.run(client.generate_image(prompt_with_prefix, count=4, task_type="shot"))
 
-                    if not image_urls:
-                        raise ValueError("No images generated")
+                        if not image_urls:
+                            raise ValueError("No images generated")
 
-                    # Download and save images to project directory
-                    # Strategy: Always maintain 4 alternative images (index 1-4)
-                    # If slots are available, fill them; otherwise replace the oldest one
-                    image_paths = []
-                    image_local_paths = []
-                    shot_id = shot["id"]
-
-                    # Check which slots (1-4) are already occupied
-                    existing_slots = []
-                    for slot in range(1, 5):
-                        slot_path = self._project_manager.get_shot_image_path(self.project_name, shot_id, slot)
-                        if slot_path.exists():
-                            existing_slots.append((slot, slot_path.stat().st_mtime))
-
-                    # Sort by modification time (oldest first)
-                    existing_slots.sort(key=lambda x: x[1])
-
-                    # Determine which slots to use for new images
-                    slots_to_use = []
-                    if len(existing_slots) < 4:
-                        # Fill empty slots first
-                        occupied = {slot for slot, _ in existing_slots}
-                        for slot in range(1, 5):
-                            if slot not in occupied:
-                                slots_to_use.append(slot)
-                                if len(slots_to_use) == 4:
-                                    break
-                    else:
-                        # All slots occupied, replace the 4 oldest ones
-                        slots_to_use = [slot for slot, _ in existing_slots[:4]]
-
-                    # Download and save new images
-                    first_new_slot = None  # Track the first newly generated image slot
-                    for idx, img_url in enumerate(image_urls):
-                        slot = slots_to_use[idx]
-                        if first_new_slot is None:
-                            first_new_slot = slot
-                        image_path = self._project_manager.get_shot_image_path(self.project_name, shot_id, slot)
-                        asyncio.run(download_file(img_url, image_path))
-                        image_local_paths.append(str(image_path))
-                        image_paths.append(self._path_to_url(str(image_path)))
+                        for idx, img_url in enumerate(image_urls):
+                            slot = slots_to_use[idx]
+                            if first_new_slot is None:
+                                first_new_slot = slot
+                            image_path = self._project_manager.get_shot_image_path(self.project_name, current_shot_id, slot)
+                            asyncio.run(download_file(img_url, image_path))
+                            image_local_paths.append(str(image_path))
+                            image_paths.append(self._path_to_url(str(image_path)))
+                            source_url_by_slot[slot] = img_url
+                            media_gen_id_by_slot[slot] = ""  # OpenAI mode doesn't have this
 
                     # Load all 4 slots for frontend display (in order 1-4)
                     all_image_paths = []
                     all_local_paths = []
+                    all_source_urls = []
+                    all_media_gen_ids = []
                     for slot in range(1, 5):
-                        slot_path = self._project_manager.get_shot_image_path(self.project_name, shot_id, slot)
+                        slot_path = self._project_manager.get_shot_image_path(self.project_name, current_shot_id, slot)
                         if slot_path.exists():
                             all_image_paths.append(self._path_to_url(str(slot_path)))
                             all_local_paths.append(str(slot_path))
+                            all_source_urls.append(source_url_by_slot.get(slot, ""))
+                            all_media_gen_ids.append(media_gen_id_by_slot.get(slot, ""))
 
-                    # If no images existed before, set the first newly generated image as selected
-                    # Otherwise keep the current selection
                     if len(existing_slots) == 0 and first_new_slot is not None:
-                        # Find the index of the first new slot in the sorted list
-                        shot["selectedImageIndex"] = first_new_slot - 1  # Convert slot (1-4) to index (0-3)
+                        shot["selectedImageIndex"] = first_new_slot - 1
                         logger.info(f"Set first generated image (slot {first_new_slot}) as default selection")
                     elif "selectedImageIndex" not in shot or shot["selectedImageIndex"] >= len(all_image_paths):
-                        shot["selectedImageIndex"] = 0  # Default to first available image
+                        shot["selectedImageIndex"] = 0
 
                     shot["images"] = all_image_paths
+                    shot["imageSourceUrls"] = all_source_urls
+                    shot["imageMediaGenerationIds"] = all_media_gen_ids
                     shot["_localImagePaths"] = all_local_paths
                     shot["status"] = "images_ready"
 
-                    generation_type = "图生图" if reference_images else "文生图"
-                    logger.info(f"Generated {len(image_urls)} images for shot {shot_id} using {generation_type}, total alternatives: {len(all_image_paths)}")
+                    generation_type = "Whisk" if provider == "whisk" else ("图生图" if shot_characters else "文生图")
+                    logger.info(f"Generated images for shot {current_shot_id} using {generation_type}, total alternatives: {len(all_image_paths)}")
                     return {"success": True, "images": all_image_paths, "shot": shot}
 
                 except Exception as e:
@@ -1590,24 +1778,16 @@ class Api:
         for shot in self.project_data["shots"]:
             if shot["id"] == shot_id:
                 try:
-                    import asyncio
-                    from services.generator import GenerationClient, download_file
-
                     shot["status"] = "generating_video"
 
                     # Get settings
                     settings = self._load_settings()
                     ttv_config = settings.get("ttv", {})
+                    provider = ttv_config.get("provider", "openai")
 
-                    if not ttv_config.get("apiUrl") or not ttv_config.get("apiKey"):
-                        raise ValueError("TTV API not configured in settings")
-
-                    # Create client
-                    client = GenerationClient(
-                        api_url=ttv_config["apiUrl"],
-                        api_key=ttv_config["apiKey"],
-                        model=ttv_config.get("model", "veo_3_1_i2v_s_fast_fl_landscape"),
-                    )
+                    # Require project to be saved before generating videos
+                    if not self.project_name:
+                        raise ValueError("Please save the project first before generating videos")
 
                     # Get selected image path (use local path for video generation)
                     selected_idx = shot.get("selectedImageIndex", 0)
@@ -1618,31 +1798,10 @@ class Api:
 
                     # Use local file path for video generation
                     image_local_path = local_images[selected_idx] if selected_idx < len(local_images) else local_images[0]
-
-                    # Check if model supports image input
-                    model = ttv_config.get("model", "")
-                    image_paths = None
-
-                    if "i2v" in model or "r2v" in model:
-                        # Image-to-video models - use first frame
-                        image_paths = [image_local_path]
-                        logger.info(f"Using first frame for I2V: {image_local_path}")
-
-                    # Generate video (returns URL)
                     prompt = shot.get("videoPrompt", "")
-                    video_url = asyncio.run(client.generate_video(prompt, image_paths))
-
-                    if not video_url:
-                        raise ValueError("No video generated")
-
-                    # Require project to be saved before generating videos
-                    if not self.project_name:
-                        raise ValueError("Please save the project first before generating videos")
-
-                    # Download and save video to project directory
-                    # Strategy: Always maintain 4 alternative videos (index 1-4)
-                    # If slots are available, fill them; otherwise replace the oldest one
-                    video_paths = []
+                    prefix_config = (self.project_data or {}).get("promptPrefixes", {})
+                    shot_video_prefix = str(prefix_config.get("shotVideoPrefix", "")).strip()
+                    prompt_with_prefix = f"{shot_video_prefix} {prompt}".strip() if shot_video_prefix else prompt
                     shot_id_str = shot["id"]
 
                     # Check which slots (1-4) are already occupied
@@ -1668,9 +1827,73 @@ class Api:
                         # All slots occupied, replace the oldest one
                         target_slot = existing_slots[0][0]
 
-                    # Download and save new video
                     video_path = self._project_manager.get_shot_video_path(self.project_name, shot_id_str, target_slot)
-                    asyncio.run(download_file(video_url, video_path))
+
+                    if provider == "whisk":
+                        # Whisk mode
+                        from services.whisk import Whisk, VideoProgress, WhiskVideo
+
+                        if not ttv_config.get("whiskToken") or not ttv_config.get("whiskWorkflowId"):
+                            raise ValueError("Whisk Token and Workflow ID not configured in settings")
+
+                        whisk = Whisk(
+                            token=ttv_config["whiskToken"],
+                            workflow_id=ttv_config["whiskWorkflowId"]
+                        )
+
+                        # Read image file
+                        with open(image_local_path, 'rb') as f:
+                            image_bytes = f.read()
+
+                        logger.info(f"Generating video via Whisk with image: {image_local_path}")
+
+                        # Generate video (iterate through generator)
+                        whisk_video = None
+                        for result in whisk.generate_video(prompt_with_prefix, image_bytes):
+                            if isinstance(result, VideoProgress):
+                                logger.info(f"Video generation progress: {result.status.value}, elapsed: {result.elapsed_seconds:.1f}s")
+                            elif isinstance(result, WhiskVideo):
+                                whisk_video = result
+                                break
+
+                        if not whisk_video:
+                            raise ValueError("No video generated from Whisk")
+
+                        # Save video to file
+                        whisk_video.save(str(video_path))
+                        logger.info(f"Saved Whisk video to: {video_path}")
+
+                    else:
+                        # OpenAI compatible mode
+                        import asyncio
+                        from services.generator import GenerationClient, download_file
+
+                        if not ttv_config.get("apiUrl") or not ttv_config.get("apiKey"):
+                            raise ValueError("TTV API not configured in settings")
+
+                        client = GenerationClient(
+                            api_url=ttv_config["apiUrl"],
+                            api_key=ttv_config["apiKey"],
+                            model=ttv_config.get("model", "veo_3_1_i2v_s_fast_fl_landscape"),
+                        )
+
+                        # Check if model supports image input
+                        model = ttv_config.get("model", "")
+                        image_paths = None
+
+                        if "i2v" in model or "r2v" in model:
+                            # Image-to-video models - use first frame
+                            image_paths = [image_local_path]
+                            logger.info(f"Using first frame for I2V: {image_local_path}")
+
+                        # Generate video (returns URL)
+                        video_url = asyncio.run(client.generate_video(prompt_with_prefix, image_paths))
+
+                        if not video_url:
+                            raise ValueError("No video generated")
+
+                        # Download and save new video
+                        asyncio.run(download_file(video_url, video_path))
 
                     # Load all 4 slots for frontend display (in order 1-4)
                     all_video_paths = []
@@ -1695,7 +1918,8 @@ class Api:
 
                     shot["videos"] = all_video_paths
                     shot["status"] = "completed"
-                    logger.info(f"Generated video for shot {shot_id}, total alternatives: {len(all_video_paths)}")
+                    generation_type = "Whisk" if provider == "whisk" else "OpenAI"
+                    logger.info(f"Generated video for shot {shot_id} via {generation_type}, total alternatives: {len(all_video_paths)}")
                     return {"success": True, "videoUrl": shot["videoUrl"], "shot": shot}
 
                 except Exception as e:
@@ -2047,6 +2271,264 @@ class Api:
             return {"success": False, "error": str(e)}
 
 
+    # ========== Shot Builder ==========
+
+    def get_shot_builder_prompts(self) -> dict:
+        try:
+            self._ensure_shot_builder_prompts()
+            prompt_dir = self._get_shot_builder_prompt_dir()
+            prompts = {
+                "role": (prompt_dir / "role.txt").read_text(encoding="utf-8"),
+                "scene": (prompt_dir / "scene.txt").read_text(encoding="utf-8"),
+                "shot": (prompt_dir / "shot.txt").read_text(encoding="utf-8"),
+            }
+            return {"success": True, "prompts": prompts}
+        except Exception as e:
+            logger.error(f"Failed to load shot builder prompts: {e}")
+            return {"success": False, "error": str(e)}
+
+    def save_shot_builder_prompts(self, prompts: dict) -> dict:
+        try:
+            self._ensure_shot_builder_prompts()
+            prompt_dir = self._get_shot_builder_prompt_dir()
+            (prompt_dir / "role.txt").write_text(prompts.get("role", ""), encoding="utf-8")
+            (prompt_dir / "scene.txt").write_text(prompts.get("scene", ""), encoding="utf-8")
+            (prompt_dir / "shot.txt").write_text(prompts.get("shot", ""), encoding="utf-8")
+            return {"success": True}
+        except Exception as e:
+            logger.error(f"Failed to save shot builder prompts: {e}")
+            return {"success": False, "error": str(e)}
+
+    def get_shot_builder_novel(self) -> dict:
+        try:
+            output_dir = self._get_shot_builder_output_dir()
+            novel_path = output_dir / "novel.txt"
+            text = novel_path.read_text(encoding="utf-8") if novel_path.exists() else ""
+            return {"success": True, "text": text}
+        except Exception as e:
+            logger.error(f"Failed to load novel text: {e}")
+            return {"success": False, "error": str(e)}
+
+    def save_shot_builder_novel(self, text: str) -> dict:
+        try:
+            output_dir = self._get_shot_builder_output_dir()
+            novel_path = output_dir / "novel.txt"
+            novel_path.write_text(text or "", encoding="utf-8")
+            return {"success": True}
+        except Exception as e:
+            logger.error(f"Failed to save novel text: {e}")
+            return {"success": False, "error": str(e)}
+
+    def clear_shot_builder_output(self) -> dict:
+        try:
+            output_dir = self._get_shot_builder_output_dir()
+            if output_dir.exists():
+                import shutil
+                shutil.rmtree(output_dir)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            return {"success": True, "outputDir": str(output_dir)}
+        except Exception as e:
+            logger.error(f"Failed to clear shot builder output: {e}")
+            return {"success": False, "error": str(e)}
+
+    def get_shot_builder_outputs(self) -> dict:
+        try:
+            output_dir = self._get_shot_builder_output_dir()
+
+            def read_text(path: Path) -> str:
+                return path.read_text(encoding="utf-8") if path.exists() else ""
+
+            outputs = {
+                "roles": read_text(output_dir / "roles.jsonl"),
+                "scenes": read_text(output_dir / "scenes.jsonl"),
+                "shots": read_text(output_dir / "shots.jsonl"),
+                "outputDir": str(output_dir),
+            }
+            return {"success": True, "outputs": outputs}
+        except Exception as e:
+            logger.error(f"Failed to load shot builder outputs: {e}")
+            return {"success": False, "error": str(e)}
+
+    def save_shot_builder_outputs(self, outputs: dict) -> dict:
+        try:
+            output_dir = self._get_shot_builder_output_dir()
+            (output_dir / "roles.jsonl").write_text(outputs.get("roles", ""), encoding="utf-8")
+            (output_dir / "scenes.jsonl").write_text(outputs.get("scenes", ""), encoding="utf-8")
+            (output_dir / "shots.jsonl").write_text(outputs.get("shots", ""), encoding="utf-8")
+            return {"success": True, "outputDir": str(output_dir)}
+        except Exception as e:
+            logger.error(f"Failed to save shot builder outputs: {e}")
+            return {"success": False, "error": str(e)}
+
+    def _run_shot_builder_task(
+        self,
+        step: str,
+        output_dir: Path,
+        novel_text: str,
+        prompt_role: str,
+        prompt_scene: str,
+        prompt_shot: str,
+        llm_config: dict,
+    ) -> None:
+        """Background task to run shot builder step"""
+        try:
+            from services.shots import (
+                generate_roles,
+                generate_scenes,
+                generate_shots,
+                load_existing_data,
+                Role,
+                Scene,
+            )
+
+            if step == "role":
+                generate_roles(prompt_role, novel_text, output_dir, llm_config=llm_config)
+            elif step == "scene":
+                generate_scenes(prompt_scene, novel_text, output_dir, llm_config=llm_config)
+            else:
+                roles_path = output_dir / "roles.jsonl"
+                scenes_path = output_dir / "scenes.jsonl"
+                roles = load_existing_data(roles_path, Role)
+                scenes = load_existing_data(scenes_path, Scene)
+                generate_shots(prompt_shot, novel_text, roles, scenes, output_dir, llm_config=llm_config)
+
+            # Mark task as completed
+            if self._shot_builder_task and self._shot_builder_task.get("step") == step:
+                self._shot_builder_task["running"] = False
+                self._shot_builder_task["error"] = None
+                logger.info(f"Shot builder task completed: {step}")
+        except Exception as e:
+            logger.error(f"Shot builder task failed: {e}")
+            if self._shot_builder_task and self._shot_builder_task.get("step") == step:
+                self._shot_builder_task["running"] = False
+                self._shot_builder_task["error"] = str(e)
+
+    def run_shot_builder_step(self, step: str, force: bool) -> dict:
+        """Start shot builder step in background thread"""
+        try:
+            if step not in {"role", "scene", "shot"}:
+                return {"success": False, "error": "Invalid step"}
+
+            # Check if a task is already running
+            if self._shot_builder_task and self._shot_builder_task.get("running"):
+                return {"success": False, "error": "已有任务正在执行中"}
+
+            output_dir = self._get_shot_builder_output_dir()
+            novel_path = output_dir / "novel.txt"
+            novel_text = ""
+            if novel_path.exists():
+                novel_text = novel_path.read_text(encoding="utf-8")
+
+            # 只删除当前步骤对应的文件，不删除整个目录
+            step_file_map = {
+                "role": "roles.jsonl",
+                "scene": "scenes.jsonl",
+                "shot": "shots.jsonl",
+            }
+            target_file = output_dir / step_file_map[step]
+            if target_file.exists():
+                target_file.unlink()
+
+            novel_text = novel_text.strip()
+            if not novel_text:
+                return {"success": False, "error": "Novel text is empty"}
+
+            self._ensure_shot_builder_prompts()
+            prompt_dir = self._get_shot_builder_prompt_dir()
+            prompt_role = (prompt_dir / "role.txt").read_text(encoding="utf-8")
+            prompt_scene = (prompt_dir / "scene.txt").read_text(encoding="utf-8")
+            prompt_shot = (prompt_dir / "shot.txt").read_text(encoding="utf-8")
+
+            settings = self._load_settings()
+            shot_builder_cfg = settings.get("shotBuilder", {})
+            api_url = str(shot_builder_cfg.get("apiUrl", "")).strip()
+            api_key = str(shot_builder_cfg.get("apiKey", "")).strip()
+            model = str(shot_builder_cfg.get("model", "")).strip()
+            if not api_url or not api_key or not model:
+                return {"success": False, "error": "请在设置中配置分镜接口地址、密钥与模型"}
+
+            if api_url.endswith("/chat/completions"):
+                api_url = api_url.rsplit("/chat/completions", 1)[0]
+
+            llm_config = {
+                "api_key": api_key,
+                "base_url": api_url,
+                "model": model,
+            }
+
+            # For shot step, check if roles and scenes exist
+            if step == "shot":
+                roles_path = output_dir / "roles.jsonl"
+                scenes_path = output_dir / "scenes.jsonl"
+                if not roles_path.exists() or not scenes_path.exists():
+                    return {"success": False, "error": "角色或场景数据不存在，请先生成"}
+
+            # Initialize task state
+            self._shot_builder_task = {
+                "step": step,
+                "running": True,
+                "error": None,
+                "outputDir": str(output_dir),
+            }
+
+            # Submit task to thread pool
+            import threading
+            thread = threading.Thread(
+                target=self._run_shot_builder_task,
+                args=(step, output_dir, novel_text, prompt_role, prompt_scene, prompt_shot, llm_config),
+                daemon=True,
+            )
+            thread.start()
+
+            return {
+                "success": True,
+                "step": step,
+                "running": True,
+                "outputDir": str(output_dir),
+            }
+        except Exception as e:
+            logger.error(f"Failed to start shot builder step: {e}")
+            return {"success": False, "error": str(e)}
+
+    def get_shot_builder_status(self) -> dict:
+        """Get current shot builder task status"""
+        try:
+            output_dir = self._get_shot_builder_output_dir()
+
+            def count_lines(path: Path) -> int:
+                if not path.exists():
+                    return 0
+                with open(path, "r", encoding="utf-8") as f:
+                    return sum(1 for line in f if line.strip())
+
+            counts = {
+                "roles": count_lines(output_dir / "roles.jsonl"),
+                "scenes": count_lines(output_dir / "scenes.jsonl"),
+                "shots": count_lines(output_dir / "shots.jsonl"),
+            }
+
+            if self._shot_builder_task:
+                return {
+                    "success": True,
+                    "step": self._shot_builder_task.get("step"),
+                    "running": self._shot_builder_task.get("running", False),
+                    "error": self._shot_builder_task.get("error"),
+                    "outputDir": str(output_dir),
+                    "counts": counts,
+                }
+            return {
+                "success": True,
+                "step": None,
+                "running": False,
+                "error": None,
+                "outputDir": str(output_dir),
+                "counts": counts,
+            }
+        except Exception as e:
+            logger.error(f"Failed to get shot builder status: {e}")
+            return {"success": False, "error": str(e)}
+
+
     # ========== Settings Management ==========
 
     def get_settings(self) -> dict:
@@ -2073,7 +2555,7 @@ class Api:
                 json.dump(settings, f, indent=2, ensure_ascii=False)
 
             # Update project manager work directory if changed
-            if "workDir" in settings:
+            if "workDir" in settings and settings["workDir"]:
                 self._project_manager.set_work_dir(Path(settings["workDir"]))
 
             # Update thread pool sizes if concurrency changed
