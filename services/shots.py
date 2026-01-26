@@ -34,6 +34,8 @@ class TTI_Role(BaseModel):
 class Role(BaseModel):
     id: int
     name: str
+    alias: List[str] = []
+    alias_rel: str = ""
     gender: str
     age: int
     dna: str
