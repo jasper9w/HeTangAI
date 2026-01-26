@@ -12,7 +12,7 @@ import {
   Loader2,
   Trash2,
 } from 'lucide-react';
-import type { Character, ImportedCharacter } from '../../types';
+import type { ImportedCharacter } from '../../types';
 
 interface CharacterImportModalProps {
   isOpen: boolean;

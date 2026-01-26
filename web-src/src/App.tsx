@@ -25,7 +25,7 @@ import { CharactersPage } from './pages/CharactersPage';
 import { DubbingPage } from './pages/DubbingPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { Toast, type ToastMessage } from './components/ui/Toast';
-import type { ProjectData, Shot, PageType, Character, ImportedCharacter } from './types';
+import type { ProjectData, Shot, PageType, ImportedCharacter } from './types';
 
 function App() {
   const { api, ready } = useApi();
@@ -420,14 +420,14 @@ function App() {
       }
     }
 
-    let result = { success: true, addedCount: 0 };
+    let result: { success: true; addedCount: number } = { success: true, addedCount: 0 };
     if (newCharacters.length > 0) {
       const importResult = await api.confirm_import_characters(newCharacters);
       if (!importResult.success) {
         return importResult;
       }
-      addedCount = importResult.addedCount || 0;
-      result = importResult;
+      addedCount = importResult.addedCount ?? 0;
+      result = { success: true, addedCount };
     }
 
     if (duplicates.length > 0 && duplicateAction === 'overwrite') {

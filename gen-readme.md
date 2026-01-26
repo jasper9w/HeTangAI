@@ -146,3 +146,24 @@ curl -X POST "http://localhost:8000/v1/chat/completions" \
     "stream": true
   }'
 ```
+
+
+关于输出
+```
+
+data: {"id": "chatcmpl-task_0_125546194334", "object": "chat.completion.chunk", "created": 1769403367, "model": "gemini-2.5-flash-image-landscape", "choices": [{"index": 0, "delta": {"role": null, "content": "[进度 65%]\n"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-task_0_125546194334", "object": "chat.completion.chunk", "created": 1769403368, "model": "gemini-2.5-flash-image-landscape", "choices": [{"index": 0, "delta": {"role": null, "content": "[下载中...]\n"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-task_0_125546194334", "object": "chat.completion.chunk", "created": 1769403369, "model": "gemini-2.5-flash-image-landscape", "choices": [{"index": 0, "delta": {"role": null, "content": "![Generated Image](http://localhost:8000/files/task_0_125546194334)"}, "finish_reason": "stop"}]}
+```
+
+可见，对于生图类任务，如果输出中 content 包含 ![Generated Image](https://example.com/image.jpg) 这种 内容，说明图片生成完成了，直接提取其链接和下载
+
+如果是视频类任务，则格式如 <video src='https://example.com/video.mp4' ...>
+
+即提取方式是
+Examples:
+  - ![Generated Image](https://example.com/image.jpg) -> https://example.com/image.jpg
+  - <video src='https://example.com/video.mp4' ... -> https://example.com/video.mp4
+"""
