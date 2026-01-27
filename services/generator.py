@@ -142,24 +142,11 @@ class GenerationClient:
         self.model = model
         self.timeout = 300.0  # 5 minutes timeout
 
-    def _build_request_url(self, task_type: Optional[str]) -> str:
-        """Append taskType query parameter if provided"""
-        if not task_type:
-            return self.api_url
-
-        parsed = urlparse(self.api_url)
-        query = dict(parse_qsl(parsed.query))
-        query["taskType"] = task_type
-        new_query = urlencode(query)
-        return urlunparse(parsed._replace(query=new_query))
-
     async def generate_image(
         self,
         prompt: str,
         reference_images: Optional[List[Dict[str, str]]] = None,
         count: int = 4,
-        task_type: Optional[str] = None,
-        reference_urls: Optional[List[str]] = None,
     ) -> List[str]:
         """
         Generate images using streaming API
@@ -167,10 +154,8 @@ class GenerationClient:
 
         Args:
             prompt: Text prompt for image generation
-            reference_images: Optional list of reference images (base64 or url)
+            reference_images: Optional list of reference images with base64 data
             count: Number of images to generate (default 4)
-            task_type: Optional task type for API routing
-            reference_urls: Optional list of reference image URLs for metadata
         """
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -178,24 +163,11 @@ class GenerationClient:
         }
 
         # Build message content
-        if reference_images or reference_urls:
-            # Image-to-image with multiple references
+        if reference_images:
+            # Image-to-image with multiple references (base64 only)
             content = [{"type": "text", "text": prompt}]
-            if reference_urls:
-                content.append({
-                    "type": "text",
-                    "text": "参考图URL:\n" + "\n".join(reference_urls),
-                })
 
-            for img_item in reference_images or []:
-                url = img_item.get("url", "")
-                if url:
-                    content.append({
-                        "type": "image_url",
-                        "image_url": {"url": url},
-                    })
-                    continue
-
+            for img_item in reference_images:
                 base64_data = img_item.get("base64", "")
                 if base64_data:
                     content.append({
@@ -212,17 +184,14 @@ class GenerationClient:
             "stream": True,
         }
 
-        request_url = self._build_request_url(task_type)
         logger.info(f"Generating {count} images with model: {self.model}")
-        if task_type:
-            logger.info(f"Image task type: {task_type}")
         if reference_images:
             logger.info(f"Using {len(reference_images)} reference images")
 
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 async with client.stream(
-                    "POST", request_url, headers=headers, json=payload
+                    "POST", self.api_url, headers=headers, json=payload
                 ) as response:
                     response.raise_for_status()
 
@@ -284,8 +253,6 @@ class GenerationClient:
         prompt: str,
         reference_image: Optional[str] = None,
         count: int = 4,
-        task_type: Optional[str] = None,
-        reference_urls: Optional[List[str]] = None,
     ) -> List[str]:
         """
         Backward compatibility method for single reference image
@@ -293,9 +260,7 @@ class GenerationClient:
         reference_images = None
         if reference_image:
             reference_images = [{"base64": reference_image}]
-        return await self.generate_image(
-            prompt, reference_images, count, task_type=task_type, reference_urls=reference_urls
-        )
+        return await self.generate_image(prompt, reference_images, count)
 
     async def generate_video(
         self, prompt: str, image_paths: Optional[List[str]] = None

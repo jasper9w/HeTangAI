@@ -797,7 +797,7 @@ class Api:
                             model=model_name,
                         )
 
-                        image_urls = asyncio.run(client.generate_image(prompt, count=1, task_type="character"))
+                        image_urls = asyncio.run(client.generate_image(prompt, count=1))
 
                         if not image_urls:
                             raise ValueError("No images generated")
@@ -1003,7 +1003,7 @@ class Api:
                             model=model_name,
                         )
 
-                        image_urls = asyncio.run(client.generate_image(prompt, count=1, task_type="scene"))
+                        image_urls = asyncio.run(client.generate_image(prompt, count=1))
                         if not image_urls:
                             raise ValueError("No images returned from API")
 
@@ -2178,7 +2178,6 @@ class Api:
                             raise ValueError("TTI API not configured in settings")
 
                         reference_images = []
-                        reference_urls = []
                         character_references = []
                         missing_characters = []
 
@@ -2198,15 +2197,7 @@ class Api:
                                         if "?t=" in image_url:
                                             image_url = image_url.split("?t=")[0]
 
-                                        source_url = char.get("imageSourceUrl", "")
-                                        if source_url:
-                                            reference_urls.append(source_url)
-                                            if "mediaGenerationId" in source_url:
-                                                reference_images.append({"url": source_url})
-                                                character_references.append(char_name)
-                                                logger.info(f"Added character reference url: {char_name} -> {source_url}")
-                                                break
-
+                                        # Convert local URL to file path and encode as base64
                                         if image_url.startswith(f"http://127.0.0.1:{self._file_server_port}/"):
                                             local_path = image_url.replace(f"http://127.0.0.1:{self._file_server_port}/", "")
                                             if not local_path.startswith("/"):
@@ -2229,21 +2220,15 @@ class Api:
                                 raise ValueError(f"Missing reference images for characters: {', '.join(missing_characters)}")
 
                         if matched_scene:
-                            scene_source_url = matched_scene.get("imageSourceUrl", "")
                             scene_image_url = matched_scene.get("imageUrl", "")
-                            if scene_source_url:
-                                reference_urls.append(scene_source_url)
-                                if "mediaGenerationId" in scene_source_url:
-                                    reference_images.append({"url": scene_source_url})
-                                    logger.info(f"Added scene reference url: {matched_scene.get('name', '')} -> {scene_source_url}")
-                            elif scene_image_url.startswith(f"http://127.0.0.1:{self._file_server_port}/"):
+                            if scene_image_url.startswith(f"http://127.0.0.1:{self._file_server_port}/"):
                                 local_path = scene_image_url.replace(f"http://127.0.0.1:{self._file_server_port}/", "")
                                 if not local_path.startswith("/"):
                                     local_path = str(Path.cwd() / local_path)
                                 if Path(local_path).exists():
                                     reference_image_data = compress_image_if_needed(local_path, max_size_kb=256)
                                     reference_images.append({"base64": reference_image_data})
-                                    logger.info(f"Added scene reference local: {local_path}")
+                                    logger.info(f"Added scene reference: {matched_scene.get('name', '')} -> {local_path}")
                                 else:
                                     logger.warning(f"Scene image file not found: {local_path}")
                             else:
@@ -2294,12 +2279,10 @@ class Api:
                                 enhanced_prompt,
                                 reference_images=reference_images,
                                 count=4,
-                                task_type="scene",
-                                reference_urls=reference_urls,
                             ))
                         else:
                             logger.info("No character references found, using text-to-image generation")
-                            image_urls = asyncio.run(client.generate_image(prompt_with_prefix, count=4, task_type="shot"))
+                            image_urls = asyncio.run(client.generate_image(prompt_with_prefix, count=4))
 
                         if not image_urls:
                             raise ValueError("No images generated")
@@ -3862,7 +3845,7 @@ class Api:
                     model=model_name,
                 )
 
-                image_urls = asyncio.run(client.generate_image(prompt, count=1, task_type="scene"))
+                image_urls = asyncio.run(client.generate_image(prompt, count=1))
                 if not image_urls:
                     return {"success": False, "error": "No images returned from API"}
 
@@ -3995,7 +3978,7 @@ class Api:
                     model=model_name,
                 )
 
-                image_urls = asyncio.run(client.generate_image(full_prompt, count=1, task_type="scene"))
+                image_urls = asyncio.run(client.generate_image(full_prompt, count=1))
                 if not image_urls:
                     return {"success": False, "error": "No images returned from API"}
 
