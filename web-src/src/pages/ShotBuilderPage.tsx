@@ -1,8 +1,8 @@
 /**
  * ShotBuilderPage - Storyboard builder page
  */
-import { useEffect, useState, useRef, useCallback } from 'react';
-import { Save, Play, Loader2, FileText, ChevronDown, RefreshCw } from 'lucide-react';
+import { useEffect, useState, useRef } from 'react';
+import { Play, Loader2, X } from 'lucide-react';
 import { useApi } from '../hooks/useApi';
 import type { ShotBuilderPrompts, ShotBuilderOutputs } from '../types';
 import type { ToastType } from '../components/ui/Toast';
@@ -31,14 +31,12 @@ export function ShotBuilderPage({ projectName, showToast }: ShotBuilderPageProps
   const [outputs, setOutputs] = useState<ShotBuilderOutputs>(emptyOutputs);
   const [outputDir, setOutputDir] = useState('');
   const [isLoading, setIsLoading] = useState(true);
-  const [isSavingPrompts, setIsSavingPrompts] = useState(false);
-  const [isSavingNovel, setIsSavingNovel] = useState(false);
-  const [isSavingOutputs, setIsSavingOutputs] = useState(false);
   const [isRunning, setIsRunning] = useState<'role' | 'scene' | 'shot' | null>(null);
-  const [isPromptsOpen, setIsPromptsOpen] = useState(false);
-  const [activeOutputTab, setActiveOutputTab] = useState<'role' | 'scene' | 'shot'>('role');
-  const [activePromptTab, setActivePromptTab] = useState<'role' | 'scene' | 'shot'>('role');
-  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [activeTab, setActiveTab] = useState<'novel' | 'role' | 'scene' | 'shot'>('novel');
+  const [promptModalOpen, setPromptModalOpen] = useState(false);
+  const [promptModalStep, setPromptModalStep] = useState<'role' | 'scene' | 'shot'>('role');
+  const [promptDraft, setPromptDraft] = useState('');
+  const [isSavingPromptModal, setIsSavingPromptModal] = useState(false);
   
   // 用于跟踪是否已初始化加载
   const hasLoadedRef = useRef(false);
@@ -46,28 +44,24 @@ export function ShotBuilderPage({ projectName, showToast }: ShotBuilderPageProps
   // 用于跟踪轮询是否应该停止
   const pollingRef = useRef(false);
 
-  // 刷新输出内容的函数
-  const refreshOutputs = useCallback(async () => {
-    if (!api || !projectName) return;
-    setIsRefreshing(true);
-    try {
-      const outputsResult = await api.get_shot_builder_outputs();
-      if (outputsResult.success && outputsResult.outputs) {
-        setOutputs({
-          roles: outputsResult.outputs.roles || '',
-          scenes: outputsResult.outputs.scenes || '',
-          shots: outputsResult.outputs.shots || '',
-        });
-        if (outputsResult.outputs.outputDir) {
-          setOutputDir(outputsResult.outputs.outputDir);
-        }
-      }
-    } catch (error) {
-      console.error('Failed to refresh outputs:', error);
-    } finally {
-      setIsRefreshing(false);
-    }
-  }, [api, projectName]);
+  const outputsRef = useRef(outputs);
+  const novelRef = useRef(novelText);
+  const promptsRef = useRef(prompts);
+  const promptOriginalRef = useRef<ShotBuilderPrompts | null>(null);
+  const outputSaveTimersRef = useRef<{
+    roles?: ReturnType<typeof setTimeout>;
+    scenes?: ReturnType<typeof setTimeout>;
+    shots?: ReturnType<typeof setTimeout>;
+  }>({});
+  const promptSaveTimersRef = useRef<{
+    role?: ReturnType<typeof setTimeout>;
+    scene?: ReturnType<typeof setTimeout>;
+    shot?: ReturnType<typeof setTimeout>;
+  }>({});
+  const novelSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dirtyOutputsRef = useRef({ roles: false, scenes: false, shots: false });
+  const dirtyPromptsRef = useRef({ role: false, scene: false, shot: false });
+  const dirtyNovelRef = useRef(false);
 
   // 初始加载 - 只在组件挂载或项目变化时执行一次
   useEffect(() => {
@@ -143,13 +137,14 @@ export function ShotBuilderPage({ projectName, showToast }: ShotBuilderPageProps
         if (!pollingRef.current) return;
 
         if (outputsResult.success && outputsResult.outputs) {
-          setOutputs({
-            roles: outputsResult.outputs.roles || '',
-            scenes: outputsResult.outputs.scenes || '',
-            shots: outputsResult.outputs.shots || '',
-          });
-          if (outputsResult.outputs.outputDir) {
-            setOutputDir(outputsResult.outputs.outputDir);
+          const nextOutputs = outputsResult.outputs;
+          setOutputs((prev) => ({
+            roles: dirtyOutputsRef.current.roles ? prev.roles : nextOutputs.roles || '',
+            scenes: dirtyOutputsRef.current.scenes ? prev.scenes : nextOutputs.scenes || '',
+            shots: dirtyOutputsRef.current.shots ? prev.shots : nextOutputs.shots || '',
+          }));
+          if (nextOutputs.outputDir) {
+            setOutputDir(nextOutputs.outputDir);
           }
         }
 
@@ -190,68 +185,129 @@ export function ShotBuilderPage({ projectName, showToast }: ShotBuilderPageProps
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [api, projectName, isRunning]);
 
-  const handleSavePrompts = async () => {
+  useEffect(() => {
+    outputsRef.current = outputs;
+  }, [outputs]);
+
+  useEffect(() => {
+    novelRef.current = novelText;
+  }, [novelText]);
+
+  useEffect(() => {
+    promptsRef.current = prompts;
+  }, [prompts]);
+
+  const scheduleSaveOutputs = (field: 'roles' | 'scenes' | 'shots') => {
+    if (!api || !projectName) return;
+    dirtyOutputsRef.current[field] = true;
+    if (outputSaveTimersRef.current[field]) {
+      clearTimeout(outputSaveTimersRef.current[field]);
+    }
+    outputSaveTimersRef.current[field] = setTimeout(async () => {
+      try {
+        const result = await api.save_shot_builder_outputs(outputsRef.current);
+        if (!result.success) {
+          showToast('error', result.error || '自动保存失败');
+        } else {
+          if (result.outputDir) {
+            setOutputDir(result.outputDir);
+          }
+          dirtyOutputsRef.current[field] = false;
+        }
+      } catch (error) {
+        console.error('Failed to auto save outputs:', error);
+        showToast('error', '自动保存失败');
+      }
+    }, 1000);
+  };
+
+  const scheduleSaveNovel = () => {
+    if (!api || !projectName) return;
+    dirtyNovelRef.current = true;
+    if (novelSaveTimerRef.current) {
+      clearTimeout(novelSaveTimerRef.current);
+    }
+    novelSaveTimerRef.current = setTimeout(async () => {
+      try {
+        const result = await api.save_shot_builder_novel(novelRef.current);
+        if (!result.success) {
+          showToast('error', result.error || '自动保存失败');
+        } else {
+          dirtyNovelRef.current = false;
+        }
+      } catch (error) {
+        console.error('Failed to auto save novel:', error);
+        showToast('error', '自动保存失败');
+      }
+    }, 1000);
+  };
+
+  const scheduleSavePrompts = (step: 'role' | 'scene' | 'shot') => {
     if (!api) return;
-    setIsSavingPrompts(true);
+    dirtyPromptsRef.current[step] = true;
+    if (promptSaveTimersRef.current[step]) {
+      clearTimeout(promptSaveTimersRef.current[step]);
+    }
+    promptSaveTimersRef.current[step] = setTimeout(async () => {
+      try {
+        const result = await api.save_shot_builder_prompts(promptsRef.current);
+        if (!result.success) {
+          showToast('error', result.error || '自动保存失败');
+        } else {
+          dirtyPromptsRef.current[step] = false;
+        }
+      } catch (error) {
+        console.error('Failed to auto save prompts:', error);
+        showToast('error', '自动保存失败');
+      }
+    }, 1000);
+  };
+
+  const openPromptModal = (step: 'role' | 'scene' | 'shot') => {
+    setPromptModalStep(step);
+    setPromptDraft(promptsRef.current[step] || '');
+    promptOriginalRef.current = { ...promptsRef.current };
+    setPromptModalOpen(true);
+  };
+
+  const handlePromptChange = (value: string) => {
+    setPromptDraft(value);
+    setPrompts((prev) => ({
+      ...prev,
+      [promptModalStep]: value,
+    }));
+    scheduleSavePrompts(promptModalStep);
+  };
+
+  const handlePromptCancel = () => {
+    if (promptOriginalRef.current) {
+      setPrompts(promptOriginalRef.current);
+      setPromptDraft(promptOriginalRef.current[promptModalStep] || '');
+    }
+    if (promptSaveTimersRef.current[promptModalStep]) {
+      clearTimeout(promptSaveTimersRef.current[promptModalStep]);
+    }
+    dirtyPromptsRef.current[promptModalStep] = false;
+    setPromptModalOpen(false);
+  };
+
+  const handlePromptSave = async () => {
+    if (!api) return;
+    setIsSavingPromptModal(true);
     try {
-      const result = await api.save_shot_builder_prompts(prompts);
-      if (result.success) {
-        showToast('success', '提示词已保存');
-      } else {
+      const result = await api.save_shot_builder_prompts(promptsRef.current);
+      if (!result.success) {
         showToast('error', result.error || '保存提示词失败');
+      } else {
+        showToast('success', '提示词已保存');
+        dirtyPromptsRef.current[promptModalStep] = false;
+        setPromptModalOpen(false);
       }
     } catch (error) {
       console.error('Failed to save prompts:', error);
       showToast('error', '保存提示词失败');
     } finally {
-      setIsSavingPrompts(false);
-    }
-  };
-
-  const handleSaveNovel = async () => {
-    if (!api) return;
-    if (!projectName) {
-      showToast('error', '请先打开项目');
-      return;
-    }
-    setIsSavingNovel(true);
-    try {
-      const result = await api.save_shot_builder_novel(novelText);
-      if (result.success) {
-        showToast('success', '小说文本已保存');
-      } else {
-        showToast('error', result.error || '保存小说文本失败');
-      }
-    } catch (error) {
-      console.error('Failed to save novel text:', error);
-      showToast('error', '保存小说文本失败');
-    } finally {
-      setIsSavingNovel(false);
-    }
-  };
-
-  const handleSaveOutputs = async () => {
-    if (!api) return;
-    if (!projectName) {
-      showToast('error', '请先打开项目');
-      return;
-    }
-    setIsSavingOutputs(true);
-    try {
-      const result = await api.save_shot_builder_outputs(outputs);
-      if (result.success) {
-        if (result.outputDir) {
-          setOutputDir(result.outputDir);
-        }
-        showToast('success', '生成内容已保存');
-      } else {
-        showToast('error', result.error || '保存生成内容失败');
-      }
-    } catch (error) {
-      console.error('Failed to save outputs:', error);
-      showToast('error', '保存生成内容失败');
-    } finally {
-      setIsSavingOutputs(false);
+      setIsSavingPromptModal(false);
     }
   };
 
@@ -295,210 +351,152 @@ export function ShotBuilderPage({ projectName, showToast }: ShotBuilderPageProps
 
   return (
     <div className="h-full p-4 overflow-y-auto space-y-4">
-      <div className="bg-slate-800 rounded-lg border border-slate-700 p-3">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <FileText className="w-4 h-4 text-slate-300" />
-            <h3 className="text-sm font-medium text-slate-100">生成内容（可编辑）</h3>
+      <div className="flex space-x-1 bg-slate-800 p-1 rounded-lg">
+        {([
+          { id: 'novel', label: '小说' },
+          { id: 'role', label: '角色' },
+          { id: 'scene', label: '场景' },
+          { id: 'shot', label: '分镜' },
+        ] as const).map((tab) => {
+          const isActive = activeTab === tab.id;
+          return (
             <button
-              onClick={refreshOutputs}
-              disabled={isRefreshing || !projectName}
-              className="flex items-center gap-1 px-2 py-1 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 rounded text-xs text-slate-300 transition-colors"
-              title="刷新内容"
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex-1 px-3 py-2 rounded-md text-sm transition-colors ${
+                isActive ? 'bg-violet-600 text-white' : 'text-slate-300 hover:text-white hover:bg-slate-700'
+              }`}
             >
-              <RefreshCw className={`w-3 h-3 ${isRefreshing ? 'animate-spin' : ''}`} />
-              刷新
+              {tab.label}
             </button>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => handleRunStep(activeOutputTab)}
-              disabled={isRunning !== null || !projectName}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-white transition-colors ${
-                activeOutputTab === 'role'
-                  ? 'bg-violet-600 hover:bg-violet-500'
-                  : activeOutputTab === 'scene'
-                    ? 'bg-blue-600 hover:bg-blue-500'
-                    : 'bg-emerald-600 hover:bg-emerald-500'
-              } disabled:opacity-50`}
-            >
-              {isRunning === activeOutputTab ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-              {activeOutputTab === 'role' ? '生成角色' : activeOutputTab === 'scene' ? '生成场景' : '生成分镜'}
-            </button>
-            <button
-              onClick={handleSaveOutputs}
-              disabled={isSavingOutputs || !projectName}
-              className="flex items-center gap-2 px-3 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 rounded-lg text-xs text-white transition-colors"
-            >
-              {isSavingOutputs ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-              保存内容
-            </button>
-          </div>
-        </div>
-        <div className="text-xs text-slate-400 mb-2">
-          保存位置：{outputDir ? `${outputDir}/roles.jsonl | scenes.jsonl | shots.jsonl` : '请先打开项目'}
-        </div>
-        <div className="flex space-x-1 mb-3 bg-slate-700 p-1 rounded-lg">
-          {(['role', 'scene', 'shot'] as const).map((tab) => {
-            const isActive = activeOutputTab === tab;
-            return (
-              <button
-                key={tab}
-                onClick={() => setActiveOutputTab(tab)}
-                className={`flex-1 px-3 py-1.5 rounded-md text-xs transition-colors ${
-                  isActive
-                    ? tab === 'role'
-                      ? 'bg-violet-600 text-white'
-                      : tab === 'scene'
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-emerald-600 text-white'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-600'
-                }`}
-              >
-                {tab === 'role' ? '角色' : tab === 'scene' ? '场景' : '分镜'}
-              </button>
-            );
-          })}
-        </div>
-        {activeOutputTab === 'role' && (
-          <div>
-            <label className="block text-xs text-slate-400 mb-2">角色 JSONL</label>
-            <textarea
-              value={outputs.roles}
-              onChange={(e) => setOutputs({ ...outputs, roles: e.target.value })}
-              className="w-full h-36 px-3 py-2 bg-slate-700 rounded-lg text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
-            />
-          </div>
-        )}
-        {activeOutputTab === 'scene' && (
-          <div>
-            <label className="block text-xs text-slate-400 mb-2">场景 JSONL</label>
-            <textarea
-              value={outputs.scenes}
-              onChange={(e) => setOutputs({ ...outputs, scenes: e.target.value })}
-              className="w-full h-36 px-3 py-2 bg-slate-700 rounded-lg text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
-            />
-          </div>
-        )}
-        {activeOutputTab === 'shot' && (
-          <div>
-            <label className="block text-xs text-slate-400 mb-2">分镜 JSONL</label>
-            <textarea
-              value={outputs.shots}
-              onChange={(e) => setOutputs({ ...outputs, shots: e.target.value })}
-              className="w-full h-40 px-3 py-2 bg-slate-700 rounded-lg text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
-            />
-          </div>
-        )}
+          );
+        })}
       </div>
 
-      <div className="bg-slate-800 rounded-lg border border-slate-700 p-3">
-        <div className="flex items-center gap-2 mb-2">
-          <FileText className="w-4 h-4 text-slate-300" />
-          <h3 className="text-sm font-medium text-slate-100">小说文本</h3>
-        </div>
-        <div className="text-xs text-slate-400 mb-2">
-          保存位置：{outputDir ? `${outputDir}/novel.txt` : '请先打开项目'}
-        </div>
-        <textarea
-          value={novelText}
-          onChange={(e) => setNovelText(e.target.value)}
-          placeholder={projectName ? '请粘贴小说原文内容' : '请先打开项目'}
-          className="w-full h-40 px-3 py-2 bg-slate-700 rounded-lg text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
-        />
-        <div className="flex justify-end mt-2">
-          <button
-            onClick={handleSaveNovel}
-            disabled={isSavingNovel || !projectName}
-            className="flex items-center gap-2 px-3 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 rounded-lg text-xs text-white transition-colors"
-          >
-            {isSavingNovel ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            保存小说文本
-          </button>
-        </div>
-      </div>
+      <div className="bg-slate-800 rounded-lg border border-slate-700 p-4 space-y-3">
+        {activeTab === 'novel' && (
+          <>
+            <div className="text-xs text-slate-400">
+              保存位置：{outputDir ? `${outputDir}/novel.txt` : '请先打开项目'}
+            </div>
+            <textarea
+              value={novelText}
+              onChange={(e) => {
+                setNovelText(e.target.value);
+                scheduleSaveNovel();
+              }}
+              placeholder={projectName ? '请粘贴小说原文内容' : '请先打开项目'}
+              className="w-full h-[60vh] px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
+            />
+          </>
+        )}
 
-      <div className="bg-slate-800 rounded-lg border border-slate-700 p-3">
-        <button
-          onClick={() => setIsPromptsOpen((prev) => !prev)}
-          className="w-full flex items-center justify-between text-left"
-        >
-          <div className="flex items-center gap-2">
-            <FileText className="w-4 h-4 text-slate-400" />
-            <span className="text-xs text-slate-300">基础提示词（可折叠）</span>
-          </div>
-          <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isPromptsOpen ? 'rotate-180' : ''}`} />
-        </button>
-        {isPromptsOpen && (
-          <div className="mt-3">
-            <div className="flex items-center justify-between mb-3">
+        {activeTab !== 'novel' && (
+          <>
+            <div className="flex items-center justify-between gap-2">
               <div className="text-xs text-slate-400">
-                保存位置：~/.hetangai/prompts/role.txt | scene.txt | shot.txt
+                保存位置：
+                {outputDir
+                  ? `${outputDir}/${activeTab === 'role' ? 'roles' : activeTab === 'scene' ? 'scenes' : 'shots'}.jsonl`
+                  : '请先打开项目'}
               </div>
-              <button
-                onClick={handleSavePrompts}
-                disabled={isSavingPrompts}
-                className="flex items-center gap-2 px-3 py-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 rounded-lg text-xs text-white transition-colors"
-              >
-                {isSavingPrompts ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                保存提示词
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleRunStep(activeTab)}
+                  disabled={isRunning !== null || !projectName}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-white transition-colors ${
+                    activeTab === 'role'
+                      ? 'bg-violet-600 hover:bg-violet-500'
+                      : activeTab === 'scene'
+                        ? 'bg-blue-600 hover:bg-blue-500'
+                        : 'bg-emerald-600 hover:bg-emerald-500'
+                  } disabled:opacity-50`}
+                >
+                  {isRunning === activeTab ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+                  {activeTab === 'role' ? '生成角色' : activeTab === 'scene' ? '生成场景' : '生成分镜'}
+                </button>
+                <button
+                  onClick={() => openPromptModal(activeTab)}
+                  className="px-3 py-2 rounded-lg text-xs text-slate-200 bg-slate-700 hover:bg-slate-600 transition-colors"
+                >
+                  查看系统提示词
+                </button>
+              </div>
             </div>
-            <div className="flex space-x-1 mb-3 bg-slate-700 p-1 rounded-lg">
-              {(['role', 'scene', 'shot'] as const).map((tab) => {
-                const isActive = activePromptTab === tab;
-                return (
-                  <button
-                    key={tab}
-                    onClick={() => setActivePromptTab(tab)}
-                    className={`flex-1 px-3 py-1.5 rounded-md text-xs transition-colors ${
-                      isActive
-                        ? tab === 'role'
-                          ? 'bg-violet-600 text-white'
-                          : tab === 'scene'
-                            ? 'bg-blue-600 text-white'
-                            : 'bg-emerald-600 text-white'
-                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-600'
-                    }`}
-                  >
-                    {tab === 'role' ? '角色' : tab === 'scene' ? '场景' : '分镜'}
-                  </button>
-                );
-              })}
-            </div>
-            {activePromptTab === 'role' && (
-              <div>
-                <label className="block text-xs text-slate-400 mb-2">角色提示词</label>
-                <textarea
-                  value={prompts.role}
-                  onChange={(e) => setPrompts({ ...prompts, role: e.target.value })}
-                  className="w-full h-32 px-3 py-2 bg-slate-700 rounded-lg text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500 resize-none"
-                />
-              </div>
+
+            {activeTab === 'role' && (
+              <textarea
+                value={outputs.roles}
+                onChange={(e) => {
+                  setOutputs((prev) => ({ ...prev, roles: e.target.value }));
+                  scheduleSaveOutputs('roles');
+                }}
+                className="w-full h-[60vh] px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
+              />
             )}
-            {activePromptTab === 'scene' && (
-              <div>
-                <label className="block text-xs text-slate-400 mb-2">场景提示词</label>
-                <textarea
-                  value={prompts.scene}
-                  onChange={(e) => setPrompts({ ...prompts, scene: e.target.value })}
-                  className="w-full h-32 px-3 py-2 bg-slate-700 rounded-lg text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500 resize-none"
-                />
-              </div>
+            {activeTab === 'scene' && (
+              <textarea
+                value={outputs.scenes}
+                onChange={(e) => {
+                  setOutputs((prev) => ({ ...prev, scenes: e.target.value }));
+                  scheduleSaveOutputs('scenes');
+                }}
+                className="w-full h-[60vh] px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
+              />
             )}
-            {activePromptTab === 'shot' && (
-              <div>
-                <label className="block text-xs text-slate-400 mb-2">分镜提示词</label>
-                <textarea
-                  value={prompts.shot}
-                  onChange={(e) => setPrompts({ ...prompts, shot: e.target.value })}
-                  className="w-full h-32 px-3 py-2 bg-slate-700 rounded-lg text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500 resize-none"
-                />
-              </div>
+            {activeTab === 'shot' && (
+              <textarea
+                value={outputs.shots}
+                onChange={(e) => {
+                  setOutputs((prev) => ({ ...prev, shots: e.target.value }));
+                  scheduleSaveOutputs('shots');
+                }}
+                className="w-full h-[60vh] px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
+              />
             )}
-          </div>
+          </>
         )}
       </div>
+
+      {promptModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-3xl bg-slate-800 border border-slate-700 rounded-lg shadow-xl">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700">
+              <h3 className="text-sm font-medium text-slate-100">
+                {promptModalStep === 'role' ? '角色' : promptModalStep === 'scene' ? '场景' : '分镜'}系统提示词
+              </h3>
+              <button
+                onClick={handlePromptCancel}
+                className="p-1 text-slate-400 hover:text-slate-200 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-4">
+              <textarea
+                value={promptDraft}
+                onChange={(e) => handlePromptChange(e.target.value)}
+                className="w-full h-[60vh] px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500 resize-none"
+              />
+              <div className="flex justify-end gap-2 mt-4">
+                <button
+                  onClick={handlePromptCancel}
+                  className="px-4 py-2 rounded-lg text-xs text-slate-200 bg-slate-700 hover:bg-slate-600 transition-colors"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={handlePromptSave}
+                  disabled={isSavingPromptModal}
+                  className="px-4 py-2 rounded-lg text-xs text-white bg-violet-600 hover:bg-violet-500 disabled:opacity-50 transition-colors"
+                >
+                  {isSavingPromptModal ? '保存中...' : '保存'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
