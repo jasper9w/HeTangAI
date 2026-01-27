@@ -9,6 +9,7 @@ interface ShotsPageProps {
   shots: Shot[];
   characters: Character[];
   scenes: Scene[];
+  aspectRatio?: '16:9' | '9:16' | '1:1';
   selectedIds: string[];
   onSelectShot: (id: string, selected: boolean) => void;
   onSelectAll: (selected: boolean) => void;
@@ -33,6 +34,7 @@ export function ShotsPage({
   shots,
   characters,
   scenes,
+  aspectRatio = '16:9',
   selectedIds,
   onSelectShot,
   onSelectAll,
@@ -63,6 +65,7 @@ export function ShotsPage({
           shots={shots}
           characters={characters}
           scenes={scenes}
+          aspectRatio={aspectRatio}
           selectedIds={selectedIds}
           onSelectShot={onSelectShot}
           onSelectAll={onSelectAll}

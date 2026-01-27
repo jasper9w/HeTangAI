@@ -82,6 +82,7 @@ interface ShotTableProps {
   shots: Shot[];
   characters: Character[];
   scenes: Scene[];
+  aspectRatio?: '16:9' | '9:16' | '1:1';
   selectedIds: string[];
   onSelectShot: (id: string, selected: boolean) => void;
   onSelectAll: (selected: boolean) => void;
@@ -102,6 +103,7 @@ export function ShotTable({
   shots,
   characters,
   scenes,
+  aspectRatio = '16:9',
   selectedIds,
   onSelectShot,
   onSelectAll,
@@ -117,6 +119,12 @@ export function ShotTable({
   onFilterChange,
   onInsertShot,
 }: ShotTableProps) {
+  // 根据 aspectRatio 决定布局方向：横屏上下排列，竖屏/方形左右排列
+  const isVerticalLayout = aspectRatio === '16:9';
+  // 根据 aspectRatio 返回对应的 CSS aspect class
+  const previewAspect = aspectRatio === '9:16' ? 'aspect-[9/16]' 
+                      : aspectRatio === '1:1' ? 'aspect-square' 
+                      : 'aspect-video';
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [previewVideo, setPreviewVideo] = useState<{ url: string; title: string } | null>(null);
   const [isSceneModalOpen, setIsSceneModalOpen] = useState(false);
@@ -344,7 +352,7 @@ export function ShotTable({
           </div>
 
           {/* 配音列 */}
-          <div className="w-84">  {/* 增加宽度以容纳对话列表 */}
+          <div className="w-44">
             <ColumnHeaderFilter
               title="配音"
               hasActiveFilter={!!filters.script.value || filters.script.inverted}
@@ -525,6 +533,8 @@ export function ShotTable({
                       scene={shot.scene ? (sceneByName.get(shot.scene.trim()) || null) : null}
                       isSelected={selectedIds.includes(shot.id)}
                       isPlayingAudio={playingAudioId === shot.id}
+                      isVerticalLayout={isVerticalLayout}
+                      previewAspect={previewAspect}
                       onOpenSceneModal={openSceneModal}
                       onSelect={(selected) => onSelectShot(shot.id, selected)}
                       onGenerateImages={() => onGenerateImages(shot.id)}
@@ -674,6 +684,8 @@ interface ShotRowProps {
   scene: Scene | null;
   isSelected: boolean;
   isPlayingAudio: boolean;
+  isVerticalLayout: boolean;  // 横屏时上下排列
+  previewAspect: string;      // 预览图的 aspect class
   onOpenSceneModal: (shotId: string, sceneName: string) => void;
   onSelect: (selected: boolean) => void;
   onGenerateImages: () => void;
@@ -770,6 +782,8 @@ function ShotRow({
   scene,
   isSelected,
   isPlayingAudio,
+  isVerticalLayout,
+  previewAspect,
   onOpenSceneModal,
   onSelect,
   onGenerateImages,
@@ -815,7 +829,7 @@ function ShotRow({
         </div>
 
         {/* 配音列 - 高亮文本框 */}
-        <div className="w-80 flex-shrink-0 relative h-[180px]">
+        <div className="w-44 flex-shrink-0 relative h-[180px]">
           <div className="h-[180px] space-y-2 overflow-y-auto relative">
             <HighlightedTextArea
               className="w-full h-full bg-slate-700/50 rounded pr-10 pb-8"
@@ -922,11 +936,11 @@ function ShotRow({
           </div>
         </div>
 
-        {/* 场景列 */}
+        {/* 场景列 - 固定尺寸，图片自适应 */}
         <div className="flex-shrink-0">
           <div
             className={`relative w-[101px] h-[180px] rounded-lg overflow-hidden ${
-              scene?.imageUrl ? 'bg-slate-700 cursor-pointer group' : 'bg-slate-700/50'
+              scene?.imageUrl ? 'bg-slate-800 cursor-pointer group' : 'bg-slate-700/50'
             }`}
             onClick={() => scene?.imageUrl && onPreviewImage(scene.imageUrl)}
             title={scene?.imageUrl ? '预览场景图' : '暂无场景图'}
@@ -936,7 +950,7 @@ function ShotRow({
                 <img
                   src={scene.imageUrl}
                   alt={sceneName || scene.name}
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-contain"
                 />
                 <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                   <ZoomIn className="w-6 h-6 text-white" />
@@ -994,14 +1008,14 @@ function ShotRow({
         </div>
 
 
-        {/* Image Preview & Selection - 左右结构，整体宽高比18:16 */}
+        {/* Image Preview & Selection - 根据比例决定布局方向 */}
         <div className="flex-shrink-0 relative">
-          <div className="flex gap-1.5 h-[180px]">
-            {/* Main preview - 左侧，9:16 */}
+          <div className={`${isVerticalLayout ? 'flex flex-col gap-1.5 w-[180px]' : 'flex gap-1.5 h-[180px]'}`}>
+            {/* Main preview - 按比例显示 */}
             <div
-              className={`relative w-[101px] h-full rounded-lg overflow-hidden cursor-pointer group ${
+              className={`relative rounded-lg overflow-hidden cursor-pointer group ${
                 hasImages ? 'bg-slate-700' : 'bg-slate-700/50'
-              }`}
+              } ${isVerticalLayout ? `w-full ${previewAspect}` : `h-full ${previewAspect}`}`}
               onClick={() => selectedImage && onPreviewImage(selectedImage)}
             >
               {hasImages ? (
@@ -1022,18 +1036,18 @@ function ShotRow({
                 </div>
               )}
             </div>
-            {/* Thumbnails - 2x2 grid layout，右侧也是9:16 */}
-            <div className="grid grid-cols-2 grid-rows-2 gap-1 w-[101px]">
+            {/* Thumbnails - 2x2 grid layout */}
+            <div className={`grid grid-cols-2 grid-rows-2 gap-1 ${isVerticalLayout ? 'w-full h-[72px]' : 'w-[101px]'}`}>
               {[0, 1, 2, 3].map((idx) => {
                 const img = shot.images[idx];
                 return img ? (
                   <div
                     key={idx}
-                    className={`relative rounded overflow-hidden transition-all bg-slate-800 flex items-center justify-center aspect-[9/16] group cursor-pointer ${
+                    className={`relative rounded overflow-hidden transition-all bg-slate-800 flex items-center justify-center group cursor-pointer ${
                       idx === shot.selectedImageIndex
                         ? 'ring-2 ring-violet-500'
                         : 'ring-1 ring-slate-600 hover:ring-slate-500'
-                    }`}
+                    } ${isVerticalLayout ? '' : previewAspect}`}
                     onClick={() => onSelectImage(idx)}
                   >
                     <img src={img} alt={`选项 ${idx + 1}`} className="object-cover w-full h-full" />
@@ -1057,7 +1071,7 @@ function ShotRow({
                 ) : (
                   <div
                     key={idx}
-                    className="rounded bg-slate-700/50 flex items-center justify-center text-slate-500 text-[10px] aspect-[9/16]"
+                    className={`rounded bg-slate-700/50 flex items-center justify-center text-slate-500 text-[10px] ${isVerticalLayout ? '' : previewAspect}`}
                   >
                     {idx + 1}
                   </div>
@@ -1097,13 +1111,15 @@ function ShotRow({
           </button>
         </div>
 
-        {/* Video Preview - 左右结构，整体宽高比18:16 */}
+        {/* Video Preview - 根据比例决定布局方向 */}
         <div className="flex-shrink-0 relative">
           {hasVideo ? (
-            <div className="flex gap-1.5 h-[180px]">
-              {/* Main video preview - 左侧，9:16 */}
+            <div className={`${isVerticalLayout ? 'flex flex-col gap-1.5 w-[180px]' : 'flex gap-1.5 h-[180px]'}`}>
+              {/* Main video preview - 按比例显示 */}
               <div
-                className="relative w-[101px] h-full rounded-lg overflow-hidden bg-slate-700 cursor-pointer group"
+                className={`relative rounded-lg overflow-hidden bg-slate-700 cursor-pointer group ${
+                  isVerticalLayout ? `w-full ${previewAspect}` : `h-full ${previewAspect}`
+                }`}
                 onClick={() => selectedVideo && onPreviewVideo(selectedVideo, `镜头 #${shot.sequence} 视频`)}
               >
                 {selectedVideo && (
@@ -1125,18 +1141,18 @@ function ShotRow({
                   </>
                 )}
               </div>
-              {/* Thumbnails - 2x2 grid layout，右侧也是9:16 */}
-              <div className="grid grid-cols-2 grid-rows-2 gap-1 w-[101px]">
+              {/* Thumbnails - 2x2 grid layout */}
+              <div className={`grid grid-cols-2 grid-rows-2 gap-1 ${isVerticalLayout ? 'w-full h-[72px]' : 'w-[101px]'}`}>
                 {[0, 1, 2, 3].map((idx) => {
                   const video = shot.videos[idx];
                   return video ? (
                     <div
                       key={idx}
-                      className={`relative rounded overflow-hidden transition-all bg-slate-800 flex items-center justify-center aspect-[9/16] group cursor-pointer ${
+                      className={`relative rounded overflow-hidden transition-all bg-slate-800 flex items-center justify-center group cursor-pointer ${
                         idx === shot.selectedVideoIndex
                           ? 'ring-2 ring-emerald-500'
                           : 'ring-1 ring-slate-600 hover:ring-slate-500'
-                      }`}
+                      } ${isVerticalLayout ? '' : previewAspect}`}
                       onClick={() => onSelectVideo(idx)}
                     >
                       <video
@@ -1170,7 +1186,7 @@ function ShotRow({
                   ) : (
                     <div
                       key={idx}
-                      className="rounded bg-slate-700/50 flex items-center justify-center text-slate-500 text-[10px] aspect-[9/16]"
+                      className={`rounded bg-slate-700/50 flex items-center justify-center text-slate-500 text-[10px] ${isVerticalLayout ? '' : previewAspect}`}
                     >
                       {idx + 1}
                     </div>
@@ -1179,20 +1195,22 @@ function ShotRow({
               </div>
             </div>
           ) : (
-            <div className="flex gap-1.5 h-[180px]">
-              {/* Empty main preview - 左侧，9:16 */}
+            <div className={`${isVerticalLayout ? 'flex flex-col gap-1.5 w-[180px]' : 'flex gap-1.5 h-[180px]'}`}>
+              {/* Empty main preview - 按比例显示 */}
               <div
-                className="relative w-[101px] h-full rounded-lg bg-slate-700/50 flex flex-col items-center justify-center text-slate-500"
+                className={`relative rounded-lg bg-slate-700/50 flex flex-col items-center justify-center text-slate-500 ${
+                  isVerticalLayout ? `w-full ${previewAspect}` : `h-full ${previewAspect}`
+                }`}
               >
                 <Film className="w-6 h-6 mb-1" />
                 <span className="text-[10px]">暂无视频</span>
               </div>
-              {/* Empty thumbnails - 2x2 grid layout，右侧也是9:16 */}
-              <div className="grid grid-cols-2 grid-rows-2 gap-1 w-[101px]">
+              {/* Empty thumbnails - 2x2 grid layout */}
+              <div className={`grid grid-cols-2 grid-rows-2 gap-1 ${isVerticalLayout ? 'w-full h-[72px]' : 'w-[101px]'}`}>
                 {[1, 2, 3, 4].map((num) => (
                   <div
                     key={num}
-                    className="rounded bg-slate-700/50 flex items-center justify-center text-slate-500 text-[10px] aspect-[9/16]"
+                    className={`rounded bg-slate-700/50 flex items-center justify-center text-slate-500 text-[10px] ${isVerticalLayout ? '' : previewAspect}`}
                   >
                     {num}
                   </div>

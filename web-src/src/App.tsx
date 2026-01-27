@@ -1306,6 +1306,7 @@ function App() {
             shots={project?.shots || []}
             characters={project?.characters || []}
             scenes={project?.scenes || []}
+            aspectRatio={project?.settings?.creationParams?.aspectRatio || '16:9'}
             selectedIds={selectedShotIds}
             onSelectShot={handleSelectShot}
             onSelectAll={handleSelectAllShots}
