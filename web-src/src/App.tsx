@@ -1331,6 +1331,9 @@ function App() {
           <ProjectSettingsPage
             projectName={projectName}
             showToast={showToast}
+            onSettingsChange={(settings) => {
+              setProject((prev) => prev ? { ...prev, settings } : prev);
+            }}
           />
         );
       case 'storyboard':
@@ -1344,6 +1347,7 @@ function App() {
         return (
           <CharactersPage
             characters={project?.characters || []}
+            aspectRatio={project?.settings?.creationParams?.aspectRatio || '16:9'}
             onAddCharacter={handleAddCharacter}
             onUpdateCharacter={handleUpdateCharacter}
             onUpdateCharacterSpeed={handleUpdateCharacterSpeed}
@@ -1365,6 +1369,7 @@ function App() {
         return (
           <ScenesPage
             scenes={project?.scenes || []}
+            aspectRatio={project?.settings?.creationParams?.aspectRatio || '16:9'}
             onAddScene={handleAddScene}
             onUpdateScene={handleUpdateScene}
             onDeleteScene={handleDeleteScene}

@@ -14,8 +14,36 @@ import {
 import { ImagePreviewModal } from '../components/ui/ImagePreviewModal';
 import type { Scene } from '../types';
 
+// 根据 aspectRatio 返回对应的 CSS class
+function getAspectRatioClass(aspectRatio: string): string {
+  switch (aspectRatio) {
+    case '9:16':
+      return 'aspect-[9/16]';
+    case '1:1':
+      return 'aspect-square';
+    default:
+      return 'aspect-video';
+  }
+}
+
+// 根据 aspectRatio 返回 grid 列数 class
+function getGridColsClass(aspectRatio: string): string {
+  switch (aspectRatio) {
+    case '9:16':
+      // 竖屏模式：更多列数让卡片更小
+      return 'grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8';
+    case '1:1':
+      // 方形模式：中等列数
+      return 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6';
+    default:
+      // 横屏模式：较少列数
+      return 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6';
+  }
+}
+
 interface ScenesPageProps {
   scenes: Scene[];
+  aspectRatio?: '16:9' | '9:16' | '1:1';
   onAddScene: (name: string, prompt: string) => void;
   onUpdateScene: (id: string, name: string, prompt: string) => void;
   onDeleteScene: (id: string) => void;
@@ -27,6 +55,7 @@ interface ScenesPageProps {
 
 export function ScenesPage({
   scenes,
+  aspectRatio = '16:9',
   onAddScene,
   onUpdateScene,
   onDeleteScene,
@@ -35,6 +64,8 @@ export function ScenesPage({
   addModalOpen,
   onAddModalOpenChange,
 }: ScenesPageProps) {
+  const aspectClass = getAspectRatioClass(aspectRatio);
+  const gridColsClass = getGridColsClass(aspectRatio);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [sceneToDelete, setSceneToDelete] = useState<Scene | null>(null);
@@ -110,13 +141,13 @@ export function ScenesPage({
   return (
     <div className="h-full p-6 overflow-y-auto">
       {scenes.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <div className={`grid ${gridColsClass} gap-4`}>
           {scenes.map((scene) => (
             <div
               key={scene.id}
               className="bg-slate-800 rounded-lg overflow-hidden border border-slate-700 hover:border-slate-600 transition-colors"
             >
-              <div className="relative aspect-video bg-slate-700 group">
+              <div className={`relative ${aspectClass} bg-slate-700 group`}>
                 {scene.imageUrl ? (
                   <img
                     src={scene.imageUrl}

@@ -8,7 +8,6 @@ import {
   Plus,
   Edit3,
   Trash2,
-  X,
   Loader2,
   Sparkles,
   Upload,
@@ -19,8 +18,36 @@ import { CharacterImportModal } from '../components/character/CharacterImportMod
 import { ImagePreviewModal } from '../components/ui/ImagePreviewModal';
 import type { Character } from '../types';
 
+// 根据 aspectRatio 返回对应的 CSS class
+function getAspectRatioClass(aspectRatio: string): string {
+  switch (aspectRatio) {
+    case '9:16':
+      return 'aspect-[9/16]';
+    case '1:1':
+      return 'aspect-square';
+    default:
+      return 'aspect-video';
+  }
+}
+
+// 根据 aspectRatio 返回 grid 列数 class
+function getGridColsClass(aspectRatio: string): string {
+  switch (aspectRatio) {
+    case '9:16':
+      // 竖屏模式：更多列数让卡片更小
+      return 'grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8';
+    case '1:1':
+      // 方形模式：中等列数
+      return 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6';
+    default:
+      // 横屏模式：较少列数
+      return 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6';
+  }
+}
+
 interface CharactersPageProps {
   characters: Character[];
+  aspectRatio?: '16:9' | '9:16' | '1:1';
   onAddCharacter: (name: string, description: string) => void;
   onUpdateCharacter: (id: string, name: string, description: string) => void;
   onUpdateCharacterSpeed: (id: string, speed: number) => void;
@@ -54,6 +81,7 @@ interface CharactersPageProps {
 
 export function CharactersPage({
   characters,
+  aspectRatio = '16:9',
   onAddCharacter,
   onUpdateCharacter,
   onUpdateCharacterSpeed,
@@ -70,6 +98,8 @@ export function CharactersPage({
   importModalOpen,
   onImportModalOpenChange,
 }: CharactersPageProps) {
+  const aspectClass = getAspectRatioClass(aspectRatio);
+  const gridColsClass = getGridColsClass(aspectRatio);
   const [audioModalOpen, setAudioModalOpen] = useState(false);
   const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(null);
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -163,15 +193,15 @@ export function CharactersPage({
     <div className="h-full p-6 overflow-y-auto">
       {/* Characters Grid */}
       {characters.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <div className={`grid ${gridColsClass} gap-4`}>
           {characters.map((char) => (
             <div
               key={char.id}
               className="bg-slate-800 rounded-lg overflow-hidden border border-slate-700 hover:border-slate-600 transition-colors"
             >
-              {/* Character Image - 16:9 ratio */}
+              {/* Character Image */}
               {!char.isNarrator && (
-                <div className="relative aspect-video bg-slate-700 group">
+                <div className={`relative ${aspectClass} bg-slate-700 group`}>
                   {char.imageUrl ? (
                     <img
                       src={char.imageUrl}
@@ -327,7 +357,7 @@ export function CharactersPage({
 
               {/* Narrator Character - No Image */}
               {char.isNarrator && (
-                <div className="relative aspect-video bg-slate-700 group flex items-center justify-center">
+                <div className={`relative ${aspectClass} bg-slate-700 group flex items-center justify-center`}>
                   <div className="text-center text-slate-400">
                     <Mic className="w-12 h-12 mx-auto mb-2" />
                     <p className="text-sm">旁白角色</p>

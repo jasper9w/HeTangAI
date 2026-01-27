@@ -30,6 +30,7 @@ import type { ToastType } from '../components/ui/Toast';
 interface ProjectSettingsPageProps {
   projectName: string | null;
   showToast: (type: ToastType, message: string, duration?: number) => void;
+  onSettingsChange?: (settings: ProjectSettings) => void;
 }
 
 const defaultSettings: ProjectSettings = {
@@ -62,7 +63,7 @@ const aspectRatioOptions = [
   { value: '1:1', label: '方形 1:1' },
 ];
 
-export function ProjectSettingsPage({ projectName, showToast }: ProjectSettingsPageProps) {
+export function ProjectSettingsPage({ projectName, showToast, onSettingsChange }: ProjectSettingsPageProps) {
   const { api, ready } = useApi();
 
   // State
@@ -178,10 +179,14 @@ export function ProjectSettingsPage({ projectName, showToast }: ProjectSettingsP
   };
 
   const updateAspectRatio = (aspectRatio: '16:9' | '9:16' | '1:1') => {
-    setProjectSettings((prev) => ({
-      ...prev,
-      creationParams: { ...prev.creationParams, aspectRatio },
-    }));
+    setProjectSettings((prev) => {
+      const newSettings = {
+        ...prev,
+        creationParams: { ...prev.creationParams, aspectRatio },
+      };
+      onSettingsChange?.(newSettings);
+      return newSettings;
+    });
     scheduleSaveSettings();
   };
 
