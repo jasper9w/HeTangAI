@@ -1,14 +1,14 @@
 /**
  * Shot Table - Main content area for displaying shots with Excel-style column filters
  */
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Image, Film, Trash2, Loader2, Check, X, ZoomIn, Plus, Play, Pause } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { VideoModal } from '../ui/VideoModal';
 import { useColumnFilter } from './ColumnFilter';
 import { ColumnHeaderFilter, SearchFilter, StatusFilter } from './ExcelColumnFilter';
-import type { Shot, Character } from '../../types';
+import type { Shot, Character, Scene } from '../../types';
 
 // 角色颜色映射 - 使用柔和但可辨识的颜色
 const CHARACTER_COLORS = [
@@ -81,6 +81,7 @@ function highlightCharacterNames(text: string, characters: Character[]): React.R
 interface ShotTableProps {
   shots: Shot[];
   characters: Character[];
+  scenes: Scene[];
   selectedIds: string[];
   onSelectShot: (id: string, selected: boolean) => void;
   onSelectAll: (selected: boolean) => void;
@@ -98,6 +99,7 @@ interface ShotTableProps {
 export function ShotTable({
   shots,
   characters,
+  scenes,
   selectedIds,
   onSelectShot,
   onSelectAll,
@@ -113,10 +115,47 @@ export function ShotTable({
 }: ShotTableProps) {
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [previewVideo, setPreviewVideo] = useState<{ url: string; title: string } | null>(null);
+  const [isSceneModalOpen, setIsSceneModalOpen] = useState(false);
+  const [sceneModalShotId, setSceneModalShotId] = useState<string | null>(null);
+  const [sceneModalShotSceneName, setSceneModalShotSceneName] = useState<string>('');
   const [hoveredShotId, setHoveredShotId] = useState<string | null>(null);
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
   const parentRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const sceneByName = useMemo(() => {
+    const map = new Map<string, Scene>();
+    for (const scene of scenes) {
+      const key = scene.name?.trim();
+      if (!key) continue;
+      map.set(key, scene);
+    }
+    return map;
+  }, [scenes]);
+
+  const openSceneModal = (shotId: string, currentSceneName: string) => {
+    setSceneModalShotId(shotId);
+    setSceneModalShotSceneName(currentSceneName);
+    setIsSceneModalOpen(true);
+  };
+
+  const closeSceneModal = () => {
+    setIsSceneModalOpen(false);
+    setSceneModalShotId(null);
+    setSceneModalShotSceneName('');
+  };
+
+  const handleSelectScene = (scene: Scene) => {
+    if (!sceneModalShotId) return;
+    onUpdateShot(sceneModalShotId, 'scene', scene.name);
+    closeSceneModal();
+  };
+
+  const handleClearScene = () => {
+    if (!sceneModalShotId) return;
+    onUpdateShot(sceneModalShotId, 'scene', '');
+    closeSceneModal();
+  };
 
   // 使用列筛选钩子
   const {
@@ -279,9 +318,9 @@ export function ShotTable({
         </div>
 
         {/* Column headers with filter icons */}
-        <div className="px-4 py-2 flex items-center gap-4">
+        <div className="px-4 py-2 flex items-center gap-4 overflow-x-auto">
           {/* Checkbox column - 全选 */}
-          <div className="w-4">
+          <div className="w-8">
             <input
               type="checkbox"
               checked={
@@ -300,7 +339,6 @@ export function ShotTable({
             />
           </div>
 
-
           {/* 配音列 */}
           <div className="w-84">  {/* 增加宽度以容纳对话列表 */}
             <ColumnHeaderFilter
@@ -313,6 +351,22 @@ export function ShotTable({
                 onChange={(value) => updateFilter('script', { ...filters.script, value })}
                 onInvertedChange={(inverted) => updateFilter('script', { ...filters.script, inverted })}
                 placeholder="搜索配音内容..."
+              />
+            </ColumnHeaderFilter>
+          </div>
+
+          {/* 场景列 */}
+          <div className="w-[101px] flex-shrink-0">
+            <ColumnHeaderFilter
+              title="场景"
+              hasActiveFilter={!!filters.scene.value || filters.scene.inverted}
+            >
+              <SearchFilter
+                value={filters.scene.value}
+                inverted={filters.scene.inverted}
+                onChange={(value) => updateFilter('scene', { ...filters.scene, value })}
+                onInvertedChange={(inverted) => updateFilter('scene', { ...filters.scene, inverted })}
+                placeholder="搜索场景..."
               />
             </ColumnHeaderFilter>
           </div>
@@ -389,7 +443,7 @@ export function ShotTable({
       </div>
 
       {/* Table Content */}
-      <div ref={parentRef} className="flex-1 overflow-y-auto">
+      <div ref={parentRef} className="flex-1 overflow-auto">
         {filteredShots.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-slate-500">
             <Film className="w-16 h-16 mb-4 opacity-30" />
@@ -464,8 +518,10 @@ export function ShotTable({
                     <ShotRow
                       shot={shot}
                       characters={characters}
+                      scene={shot.scene ? (sceneByName.get(shot.scene.trim()) || null) : null}
                       isSelected={selectedIds.includes(shot.id)}
                       isPlayingAudio={playingAudioId === shot.id}
+                      onOpenSceneModal={openSceneModal}
                       onSelect={(selected) => onSelectShot(shot.id, selected)}
                       onGenerateImages={() => onGenerateImages(shot.id)}
                       onGenerateVideo={() => onGenerateVideo(shot.id)}
@@ -502,6 +558,90 @@ export function ShotTable({
           </div>
         )}
       </div>
+
+      {/* Scene Select Modal */}
+      {isSceneModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={closeSceneModal}>
+          <div
+            className="bg-slate-800 rounded-lg p-6 w-full max-w-3xl mx-4 max-h-[80vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-medium text-slate-200">选择场景</h3>
+              <button
+                onClick={closeSceneModal}
+                className="text-slate-400 hover:text-slate-200"
+                title="关闭"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto">
+              {scenes.length === 0 ? (
+                <div className="text-sm text-slate-400 text-center py-10">
+                  暂无场景，请先在场景页创建
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  {scenes.map((scene) => {
+                    const isSelected = scene.name === sceneModalShotSceneName.trim();
+                    return (
+                      <button
+                        key={scene.id}
+                        type="button"
+                        onClick={() => handleSelectScene(scene)}
+                        className={`text-left border rounded-lg overflow-hidden transition-colors ${
+                          isSelected
+                            ? 'border-violet-500 bg-violet-500/10'
+                            : 'border-slate-700 hover:border-slate-600'
+                        }`}
+                      >
+                        <div className="relative aspect-video bg-slate-700">
+                          {scene.imageUrl ? (
+                            <img
+                              src={scene.imageUrl}
+                              alt={scene.name}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-slate-500">
+                              <Image className="w-6 h-6" />
+                            </div>
+                          )}
+                          {isSelected && (
+                            <div className="absolute inset-0 bg-violet-500/20 flex items-center justify-center">
+                              <Check className="w-5 h-5 text-violet-300" />
+                            </div>
+                          )}
+                        </div>
+                        <div className="px-3 py-2 text-sm text-slate-200 truncate">
+                          {scene.name}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2 mt-4">
+              <button
+                onClick={handleClearScene}
+                className="px-4 py-2 bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded text-sm transition-colors"
+              >
+                清空场景
+              </button>
+              <button
+                onClick={closeSceneModal}
+                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded text-sm transition-colors"
+              >
+                取消
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Image Preview Modal */}
       <AnimatePresence>
@@ -554,8 +694,10 @@ export function ShotTable({
 interface ShotRowProps {
   shot: Shot;
   characters: Character[];
+  scene: Scene | null;
   isSelected: boolean;
   isPlayingAudio: boolean;
+  onOpenSceneModal: (shotId: string, sceneName: string) => void;
   onSelect: (selected: boolean) => void;
   onGenerateImages: () => void;
   onGenerateVideo: () => void;
@@ -646,8 +788,10 @@ function HighlightedTextArea({
 function ShotRow({
   shot,
   characters,
+  scene,
   isSelected,
   isPlayingAudio,
+  onOpenSceneModal,
   onSelect,
   onGenerateImages,
   onGenerateVideo,
@@ -665,6 +809,7 @@ function ShotRow({
   const hasAudio = !!shot.audioUrl;
   const selectedImage = hasImages ? shot.images[shot.selectedImageIndex] : null;
   const selectedVideo = hasVideo ? shot.videos[shot.selectedVideoIndex || 0] : null;
+  const sceneName = shot.scene?.trim() || '';
 
   const isGeneratingImages = shot.status === 'generating_images';
   const isGeneratingVideo = shot.status === 'generating_video';
@@ -793,6 +938,47 @@ function ShotRow({
                 )}
               </button>
             </div>
+          </div>
+        </div>
+
+        {/* 场景列 */}
+        <div className="flex-shrink-0">
+          <div
+            className={`relative w-[101px] h-[180px] rounded-lg overflow-hidden ${
+              scene?.imageUrl ? 'bg-slate-700 cursor-pointer group' : 'bg-slate-700/50'
+            }`}
+            onClick={() => scene?.imageUrl && onPreviewImage(scene.imageUrl)}
+            title={scene?.imageUrl ? '预览场景图' : '暂无场景图'}
+          >
+            {scene?.imageUrl ? (
+              <>
+                <img
+                  src={scene.imageUrl}
+                  alt={sceneName || scene.name}
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                  <ZoomIn className="w-6 h-6 text-white" />
+                </div>
+              </>
+            ) : (
+              <div className="w-full h-full flex flex-col items-center justify-center text-slate-500">
+                <Image className="w-6 h-6 mb-1" />
+                <span className="text-[10px]">暂无场景</span>
+              </div>
+            )}
+            {/* 场景名叠加在底部 */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenSceneModal(shot.id, sceneName);
+              }}
+              className="absolute bottom-0 left-0 right-0 bg-black/60 px-2 py-1.5 text-[10px] text-slate-200 truncate text-center hover:bg-black/70 transition-colors"
+              title="选择场景"
+            >
+              {sceneName || '未设置'}
+            </button>
           </div>
         </div>
 

@@ -950,6 +950,7 @@ class Api:
                     image_path = self._project_manager.get_scene_image_path(
                         self.project_name, scene_id
                     )
+                    image_path.parent.mkdir(parents=True, exist_ok=True)
 
                     if provider == "whisk":
                         from services.whisk import Whisk
@@ -1882,6 +1883,15 @@ class Api:
                     prompt_with_prefix = f"{shot_image_prefix} {base_prompt}".strip() if shot_image_prefix else base_prompt
                     current_shot_id = shot["id"]
 
+                    # Resolve scene reference for this shot
+                    scene_name = str(shot.get("scene", "")).strip()
+                    matched_scene = None
+                    if scene_name:
+                        for scene in self.project_data.get("scenes", []):
+                            if scene.get("name") == scene_name:
+                                matched_scene = scene
+                                break
+
                     # Check which slots (1-4) are already occupied
                     existing_slots = []
                     for slot in range(1, 5):
@@ -1935,6 +1945,7 @@ class Api:
 
                         # Collect subject_ids from characters with imageMediaGenerationId
                         subject_ids = []
+                        scene_ids = []
                         missing_characters = []
                         if shot_characters:
                             logger.info(f"Characters found in imagePrompt: {shot_characters}")
@@ -1944,6 +1955,9 @@ class Api:
                                     if char["name"] == char_name:
                                         char_found = True
                                         media_gen_id = char.get("imageMediaGenerationId", "")
+                                        logger.info(
+                                            f"Whisk character reference: name={char_name}, media_generation_id={media_gen_id or 'EMPTY'}"
+                                        )
                                         if media_gen_id:
                                             subject_ids.append(media_gen_id)
                                             logger.info(f"Added character subject_id: {char_name} -> {media_gen_id}")
@@ -1955,18 +1969,28 @@ class Api:
 
                             if missing_characters:
                                 raise ValueError(f"Missing character images (need Whisk media_generation_id) for: {', '.join(missing_characters)}")
+                            logger.info(f"Whisk subject_ids prepared: {len(subject_ids)}")
+
+                        if matched_scene:
+                            scene_media_id = matched_scene.get("imageMediaGenerationId", "")
+                            if scene_media_id:
+                                scene_ids.append(scene_media_id)
+                                logger.info(f"Added scene reference: {matched_scene.get('name', '')} -> {scene_media_id}")
+                            else:
+                                logger.warning("Scene has no imageMediaGenerationId, cannot use as Whisk reference")
 
                         # Generate 1 image using Whisk (user clicks multiple times to accumulate up to 4)
                         slot = slots_to_use[0] if slots_to_use else 1
 
-                        if subject_ids:
+                        if subject_ids or scene_ids:
                             # Use generate_with_references for scene with characters
                             whisk_image = whisk.generate_with_references(
                                 prompt=prompt_with_prefix,
                                 subject_ids=subject_ids,
+                                scene_ids=scene_ids,
                                 aspect_ratio="IMAGE_ASPECT_RATIO_LANDSCAPE"
                             )
-                            logger.info(f"Generated scene image via Whisk with {len(subject_ids)} subject references")
+                            logger.info(f"Generated scene image via Whisk with {len(subject_ids)} subject references and {len(scene_ids)} scene references")
                         else:
                             # Use generate_image for scene without characters
                             whisk_image = whisk.generate_image(
@@ -2043,6 +2067,27 @@ class Api:
 
                             if missing_characters:
                                 raise ValueError(f"Missing reference images for characters: {', '.join(missing_characters)}")
+
+                        if matched_scene:
+                            scene_source_url = matched_scene.get("imageSourceUrl", "")
+                            scene_image_url = matched_scene.get("imageUrl", "")
+                            if scene_source_url:
+                                reference_urls.append(scene_source_url)
+                                if "mediaGenerationId" in scene_source_url:
+                                    reference_images.append({"url": scene_source_url})
+                                    logger.info(f"Added scene reference url: {matched_scene.get('name', '')} -> {scene_source_url}")
+                            elif scene_image_url.startswith(f"http://127.0.0.1:{self._file_server_port}/"):
+                                local_path = scene_image_url.replace(f"http://127.0.0.1:{self._file_server_port}/", "")
+                                if not local_path.startswith("/"):
+                                    local_path = str(Path.cwd() / local_path)
+                                if Path(local_path).exists():
+                                    reference_image_data = compress_image_if_needed(local_path, max_size_kb=256)
+                                    reference_images.append({"base64": reference_image_data})
+                                    logger.info(f"Added scene reference local: {local_path}")
+                                else:
+                                    logger.warning(f"Scene image file not found: {local_path}")
+                            else:
+                                logger.warning("Scene has no usable image for reference")
 
                         has_references = len(reference_images) > 0
                         model_name = (
@@ -2861,6 +2906,10 @@ class Api:
             target_file = output_dir / step_file_map[step]
             if target_file.exists():
                 target_file.unlink()
+            if step == "shot":
+                state_path = output_dir / "session_state.json"
+                if state_path.exists():
+                    state_path.unlink()
 
             novel_text = novel_text.strip()
             if not novel_text:

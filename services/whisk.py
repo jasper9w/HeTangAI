@@ -170,6 +170,9 @@ class Whisk:
             "userInstruction": prompt,
             "recipeMediaInputs": recipe_inputs
         }
+
+        import json
+        print("payload", json.dumps(payload, indent=4, ensure_ascii=False))
         
         response = requests.post(
             f"{self.BASE_URL}/whisk:runImageRecipe",

@@ -8,6 +8,7 @@ import type { Shot, Character } from '../../types';
 interface FilterState {
   sequence: { value: string; inverted: boolean }; // 序号搜索
   voiceActor: { values: string[]; inverted: boolean }; // 配音角色多选
+  scene: { value: string; inverted: boolean }; // 场景名搜索
   script: { value: string; inverted: boolean }; // 文案搜索
   imagePrompt: { value: string; inverted: boolean }; // 图片提示词搜索
   characters: { values: string[]; inverted: boolean }; // 出场角色多选
@@ -25,6 +26,7 @@ export function useColumnFilter({ shots, characters }: UseColumnFilterProps) {
   const [filters, setFilters] = useState<FilterState>({
     sequence: { value: '', inverted: false },
     voiceActor: { values: [], inverted: false },
+    scene: { value: '', inverted: false },
     script: { value: '', inverted: false },
     imagePrompt: { value: '', inverted: false },
     characters: { values: [], inverted: false },
@@ -90,6 +92,15 @@ export function useColumnFilter({ shots, characters }: UseColumnFilterProps) {
       const matches = (shot: Shot) => filters.voiceActor.values.includes(shot.voiceActor);
       filtered = filtered.filter(shot =>
         filters.voiceActor.inverted ? !matches(shot) : matches(shot)
+      );
+    }
+
+    // 场景名搜索
+    if (filters.scene.value.trim()) {
+      const searchTerm = filters.scene.value.toLowerCase();
+      const matches = (shot: Shot) => (shot.scene || '').toLowerCase().includes(searchTerm);
+      filtered = filtered.filter(shot =>
+        filters.scene.inverted ? !matches(shot) : matches(shot)
       );
     }
 
@@ -163,6 +174,7 @@ export function useColumnFilter({ shots, characters }: UseColumnFilterProps) {
     setFilters({
       sequence: { value: '', inverted: false },
       voiceActor: { values: [], inverted: false },
+      scene: { value: '', inverted: false },
       script: { value: '', inverted: false },
       imagePrompt: { value: '', inverted: false },
       characters: { values: [], inverted: false },

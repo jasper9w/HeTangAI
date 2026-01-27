@@ -52,6 +52,7 @@ function App() {
   // Generation state
   const [isGenerating, setIsGenerating] = useState(false);
   const [isGeneratingCharacters, setIsGeneratingCharacters] = useState(false);
+  const [isGeneratingScenes, setIsGeneratingScenes] = useState(false);
   const [generationProgress, setGenerationProgress] = useState<{
     current: number;
     total: number;
@@ -462,6 +463,24 @@ function App() {
     } else if (result.error && result.error !== 'No file selected') {
       showToast('error', `场景图片上传失败: ${result.error}`);
     }
+  };
+
+  const handleGenerateAllSceneImages = async () => {
+    if (!api || !project) return;
+
+    const pendingScenes = (project.scenes || []).filter(
+      (s) => (s.status === 'pending' || !s.imageUrl) && s.prompt.trim()
+    );
+
+    if (pendingScenes.length === 0) return;
+
+    setIsGeneratingScenes(true);
+
+    for (const scene of pendingScenes) {
+      await handleGenerateSceneImage(scene.id);
+    }
+
+    setIsGeneratingScenes(false);
   };
 
   // ========== One-Click Import ==========
@@ -1184,8 +1203,38 @@ function App() {
         );
       }
       case 'scenes':
+        const pendingScenes = (project?.scenes || []).filter(
+          (s) => s.status === 'pending' || !s.imageUrl
+        );
+        const pendingWithPromptCount = pendingScenes.filter((s) => s.prompt?.trim()).length;
+        const missingPromptCount = pendingScenes.length - pendingWithPromptCount;
+
         return (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            {pendingWithPromptCount > 0 && (
+              <button
+                onClick={handleGenerateAllSceneImages}
+                disabled={isGeneratingScenes}
+                className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 rounded-lg text-sm text-white transition-colors"
+              >
+                {isGeneratingScenes ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    生成中...
+                  </>
+                ) : (
+                  <>
+                    <Image className="w-4 h-4" />
+                    生成全部 ({pendingWithPromptCount})
+                  </>
+                )}
+              </button>
+            )}
+            {missingPromptCount > 0 && (
+              <div className="text-xs text-amber-400">
+                {missingPromptCount} 个场景缺少提示词
+              </div>
+            )}
             <button
               onClick={() => handleImportShotBuilder('scenes')}
               className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-200 transition-colors"
@@ -1195,7 +1244,7 @@ function App() {
             </button>
             <button
               onClick={() => setAddSceneModalOpen(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-500 rounded-lg text-sm text-white transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-200 transition-colors"
             >
               <Plus className="w-4 h-4" />
               添加场景
@@ -1223,6 +1272,7 @@ function App() {
           <ShotsPage
             shots={project?.shots || []}
             characters={project?.characters || []}
+            scenes={project?.scenes || []}
             selectedIds={selectedShotIds}
             onSelectShot={handleSelectShot}
             onSelectAll={handleSelectAllShots}

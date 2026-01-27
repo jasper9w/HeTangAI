@@ -3,11 +3,12 @@
  */
 import { ShotTable } from '../components/shot/ShotTable';
 import { BatchGenerateModal } from '../components/shot/BatchGenerateModal';
-import type { Shot, Character } from '../types';
+import type { Shot, Character, Scene } from '../types';
 
 interface ShotsPageProps {
   shots: Shot[];
   characters: Character[];
+  scenes: Scene[];
   selectedIds: string[];
   onSelectShot: (id: string, selected: boolean) => void;
   onSelectAll: (selected: boolean) => void;
@@ -29,6 +30,7 @@ interface ShotsPageProps {
 export function ShotsPage({
   shots,
   characters,
+  scenes,
   selectedIds,
   onSelectShot,
   onSelectAll,
@@ -56,6 +58,7 @@ export function ShotsPage({
         <ShotTable
           shots={shots}
           characters={characters}
+          scenes={scenes}
           selectedIds={selectedIds}
           onSelectShot={onSelectShot}
           onSelectAll={onSelectAll}
