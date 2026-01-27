@@ -16,7 +16,7 @@ const defaultSettings: AppSettings = {
   jianyingDraftDir: '',
   referenceAudioDir: '',
   tts: { apiUrl: 'https://9u7acouw9j7q8f5o-6006.container.x-gpu.com/tts_url', model: 'indextts2', apiKey: '', concurrency: 1 },
-  tti: { provider: 'openai', apiUrl: '', apiKey: '', characterModel: '', sceneModel: '', shotModel: '', whiskToken: '', whiskWorkflowId: '', concurrency: 1 },
+  tti: { provider: 'openai', apiUrl: '', apiKey: '', characterModel: '', sceneModel: '', shotModel: '', whiskToken: '', whiskWorkflowId: '', whiskCookie: '', concurrency: 1 },
   ttv: { provider: 'openai', apiUrl: '', apiKey: '', model: '', whiskToken: '', whiskWorkflowId: '', concurrency: 1 },
   shotBuilder: { apiUrl: '', apiKey: '', model: '' },
 };
@@ -347,6 +347,16 @@ export function SettingsPage({}: SettingsPageProps) {
                     onChange={(e) => updateSetting('tti', 'whiskWorkflowId', e.target.value)}
                     placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
                     className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-slate-400 mb-2">Cookie (用于上传风格图片)</label>
+                  <textarea
+                    value={settings.tti.whiskCookie || ''}
+                    onChange={(e) => updateSetting('tti', 'whiskCookie', e.target.value)}
+                    placeholder="从浏览器开发者工具复制 Cookie..."
+                    rows={3}
+                    className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-violet-500 resize-none"
                   />
                 </div>
               </>

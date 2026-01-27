@@ -1,7 +1,7 @@
 /**
  * ScenesPage - Scene management page
  */
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Image as ImageIcon,
   Plus,
@@ -126,6 +126,29 @@ export function ScenesPage({
   const handleResetZoom = () => {
     setImageScale(1);
   };
+
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    e.preventDefault();
+    if (e.deltaY < 0) {
+      setImageScale(prev => Math.min(prev + 0.1, 3));
+    } else {
+      setImageScale(prev => Math.max(prev - 0.1, 0.25));
+    }
+  }, []);
+
+  // ESC key listener for image viewer
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && imageViewerOpen) {
+        handleCloseImageViewer();
+      }
+    };
+    
+    if (imageViewerOpen) {
+      window.addEventListener('keydown', handleKeyDown);
+      return () => window.removeEventListener('keydown', handleKeyDown);
+    }
+  }, [imageViewerOpen]);
 
   return (
     <div className="h-full p-6 overflow-y-auto">
@@ -356,34 +379,50 @@ export function ScenesPage({
       )}
 
       {imageViewerOpen && viewingImage && (
-        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center">
+        <div
+          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center"
+          onClick={handleCloseImageViewer}
+          onWheel={handleWheel}
+        >
           <div className="absolute top-4 right-4 flex items-center gap-2">
             <button
-              onClick={handleZoomIn}
+              onClick={(e) => { e.stopPropagation(); handleZoomIn(); }}
               className="p-2 bg-slate-800/80 hover:bg-slate-700 text-slate-200 rounded-lg"
+              title="放大 (滚轮向上)"
             >
               <ZoomIn className="w-4 h-4" />
             </button>
             <button
-              onClick={handleZoomOut}
+              onClick={(e) => { e.stopPropagation(); handleZoomOut(); }}
               className="p-2 bg-slate-800/80 hover:bg-slate-700 text-slate-200 rounded-lg"
+              title="缩小 (滚轮向下)"
             >
               <ZoomOut className="w-4 h-4" />
             </button>
             <button
-              onClick={handleResetZoom}
+              onClick={(e) => { e.stopPropagation(); handleResetZoom(); }}
               className="p-2 bg-slate-800/80 hover:bg-slate-700 text-slate-200 rounded-lg"
+              title="重置缩放"
             >
               <RotateCcw className="w-4 h-4" />
             </button>
             <button
               onClick={handleCloseImageViewer}
               className="p-2 bg-slate-800/80 hover:bg-slate-700 text-slate-200 rounded-lg"
+              title="关闭 (Esc)"
             >
               <X className="w-4 h-4" />
             </button>
           </div>
-          <div className="max-w-[90vw] max-h-[90vh] overflow-hidden">
+          {/* Scale indicator */}
+          <div className="absolute bottom-4 left-4 z-10 px-3 py-1 bg-black/50 rounded-full text-white text-sm">
+            {Math.round(imageScale * 100)}%
+          </div>
+          {/* Scene name */}
+          <div className="absolute bottom-4 right-4 z-10 px-3 py-1 bg-black/50 rounded-full text-white text-sm">
+            {viewingImage.name}
+          </div>
+          <div className="max-w-[90vw] max-h-[90vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
             <img
               src={viewingImage.url}
               alt={viewingImage.name}

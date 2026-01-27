@@ -105,6 +105,10 @@ class Api:
     def _url_to_path(self, url: str) -> str:
         """Convert HTTP URL back to local file path"""
         try:
+            # Remove query parameters (e.g., ?t=timestamp)
+            if "?" in url:
+                url = url.split("?")[0]
+
             # Remove the HTTP URL prefix
             prefix = f"http://127.0.0.1:{self._file_server_port}/"
             if url.startswith(prefix):
@@ -723,6 +727,10 @@ class Api:
                     if character_prefix:
                         base_desc = f"{character_prefix} {base_desc}".strip()
 
+                    # Get style info
+                    style_info = self._get_style_info()
+                    style_text = style_info.get("text", "")
+
                     prompt_template = """
 专业角色设计参考图，16:9横向三等分构图，纯白背景。
 
@@ -734,12 +742,13 @@ class Api:
 自然站立姿态，双臂下垂，双脚并拢
 角色占区域高度85%，头脚留白，不裁切
 电影级超高清画质，光影真实，细节精细
-默认：写实真人风格，亚洲面孔，主角级精致外貌（除非另有说明）
+{style_requirement}
 角色描述：
 {character_desc}
 """
 
-                    prompt = prompt_template.format(character_desc=base_desc)
+                    style_requirement = f"画面风格：{style_text}" if style_text else "默认：写实真人风格，亚洲面孔，主角级精致外貌（除非另有说明）"
+                    prompt = prompt_template.format(character_desc=base_desc, style_requirement=style_requirement)
 
                     # Get image path
                     image_path = self._project_manager.get_character_image_path(
@@ -945,7 +954,15 @@ class Api:
                         raise ValueError("Please save the project first before generating scene images")
 
                     scene_prompt = str(scene.get("prompt", "")).strip()
-                    prompt = scene_prompt or scene.get("name", "")
+                    base_prompt = scene_prompt or scene.get("name", "")
+
+                    # Get style info and enhance prompt
+                    style_info = self._get_style_info()
+                    style_text = style_info.get("text", "")
+                    if style_text:
+                        prompt = f"{base_prompt}\n\n画面风格：{style_text}"
+                    else:
+                        prompt = base_prompt
 
                     image_path = self._project_manager.get_scene_image_path(
                         self.project_name, scene_id
@@ -1081,9 +1098,6 @@ class Api:
 
     def _build_scene_prompt_from_scene(self, scene: dict) -> str:
         parts = []
-        desc = str(scene.get("desc", "")).strip()
-        if desc:
-            parts.append(desc)
         tti = scene.get("tti") or {}
         for label, key in [
             ("环境", "environment"),
@@ -1842,6 +1856,105 @@ class Api:
 
         return {"success": False, "error": "Shot not found"}
 
+    def delete_shot_image(self, shot_id: str, image_index: int) -> dict:
+        """Delete a specific image from a shot (keeps position, sets to empty)"""
+        if not self.project_data:
+            return {"success": False, "error": "No project data"}
+
+        for shot in self.project_data["shots"]:
+            if shot["id"] == shot_id:
+                images = shot.get("images", [])
+                if not (0 <= image_index < len(images)):
+                    return {"success": False, "error": "Invalid image index"}
+
+                # Get file path and delete file
+                local_paths = shot.get("_localImagePaths", [])
+                if image_index < len(local_paths) and local_paths[image_index]:
+                    file_path = Path(local_paths[image_index])
+                    if file_path.exists():
+                        try:
+                            file_path.unlink()
+                            logger.info(f"Deleted image file: {file_path}")
+                        except Exception as e:
+                            logger.warning(f"Failed to delete image file: {e}")
+
+                # Set to empty string instead of removing (keep position)
+                shot["images"][image_index] = ""
+                if "imageSourceUrls" in shot and image_index < len(shot["imageSourceUrls"]):
+                    shot["imageSourceUrls"][image_index] = ""
+                if "imageMediaGenerationIds" in shot and image_index < len(shot["imageMediaGenerationIds"]):
+                    shot["imageMediaGenerationIds"][image_index] = ""
+                if "_localImagePaths" in shot and image_index < len(shot["_localImagePaths"]):
+                    shot["_localImagePaths"][image_index] = ""
+
+                # If deleted the selected image, find next available
+                if shot.get("selectedImageIndex", 0) == image_index:
+                    # Find first non-empty image
+                    new_idx = -1
+                    for i, img in enumerate(shot["images"]):
+                        if img:
+                            new_idx = i
+                            break
+                    shot["selectedImageIndex"] = new_idx if new_idx >= 0 else 0
+
+                # Update status if no images left
+                if not any(shot["images"]):
+                    shot["status"] = "pending"
+
+                logger.info(f"Deleted image at position {image_index} from shot {shot_id}")
+                return {"success": True, "shot": shot}
+
+        return {"success": False, "error": "Shot not found"}
+
+    def delete_shot_video(self, shot_id: str, video_index: int) -> dict:
+        """Delete a specific video from a shot (keeps position, sets to empty)"""
+        if not self.project_data:
+            return {"success": False, "error": "No project data"}
+
+        for shot in self.project_data["shots"]:
+            if shot["id"] == shot_id:
+                videos = shot.get("videos", [])
+                if not (0 <= video_index < len(videos)):
+                    return {"success": False, "error": "Invalid video index"}
+
+                # Get file path from URL and delete file
+                video_url = videos[video_index]
+                if video_url:
+                    from urllib.parse import urlparse, unquote
+                    parsed = urlparse(video_url)
+                    file_path = Path(unquote(parsed.path))
+                    if file_path.exists():
+                        try:
+                            file_path.unlink()
+                            logger.info(f"Deleted video file: {file_path}")
+                        except Exception as e:
+                            logger.warning(f"Failed to delete video file: {e}")
+
+                # Set to empty string instead of removing (keep position)
+                shot["videos"][video_index] = ""
+
+                # If deleted the selected video, find next available
+                if shot.get("selectedVideoIndex", 0) == video_index:
+                    # Find first non-empty video
+                    new_idx = -1
+                    for i, vid in enumerate(shot["videos"]):
+                        if vid:
+                            new_idx = i
+                            break
+                    shot["selectedVideoIndex"] = new_idx if new_idx >= 0 else 0
+                    shot["videoUrl"] = shot["videos"][new_idx] if new_idx >= 0 else ""
+                
+                # Update status if no videos left
+                if not any(shot["videos"]):
+                    shot["videoUrl"] = ""
+                    if shot.get("status") == "completed":
+                        shot["status"] = "images_ready" if any(shot.get("images", [])) else "pending"
+
+                logger.info(f"Deleted video at position {video_index} from shot {shot_id}")
+                return {"success": True, "shot": shot}
+
+        return {"success": False, "error": "Shot not found"}
+
     # ========== Image Generation ==========
 
     def generate_images_for_shot(self, shot_id: str) -> dict:
@@ -1880,7 +1993,21 @@ class Api:
                     base_prompt = shot.get("imagePrompt", "")
                     prefix_config = (self.project_data or {}).get("promptPrefixes", {})
                     shot_image_prefix = str(prefix_config.get("shotImagePrefix", "")).strip()
-                    prompt_with_prefix = f"{shot_image_prefix} {base_prompt}".strip() if shot_image_prefix else base_prompt
+
+                    # Get style info
+                    style_info = self._get_style_info()
+                    style_text = style_info.get("text", "")
+                    style_image_path = style_info.get("imagePath")
+
+                    # Build prompt with prefix and style
+                    prompt_parts = []
+                    if shot_image_prefix:
+                        prompt_parts.append(shot_image_prefix)
+                    prompt_parts.append(base_prompt)
+                    if style_text:
+                        prompt_parts.append(f"\n\n画面风格：{style_text}")
+                    prompt_with_prefix = " ".join(prompt_parts[:2]) + (prompt_parts[2] if len(prompt_parts) > 2 else "")
+
                     current_shot_id = shot["id"]
 
                     # Resolve scene reference for this shot
@@ -1979,18 +2106,51 @@ class Api:
                             else:
                                 logger.warning("Scene has no imageMediaGenerationId, cannot use as Whisk reference")
 
+                        # Handle style image for Whisk
+                        style_ids = []
+                        if style_image_path and Path(style_image_path).exists():
+                            # Check if we have a cached style media_generation_id
+                            settings_data = self.project_data.get("settings", self._get_default_project_settings())
+                            style_setting = settings_data.get("creationParams", {}).get("style", {})
+                            cached_style_media_id = style_setting.get("whiskMediaGenerationId", "")
+
+                            if cached_style_media_id:
+                                style_ids.append(cached_style_media_id)
+                                logger.info(f"Using cached style media_generation_id: {cached_style_media_id}")
+                            else:
+                                # Upload style image to get media_generation_id
+                                whisk_cookie = tti_config.get("whiskCookie", "")
+                                if whisk_cookie:
+                                    try:
+                                        uploaded_style_id = whisk.upload_image(
+                                            style_image_path,
+                                            media_category="MEDIA_CATEGORY_STYLE",
+                                            cookie=whisk_cookie
+                                        )
+                                        style_ids.append(uploaded_style_id)
+                                        # Cache the style media_generation_id
+                                        if "settings" not in self.project_data:
+                                            self.project_data["settings"] = self._get_default_project_settings()
+                                        self.project_data["settings"]["creationParams"]["style"]["whiskMediaGenerationId"] = uploaded_style_id
+                                        logger.info(f"Uploaded style image, media_generation_id: {uploaded_style_id}")
+                                    except Exception as e:
+                                        logger.warning(f"Failed to upload style image: {e}")
+                                else:
+                                    logger.warning("No whiskCookie configured, cannot upload style image")
+
                         # Generate 1 image using Whisk (user clicks multiple times to accumulate up to 4)
                         slot = slots_to_use[0] if slots_to_use else 1
 
-                        if subject_ids or scene_ids:
-                            # Use generate_with_references for scene with characters
+                        if subject_ids or scene_ids or style_ids:
+                            # Use generate_with_references for scene with characters/scene/style
                             whisk_image = whisk.generate_with_references(
                                 prompt=prompt_with_prefix,
                                 subject_ids=subject_ids,
                                 scene_ids=scene_ids,
+                                style_ids=style_ids,
                                 aspect_ratio="IMAGE_ASPECT_RATIO_LANDSCAPE"
                             )
-                            logger.info(f"Generated scene image via Whisk with {len(subject_ids)} subject references and {len(scene_ids)} scene references")
+                            logger.info(f"Generated scene image via Whisk with {len(subject_ids)} subject, {len(scene_ids)} scene, {len(style_ids)} style references")
                         else:
                             # Use generate_image for scene without characters
                             whisk_image = whisk.generate_image(
@@ -2089,6 +2249,12 @@ class Api:
                             else:
                                 logger.warning("Scene has no usable image for reference")
 
+                        # Add style image as reference if available
+                        if style_image_path and Path(style_image_path).exists():
+                            style_image_data = compress_image_if_needed(style_image_path, max_size_kb=256)
+                            reference_images.append({"base64": style_image_data})
+                            logger.info(f"Added style reference image: {style_image_path}")
+
                         has_references = len(reference_images) > 0
                         model_name = (
                             tti_config.get("sceneModel")
@@ -2162,9 +2328,10 @@ class Api:
                             all_source_urls.append(source_url_by_slot.get(slot, ""))
                             all_media_gen_ids.append(media_gen_id_by_slot.get(slot, ""))
 
-                    if len(existing_slots) == 0 and first_new_slot is not None:
+                    # Always select the newly generated image
+                    if first_new_slot is not None:
                         shot["selectedImageIndex"] = first_new_slot - 1
-                        logger.info(f"Set first generated image (slot {first_new_slot}) as default selection")
+                        logger.info(f"Auto-selected newly generated image (slot {first_new_slot})")
                     elif "selectedImageIndex" not in shot or shot["selectedImageIndex"] >= len(all_image_paths):
                         shot["selectedImageIndex"] = 0
 
@@ -2380,12 +2547,11 @@ class Api:
                         if slot_path.exists():
                             all_video_paths.append(self._path_to_url(str(slot_path)))
 
-                    # If no videos existed before, set the first newly generated video as selected
-                    # Otherwise keep the current selection
-                    if len(existing_slots) == 0 and target_slot is not None:
+                    # Always select the newly generated video
+                    if target_slot is not None:
                         shot["selectedVideoIndex"] = target_slot - 1  # Convert slot (1-4) to index (0-3)
                         shot["videoUrl"] = all_video_paths[target_slot - 1] if target_slot - 1 < len(all_video_paths) else all_video_paths[0]
-                        logger.info(f"Set first generated video (slot {target_slot}) as default selection")
+                        logger.info(f"Auto-selected newly generated video (slot {target_slot})")
                     elif "selectedVideoIndex" not in shot or shot["selectedVideoIndex"] >= len(all_video_paths):
                         shot["selectedVideoIndex"] = 0
                         shot["videoUrl"] = all_video_paths[0] if all_video_paths else ""
@@ -3278,3 +3444,572 @@ class Api:
             logger.error(f"Failed to export JianYing draft: {e}")
             return {"success": False, "error": str(e)}
 
+    # ========== Project Settings APIs (作品信息与创作参数) ==========
+
+    def get_styles(self) -> dict:
+        """Get available style presets from assets/styles/styles.json"""
+        try:
+            styles_file = Path(__file__).parent / "assets" / "styles" / "styles.json"
+            if not styles_file.exists():
+                logger.warning(f"Styles file not found: {styles_file}")
+                return {"success": True, "styles": []}
+
+            with open(styles_file, "r", encoding="utf-8") as f:
+                styles = json.load(f)
+
+            logger.info(f"Loaded {len(styles)} style presets")
+            return {"success": True, "styles": styles}
+        except Exception as e:
+            logger.error(f"Failed to load styles: {e}")
+            return {"success": False, "error": str(e)}
+
+    def get_project_settings(self) -> dict:
+        """Get project settings (work info and creation params)"""
+        try:
+            if not self.project_data:
+                return {"success": False, "error": "No project loaded"}
+
+            settings = self.project_data.get("settings", self._get_default_project_settings())
+            return {"success": True, "settings": settings}
+        except Exception as e:
+            logger.error(f"Failed to get project settings: {e}")
+            return {"success": False, "error": str(e)}
+
+    def _get_default_project_settings(self) -> dict:
+        """Get default project settings"""
+        return {
+            "workInfo": {
+                "title": "",
+                "coverImage": "",
+                "description": "",
+            },
+            "creationParams": {
+                "style": {
+                    "type": "preset",
+                    "presetId": None,
+                    "customPrompt": "",
+                },
+                "language": "zh",
+                "aspectRatio": "16:9",
+            },
+        }
+
+    def _get_style_info(self) -> dict:
+        """Get style text and image path from project settings
+        Returns: {"text": str, "imagePath": str or None}
+        """
+        if not self.project_data:
+            return {"text": "", "imagePath": None}
+
+        settings_data = self.project_data.get("settings", self._get_default_project_settings())
+        creation_params = settings_data.get("creationParams", {})
+        style = creation_params.get("style", {})
+
+        style_text = ""
+        style_image_path = None
+
+        if style.get("type") == "preset" and style.get("presetId") is not None:
+            # Load style from styles.json
+            styles_file = Path(__file__).parent / "assets" / "styles" / "styles.json"
+            if styles_file.exists():
+                with open(styles_file, "r", encoding="utf-8") as f:
+                    styles = json.load(f)
+                    for s in styles:
+                        if s.get("id") == style.get("presetId"):
+                            style_text = f"{s.get('name_cn', '')} style, {s.get('desc', '')}"
+                            # Get style image path
+                            style_image = s.get("image", "")
+                            if style_image:
+                                style_image_path = str(Path(__file__).parent / "assets" / "styles" / style_image)
+                            break
+        elif style.get("type") == "custom" and style.get("customPrompt"):
+            style_text = style.get("customPrompt", "")
+            # Get custom style preview image
+            preview_url = style.get("previewUrl", "")
+            if preview_url:
+                style_image_path = self._url_to_path(preview_url)
+
+        return {"text": style_text, "imagePath": style_image_path}
+
+    def save_project_settings(self, settings: dict) -> dict:
+        """Save project settings"""
+        try:
+            if not self.project_data:
+                return {"success": False, "error": "No project loaded"}
+
+            self.project_data["settings"] = settings
+
+            # Save to work directory if project has a name
+            if self.project_name:
+                self.save_project_to_workdir(self.project_name)
+
+            logger.info("Saved project settings")
+            return {"success": True}
+        except Exception as e:
+            logger.error(f"Failed to save project settings: {e}")
+            return {"success": False, "error": str(e)}
+
+    def generate_work_info(self) -> dict:
+        """Generate work info (title and description) based on project content using LLM"""
+        try:
+            if not self.project_data:
+                return {"success": False, "error": "No project loaded"}
+
+            # Gather project content for analysis
+            shots = self.project_data.get("shots", [])
+            characters = self.project_data.get("characters", [])
+            scenes = self.project_data.get("scenes", [])
+
+            if not shots:
+                return {"success": False, "error": "No shots in project"}
+
+            # Build context from project data
+            context_parts = []
+
+            # Characters
+            if characters:
+                char_names = [c.get("name", "") for c in characters if c.get("name")]
+                if char_names:
+                    context_parts.append(f"角色: {', '.join(char_names)}")
+
+            # Scenes
+            if scenes:
+                scene_names = [s.get("name", "") for s in scenes if s.get("name")]
+                if scene_names:
+                    context_parts.append(f"场景: {', '.join(scene_names)}")
+
+            # Dialogues (sample first 10 shots)
+            dialogues = []
+            for shot in shots[:10]:
+                shot_dialogues = shot.get("dialogues", [])
+                for d in shot_dialogues:
+                    role = d.get("role", "")
+                    text = d.get("text", "")
+                    if role and text:
+                        dialogues.append(f"{role}: {text}")
+            if dialogues:
+                context_parts.append(f"对话摘要:\n" + "\n".join(dialogues[:20]))
+
+            context = "\n\n".join(context_parts)
+
+            # Call LLM to generate work info
+            settings = self._load_settings()
+            shot_builder_config = settings.get("shotBuilder", {})
+            api_url = shot_builder_config.get("apiUrl", "")
+            api_key = shot_builder_config.get("apiKey", "")
+            model = shot_builder_config.get("model", "")
+
+            if not api_url or not api_key:
+                return {"success": False, "error": "Shot builder API not configured"}
+
+            from services.stream_llm import call_llm_stream
+
+            prompt = f"""根据以下视频项目内容，生成一个吸引人的作品名和作品介绍。
+
+项目内容:
+{context}
+
+请以 JSON 格式返回，包含以下字段:
+- title: 作品名（简洁有吸引力，10字以内）
+- description: 作品介绍（50-100字，描述故事梗概和看点）
+
+只返回 JSON，不要其他内容。"""
+
+            # Collect streaming response
+            response_lines = []
+            for line in call_llm_stream(prompt, model=model, api_key=api_key, base_url=api_url, use_env=False):
+                response_lines.append(line)
+            response = "\n".join(response_lines)
+
+            # Parse JSON response
+            try:
+                # Try to extract JSON from response
+                import re
+                json_match = re.search(r'\{[^{}]*\}', response, re.DOTALL)
+                if json_match:
+                    work_info = json.loads(json_match.group())
+                else:
+                    work_info = json.loads(response)
+
+                result = {
+                    "title": work_info.get("title", ""),
+                    "description": work_info.get("description", ""),
+                    "coverImage": "",
+                }
+                logger.info(f"Generated work info: {result}")
+                return {"success": True, "workInfo": result}
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse LLM response: {e}, response: {response}")
+                return {"success": False, "error": "Failed to parse AI response"}
+
+        except Exception as e:
+            logger.error(f"Failed to generate work info: {e}")
+            return {"success": False, "error": str(e)}
+
+    def chat_update_work_info(self, message: str, history: list) -> dict:
+        """Update work info through AI chat conversation"""
+        try:
+            if not self.project_data:
+                return {"success": False, "error": "No project loaded"}
+
+            # Get current work info
+            settings = self.project_data.get("settings", self._get_default_project_settings())
+            current_work_info = settings.get("workInfo", {})
+
+            # Call LLM with conversation history
+            app_settings = self._load_settings()
+            shot_builder_config = app_settings.get("shotBuilder", {})
+            api_url = shot_builder_config.get("apiUrl", "")
+            api_key = shot_builder_config.get("apiKey", "")
+            model = shot_builder_config.get("model", "")
+
+            if not api_url or not api_key:
+                return {"success": False, "error": "Shot builder API not configured"}
+
+            from services.stream_llm import call_llm_stream
+
+            system_prompt = f"""你是一个视频创作助手，帮助用户优化作品名和作品介绍。
+
+当前作品信息:
+- 作品名: {current_work_info.get('title', '未设置')}
+- 作品介绍: {current_work_info.get('description', '未设置')}
+
+用户可能会要求你:
+1. 优化作品名（更有吸引力、更诗意、更简洁等）
+2. 修改作品介绍（更详细、更简洁、换个角度等）
+3. 同时修改两者
+
+请根据用户的要求进行修改，并以 JSON 格式返回更新后的信息:
+{{"title": "新作品名", "description": "新作品介绍", "reply": "你的回复说明"}}
+
+如果用户只是在聊天没有要求修改，reply字段回复即可，title和description保持原值。
+只返回 JSON，不要其他内容。"""
+
+            # Build messages from history
+            messages = [{"role": "system", "content": system_prompt}]
+            for h in history:
+                messages.append({"role": h.get("role", "user"), "content": h.get("content", "")})
+            messages.append({"role": "user", "content": message})
+
+            # Collect streaming response
+            response_lines = []
+            for line in call_llm_stream(messages, model=model, api_key=api_key, base_url=api_url, use_env=False):
+                response_lines.append(line)
+            response = "\n".join(response_lines)
+
+            # Parse JSON response
+            try:
+                import re
+                json_match = re.search(r'\{[^{}]*\}', response, re.DOTALL)
+                if json_match:
+                    result = json.loads(json_match.group())
+                else:
+                    result = json.loads(response)
+
+                work_info = {
+                    "title": result.get("title", current_work_info.get("title", "")),
+                    "description": result.get("description", current_work_info.get("description", "")),
+                    "coverImage": current_work_info.get("coverImage", ""),
+                }
+                reply = result.get("reply", "已更新")
+
+                logger.info(f"Chat updated work info: {work_info}")
+                return {"success": True, "reply": reply, "workInfo": work_info}
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse LLM response: {e}, response: {response}")
+                # Return the raw response as reply
+                return {"success": True, "reply": response, "workInfo": current_work_info}
+
+        except Exception as e:
+            logger.error(f"Failed to chat update work info: {e}")
+            return {"success": False, "error": str(e)}
+
+    def upload_cover_image(self) -> dict:
+        """Upload cover image for the project"""
+        try:
+            if not self._window:
+                return {"success": False, "error": "Window not initialized"}
+
+            if not self.project_data or not self.project_name:
+                return {"success": False, "error": "No project loaded"}
+
+            # Open file dialog
+            result = self._window.create_file_dialog(
+                webview.FileDialog.OPEN,
+                allow_multiple=False,
+                file_types=("Image Files (*.png;*.jpg;*.jpeg;*.webp)", "All files (*.*)")
+            )
+
+            if not result or len(result) == 0:
+                return {"success": False, "error": "No file selected"}
+
+            source_path = Path(result[0])
+
+            # Get project output directory
+            work_dir = self._project_manager.work_dir
+            project_dir = work_dir / self.project_name / "output"
+            project_dir.mkdir(parents=True, exist_ok=True)
+
+            # Copy file to project directory
+            import shutil
+            dest_filename = f"cover{source_path.suffix}"
+            dest_path = project_dir / dest_filename
+            shutil.copy2(source_path, dest_path)
+
+            # Convert to URL
+            image_url = self._path_to_url(str(dest_path))
+
+            logger.info(f"Uploaded cover image: {dest_path}")
+            return {"success": True, "imageUrl": image_url}
+
+        except Exception as e:
+            logger.error(f"Failed to upload cover image: {e}")
+            return {"success": False, "error": str(e)}
+
+    def generate_cover_image(self) -> dict:
+        """Generate cover image for the project using AI"""
+        try:
+            if not self.project_data or not self.project_name:
+                return {"success": False, "error": "No project loaded"}
+
+            import asyncio
+            import time
+
+            # Build prompt from project data
+            settings_data = self.project_data.get("settings", self._get_default_project_settings())
+            work_info = settings_data.get("workInfo", {})
+            creation_params = settings_data.get("creationParams", {})
+
+            title = work_info.get("title", "")
+            description = work_info.get("description", "")
+
+            # Get style info
+            style = creation_params.get("style", {})
+            style_prompt = ""
+            if style.get("type") == "preset" and style.get("presetId") is not None:
+                # Load style from styles.json
+                styles_file = Path(__file__).parent / "assets" / "styles" / "styles.json"
+                if styles_file.exists():
+                    with open(styles_file, "r", encoding="utf-8") as f:
+                        styles = json.load(f)
+                        for s in styles:
+                            if s.get("id") == style.get("presetId"):
+                                style_prompt = s.get("name_cn", "") + " style, " + s.get("desc", "")[:100]
+                                break
+            elif style.get("type") == "custom" and style.get("customPrompt"):
+                style_prompt = style.get("customPrompt", "")
+
+            # Build cover prompt
+            prompt_parts = []
+            if title:
+                prompt_parts.append(f"Title: {title}")
+            if description:
+                prompt_parts.append(f"Story: {description[:200]}")
+            if style_prompt:
+                prompt_parts.append(f"Style: {style_prompt}")
+
+            prompt = "Generate a movie poster or cover image. " + " ".join(prompt_parts)
+            if not prompt_parts:
+                prompt = "Generate a cinematic movie poster with dramatic lighting"
+
+            # Get TTI settings
+            app_settings = self._load_settings()
+            tti_config = app_settings.get("tti", {})
+            provider = tti_config.get("provider", "openai")
+
+            # Get output path
+            work_dir = self._project_manager.work_dir
+            project_dir = work_dir / self.project_name / "output"
+            project_dir.mkdir(parents=True, exist_ok=True)
+            image_path = project_dir / "cover.png"
+
+            if provider == "whisk":
+                from services.whisk import Whisk
+
+                if not tti_config.get("whiskToken") or not tti_config.get("whiskWorkflowId"):
+                    return {"success": False, "error": "Whisk Token and Workflow ID not configured"}
+
+                whisk = Whisk(
+                    token=tti_config["whiskToken"],
+                    workflow_id=tti_config["whiskWorkflowId"]
+                )
+
+                # Determine aspect ratio
+                aspect_ratio = creation_params.get("aspectRatio", "16:9")
+                whisk_aspect = "IMAGE_ASPECT_RATIO_LANDSCAPE"
+                if aspect_ratio == "9:16":
+                    whisk_aspect = "IMAGE_ASPECT_RATIO_PORTRAIT"
+                elif aspect_ratio == "1:1":
+                    whisk_aspect = "IMAGE_ASPECT_RATIO_SQUARE"
+
+                whisk_image = whisk.generate_image(
+                    prompt=prompt,
+                    media_category="MEDIA_CATEGORY_SCENE",
+                    aspect_ratio=whisk_aspect
+                )
+                whisk_image.save(str(image_path))
+                logger.info(f"Generated cover image via Whisk")
+            else:
+                from services.generator import GenerationClient, download_file
+
+                if not tti_config.get("apiUrl") or not tti_config.get("apiKey"):
+                    return {"success": False, "error": "TTI API not configured"}
+
+                model_name = tti_config.get("sceneModel") or tti_config.get("model", "gemini-2.5-flash-image-landscape")
+                client = GenerationClient(
+                    api_url=tti_config["apiUrl"],
+                    api_key=tti_config["apiKey"],
+                    model=model_name,
+                )
+
+                image_urls = asyncio.run(client.generate_image(prompt, count=1, task_type="scene"))
+                if not image_urls:
+                    return {"success": False, "error": "No images returned from API"}
+
+                image_url = image_urls[0]
+                if "?t=" in image_url:
+                    image_url = image_url.split("?t=")[0]
+
+                asyncio.run(download_file(image_url, image_path))
+
+            timestamp = int(time.time() * 1000)
+            final_url = f"{self._path_to_url(str(image_path))}?t={timestamp}"
+
+            logger.info(f"Generated cover image: {image_path}")
+            return {"success": True, "imageUrl": final_url}
+
+        except Exception as e:
+            logger.error(f"Failed to generate cover image: {e}")
+            return {"success": False, "error": str(e)}
+
+    def export_cover_image(self) -> dict:
+        """Export cover image to user-selected location"""
+        try:
+            if not self._window:
+                return {"success": False, "error": "Window not initialized"}
+
+            if not self.project_data or not self.project_name:
+                return {"success": False, "error": "No project loaded"}
+
+            # Get current cover image path
+            settings_data = self.project_data.get("settings", self._get_default_project_settings())
+            work_info = settings_data.get("workInfo", {})
+            cover_url = work_info.get("coverImage", "")
+
+            if not cover_url:
+                return {"success": False, "error": "No cover image to export"}
+
+            # Try to find cover image in project output directory first
+            work_dir = self._project_manager.work_dir
+            project_dir = work_dir / self.project_name / "output"
+            cover_path = project_dir / "cover.png"
+
+            # If not found, try to parse from URL
+            if not cover_path.exists():
+                parsed_path = self._url_to_path(cover_url)
+                cover_path = Path(parsed_path)
+
+            logger.info(f"Export cover: URL={cover_url}, resolved path={cover_path}")
+
+            if not cover_path.exists():
+                return {"success": False, "error": f"Cover image file not found: {cover_path}"}
+
+            # Open save dialog
+            result = self._window.create_file_dialog(
+                webview.FileDialog.SAVE,
+                save_filename=f"{self.project_name}_cover{cover_path.suffix}",
+                file_types=("Image Files (*.png;*.jpg;*.jpeg;*.webp)", "All files (*.*)")
+            )
+
+            if not result:
+                return {"success": False, "error": "No file selected"}
+
+            dest_path = Path(result)
+
+            # Copy file
+            import shutil
+            shutil.copy2(cover_path, dest_path)
+
+            logger.info(f"Exported cover image to: {dest_path}")
+            return {"success": True, "path": str(dest_path)}
+
+        except Exception as e:
+            logger.error(f"Failed to export cover image: {e}")
+            return {"success": False, "error": str(e)}
+
+    def generate_style_preview(self, prompt: str) -> dict:
+        """Generate a preview image for custom style description"""
+        try:
+            if not prompt or not prompt.strip():
+                return {"success": False, "error": "Style description is required"}
+
+            if not self.project_data or not self.project_name:
+                return {"success": False, "error": "No project loaded"}
+
+            import asyncio
+            import time
+
+            # Get TTI settings
+            app_settings = self._load_settings()
+            tti_config = app_settings.get("tti", {})
+            provider = tti_config.get("provider", "openai")
+
+            # Get output path in project directory
+            work_dir = self._project_manager.work_dir
+            preview_dir = work_dir / self.project_name / "output" / "style_previews"
+            preview_dir.mkdir(parents=True, exist_ok=True)
+            timestamp = int(time.time() * 1000)
+            image_path = preview_dir / f"preview_{timestamp}.png"
+
+            # Build prompt for style preview
+            full_prompt = f"Create a sample image demonstrating this visual style: {prompt.strip()}. Show a beautiful landscape or scene that captures the essence of this style."
+
+            if provider == "whisk":
+                from services.whisk import Whisk
+
+                if not tti_config.get("whiskToken") or not tti_config.get("whiskWorkflowId"):
+                    return {"success": False, "error": "Whisk Token and Workflow ID not configured"}
+
+                whisk = Whisk(
+                    token=tti_config["whiskToken"],
+                    workflow_id=tti_config["whiskWorkflowId"]
+                )
+
+                whisk_image = whisk.generate_image(
+                    prompt=full_prompt,
+                    media_category="MEDIA_CATEGORY_SCENE",
+                    aspect_ratio="IMAGE_ASPECT_RATIO_LANDSCAPE"
+                )
+                whisk_image.save(str(image_path))
+                logger.info(f"Generated style preview via Whisk")
+            else:
+                from services.generator import GenerationClient, download_file
+
+                if not tti_config.get("apiUrl") or not tti_config.get("apiKey"):
+                    return {"success": False, "error": "TTI API not configured"}
+
+                model_name = tti_config.get("sceneModel") or tti_config.get("model", "gemini-2.5-flash-image-landscape")
+                client = GenerationClient(
+                    api_url=tti_config["apiUrl"],
+                    api_key=tti_config["apiKey"],
+                    model=model_name,
+                )
+
+                image_urls = asyncio.run(client.generate_image(full_prompt, count=1, task_type="scene"))
+                if not image_urls:
+                    return {"success": False, "error": "No images returned from API"}
+
+                image_url = image_urls[0]
+                if "?t=" in image_url:
+                    image_url = image_url.split("?t=")[0]
+
+                asyncio.run(download_file(image_url, image_path))
+
+            final_url = f"{self._path_to_url(str(image_path))}?t={timestamp}"
+
+            logger.info(f"Generated style preview: {image_path}")
+            return {"success": True, "imageUrl": final_url}
+
+        except Exception as e:
+            logger.error(f"Failed to generate style preview: {e}")
+            return {"success": False, "error": str(e)}

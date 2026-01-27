@@ -58,6 +58,7 @@ class WhiskVideoError(Exception):
 
 class Whisk:
     BASE_URL = "https://aisandbox-pa.googleapis.com/v1"
+    UPLOAD_URL = "https://labs.google/fx/api/trpc/backbone.uploadImage"
     
     def __init__(self, token: str, workflow_id: str):
         self.token = token
@@ -93,6 +94,150 @@ class Whisk:
             "tool": "BACKBONE",
             "workflowId": self.workflow_id
         }
+
+    def _get_upload_headers(self, cookie: str) -> dict:
+        """Get headers for upload API (different from generation API)"""
+        return {
+            "accept": "*/*",
+            "accept-language": "en-US,en;q=0.9",
+            "content-type": "application/json",
+            "origin": "https://labs.google",
+            "priority": "u=1, i",
+            "referer": f"https://labs.google/fx/tools/whisk/project/{self.workflow_id}",
+            "sec-ch-ua": '"Not(A:Brand";v="8", "Chromium";v="144", "Google Chrome";v="144"',
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": '"macOS"',
+            "sec-fetch-dest": "empty",
+            "sec-fetch-mode": "cors",
+            "sec-fetch-site": "same-origin",
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36",
+            "cookie": cookie,
+        }
+
+    def upload_image(
+        self,
+        image_path: str,
+        media_category: str = "MEDIA_CATEGORY_STYLE",
+        cookie: Optional[str] = None
+    ) -> str:
+        """
+        Upload an image to Whisk and get its media_generation_id.
+        
+        Args:
+            image_path: Path to the image file
+            media_category: Category of the media (MEDIA_CATEGORY_STYLE, MEDIA_CATEGORY_SUBJECT, MEDIA_CATEGORY_SCENE)
+            cookie: Session cookie for authentication (required for upload API)
+        
+        Returns:
+            uploadMediaGenerationId string
+        """
+        if not cookie:
+            raise ValueError("Cookie is required for upload API")
+
+        # Read and encode the image
+        with open(image_path, 'rb') as f:
+            image_bytes = f.read()
+        
+        # Detect image type
+        if image_path.lower().endswith('.png'):
+            mime_type = "image/png"
+        elif image_path.lower().endswith(('.jpg', '.jpeg')):
+            mime_type = "image/jpeg"
+        elif image_path.lower().endswith('.webp'):
+            mime_type = "image/webp"
+        elif image_path.lower().endswith('.gif'):
+            mime_type = "image/gif"
+        else:
+            mime_type = "image/png"  # Default to PNG
+        
+        encoded_image = base64.b64encode(image_bytes).decode('utf-8')
+        raw_bytes = f"data:{mime_type};base64,{encoded_image}"
+        
+        payload = {
+            "json": {
+                "clientContext": {
+                    "workflowId": self.workflow_id,
+                    "sessionId": self.session_id
+                },
+                "uploadMediaInput": {
+                    "mediaCategory": media_category,
+                    "rawBytes": raw_bytes,
+                    "caption": ""
+                }
+            }
+        }
+        
+        response = requests.post(
+            self.UPLOAD_URL,
+            headers=self._get_upload_headers(cookie),
+            json=payload
+        )
+        response.raise_for_status()
+        
+        data = response.json()
+        # Parse response: {"result":{"data":{"json":{"result":{"uploadMediaGenerationId":"xxx"},"status":200}}}}
+        result = data.get("result", {}).get("data", {}).get("json", {}).get("result", {})
+        upload_id = result.get("uploadMediaGenerationId")
+        
+        if not upload_id:
+            raise ValueError(f"Failed to get uploadMediaGenerationId from response: {data}")
+        
+        return upload_id
+
+    def upload_image_bytes(
+        self,
+        image_bytes: bytes,
+        mime_type: str = "image/png",
+        media_category: str = "MEDIA_CATEGORY_STYLE",
+        cookie: Optional[str] = None
+    ) -> str:
+        """
+        Upload image bytes to Whisk and get its media_generation_id.
+        
+        Args:
+            image_bytes: Raw image bytes
+            mime_type: MIME type of the image
+            media_category: Category of the media
+            cookie: Session cookie for authentication
+        
+        Returns:
+            uploadMediaGenerationId string
+        """
+        if not cookie:
+            raise ValueError("Cookie is required for upload API")
+        
+        encoded_image = base64.b64encode(image_bytes).decode('utf-8')
+        raw_bytes = f"data:{mime_type};base64,{encoded_image}"
+        
+        payload = {
+            "json": {
+                "clientContext": {
+                    "workflowId": self.workflow_id,
+                    "sessionId": self.session_id
+                },
+                "uploadMediaInput": {
+                    "mediaCategory": media_category,
+                    "rawBytes": raw_bytes,
+                    "caption": ""
+                }
+            }
+        }
+        
+        response = requests.post(
+            self.UPLOAD_URL,
+            headers=self._get_upload_headers(cookie),
+            json=payload
+        )
+        response.raise_for_status()
+        
+        data = response.json()
+        result = data.get("result", {}).get("data", {}).get("json", {}).get("result", {})
+        upload_id = result.get("uploadMediaGenerationId")
+        
+        if not upload_id:
+            raise ValueError(f"Failed to get uploadMediaGenerationId from response: {data}")
+        
+        return upload_id
 
     def generate_image(
         self,

@@ -91,6 +91,8 @@ interface ShotTableProps {
   onGenerateAudio: (id: string) => void;
   onSelectImage: (shotId: string, imageIndex: number) => void;
   onSelectVideo: (shotId: string, videoIndex: number) => void;
+  onDeleteImage: (shotId: string, imageIndex: number) => void;
+  onDeleteVideo: (shotId: string, videoIndex: number) => void;
   onUpdateShot: (shotId: string, field: string, value: string | string[] | { role: string; text: string }[]) => void;
   onFilterChange: (filteredShots: Shot[]) => void;
   onInsertShot: (afterShotId: string | null) => void;
@@ -109,6 +111,8 @@ export function ShotTable({
   onGenerateAudio,
   onSelectImage,
   onSelectVideo,
+  onDeleteImage,
+  onDeleteVideo,
   onUpdateShot,
   onFilterChange,
   onInsertShot,
@@ -528,6 +532,8 @@ export function ShotTable({
                       onGenerateAudio={() => onGenerateAudio(shot.id)}
                       onSelectImage={(idx) => onSelectImage(shot.id, idx)}
                       onSelectVideo={(idx) => onSelectVideo(shot.id, idx)}
+                      onDeleteImage={(idx) => onDeleteImage(shot.id, idx)}
+                      onDeleteVideo={(idx) => onDeleteVideo(shot.id, idx)}
                       onDelete={() => onDeleteShots([shot.id])}
                       onPreviewImage={setPreviewImage}
                       onPreviewVideo={(url, title) => setPreviewVideo({ url, title })}
@@ -704,6 +710,8 @@ interface ShotRowProps {
   onGenerateAudio: () => void;
   onSelectImage: (imageIndex: number) => void;
   onSelectVideo: (videoIndex: number) => void;
+  onDeleteImage: (imageIndex: number) => void;
+  onDeleteVideo: (videoIndex: number) => void;
   onDelete: () => void;
   onPreviewImage: (url: string) => void;
   onPreviewVideo: (url: string, title: string) => void;
@@ -798,6 +806,8 @@ function ShotRow({
   onGenerateAudio,
   onSelectImage,
   onSelectVideo,
+  onDeleteImage,
+  onDeleteVideo,
   onDelete: _onDelete,
   onPreviewImage,
   onPreviewVideo,
@@ -1046,14 +1056,14 @@ function ShotRow({
               {[0, 1, 2, 3].map((idx) => {
                 const img = shot.images[idx];
                 return img ? (
-                  <button
+                  <div
                     key={idx}
-                    onClick={() => onSelectImage(idx)}
-                    className={`relative rounded overflow-hidden transition-all bg-slate-800 flex items-center justify-center aspect-[9/16] ${
+                    className={`relative rounded overflow-hidden transition-all bg-slate-800 flex items-center justify-center aspect-[9/16] group cursor-pointer ${
                       idx === shot.selectedImageIndex
                         ? 'ring-2 ring-violet-500'
                         : 'ring-1 ring-slate-600 hover:ring-slate-500'
                     }`}
+                    onClick={() => onSelectImage(idx)}
                   >
                     <img src={img} alt={`选项 ${idx + 1}`} className="object-cover w-full h-full" />
                     {idx === shot.selectedImageIndex && (
@@ -1061,7 +1071,18 @@ function ShotRow({
                         <Check className="w-3 h-3 text-violet-400" />
                       </div>
                     )}
-                  </button>
+                    {/* Delete button - show on hover */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDeleteImage(idx);
+                      }}
+                      className="absolute top-0.5 right-0.5 w-4 h-4 bg-red-500/80 hover:bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                      title="删除此图片"
+                    >
+                      <X className="w-2.5 h-2.5 text-white" />
+                    </button>
+                  </div>
                 ) : (
                   <div
                     key={idx}
@@ -1138,14 +1159,14 @@ function ShotRow({
                 {[0, 1, 2, 3].map((idx) => {
                   const video = shot.videos[idx];
                   return video ? (
-                    <button
+                    <div
                       key={idx}
-                      onClick={() => onSelectVideo(idx)}
-                      className={`relative rounded overflow-hidden transition-all bg-slate-800 flex items-center justify-center aspect-[9/16] ${
+                      className={`relative rounded overflow-hidden transition-all bg-slate-800 flex items-center justify-center aspect-[9/16] group cursor-pointer ${
                         idx === shot.selectedVideoIndex
                           ? 'ring-2 ring-emerald-500'
                           : 'ring-1 ring-slate-600 hover:ring-slate-500'
                       }`}
+                      onClick={() => onSelectVideo(idx)}
                     >
                       <video
                         src={video}
@@ -1163,7 +1184,18 @@ function ShotRow({
                           <Check className="w-3 h-3 text-emerald-400" />
                         </div>
                       )}
-                    </button>
+                      {/* Delete button - show on hover */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDeleteVideo(idx);
+                        }}
+                        className="absolute top-0.5 right-0.5 w-4 h-4 bg-red-500/80 hover:bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                        title="删除此视频"
+                      >
+                        <X className="w-2.5 h-2.5 text-white" />
+                      </button>
+                    </div>
                   ) : (
                     <div
                       key={idx}

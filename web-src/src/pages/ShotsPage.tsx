@@ -18,6 +18,8 @@ interface ShotsPageProps {
   onGenerateAudio: (id: string) => void;
   onSelectImage: (shotId: string, imageIndex: number) => void;
   onSelectVideo: (shotId: string, videoIndex: number) => void;
+  onDeleteImage: (shotId: string, imageIndex: number) => void;
+  onDeleteVideo: (shotId: string, videoIndex: number) => void;
   onUpdateShot: (shotId: string, field: string, value: string | string[] | { role: string; text: string }[]) => void;
   onFilterChange: (filteredShots: Shot[]) => void;
   onInsertShot: (afterShotId: string | null) => void;
@@ -40,6 +42,8 @@ export function ShotsPage({
   onGenerateAudio,
   onSelectImage,
   onSelectVideo,
+  onDeleteImage,
+  onDeleteVideo,
   onUpdateShot,
   onFilterChange,
   onInsertShot,
@@ -68,6 +72,8 @@ export function ShotsPage({
           onGenerateAudio={onGenerateAudio}
           onSelectImage={onSelectImage}
           onSelectVideo={onSelectVideo}
+          onDeleteImage={onDeleteImage}
+          onDeleteVideo={onDeleteVideo}
           onUpdateShot={onUpdateShot}
           onFilterChange={onFilterChange}
           onInsertShot={onInsertShot}

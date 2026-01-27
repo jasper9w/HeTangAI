@@ -4,7 +4,7 @@
 
 // ========== Page Types ==========
 
-export type PageType = 'projects' | 'home' | 'storyboard' | 'characters' | 'scenes' | 'shots' | 'dubbing' | 'settings';
+export type PageType = 'projects' | 'home' | 'projectSettings' | 'storyboard' | 'characters' | 'scenes' | 'shots' | 'dubbing' | 'settings';
 
 // ========== Shot Types ==========
 
@@ -106,6 +106,7 @@ export interface ProjectData {
     shotVideoPrefix: string;
     characterPrefix: string;
   };
+  settings?: ProjectSettings;  // 项目基础设定
   characters: Character[];
   scenes: Scene[];
   shots: Shot[];
@@ -241,6 +242,8 @@ export interface PyWebViewApi {
   delete_shots: (shotIds: string[]) => Promise<ApiResponse & { deletedCount?: number }>;
   select_image: (shotId: string, imageIndex: number) => Promise<ApiResponse>;
   select_video: (shotId: string, videoIndex: number) => Promise<ApiResponse>;
+  delete_shot_image: (shotId: string, imageIndex: number) => Promise<ApiResponse & { shot?: Shot }>;
+  delete_shot_video: (shotId: string, videoIndex: number) => Promise<ApiResponse & { shot?: Shot }>;
   insert_shot: (afterShotId: string | null) => Promise<ApiResponse & { shots?: Shot[] }>;
 
   // Shot builder one-click import
@@ -280,6 +283,60 @@ export interface PyWebViewApi {
   clear_shot_builder_output: () => Promise<ApiResponse & { outputDir?: string }>;
   get_shot_builder_outputs: () => Promise<ApiResponse & { outputs?: ShotBuilderOutputs }>;
   save_shot_builder_outputs: (outputs: ShotBuilderOutputs) => Promise<ApiResponse & { outputDir?: string }>;
+
+  // Project Settings (作品信息与创作参数)
+  get_styles: () => Promise<ApiResponse & { styles?: StylePreset[] }>;
+  get_project_settings: () => Promise<ApiResponse & { settings?: ProjectSettings }>;
+  save_project_settings: (settings: ProjectSettings) => Promise<ApiResponse>;
+  generate_work_info: () => Promise<ApiResponse & { workInfo?: WorkInfo }>;
+  chat_update_work_info: (message: string, history: ChatMessage[]) => Promise<ApiResponse & { reply?: string; workInfo?: WorkInfo }>;
+  upload_cover_image: () => Promise<ApiResponse & { imageUrl?: string }>;
+  generate_cover_image: () => Promise<ApiResponse & { imageUrl?: string }>;
+  export_cover_image: () => Promise<ApiResponse & { path?: string }>;
+  generate_style_preview: (prompt: string) => Promise<ApiResponse & { imageUrl?: string }>;
+}
+
+// ========== Style Types ==========
+
+export interface StylePreset {
+  id: number;
+  name: string;      // 英文名
+  name_cn: string;   // 中文名
+  image: string;     // 预览图文件名
+  desc: string;      // 风格描述
+}
+
+// ========== Project Settings Types ==========
+
+export interface WorkInfo {
+  title: string;           // 作品名
+  coverImage?: string;     // 介绍图路径
+  description: string;     // 作品介绍
+}
+
+export interface StyleSetting {
+  type: 'preset' | 'custom';
+  presetId?: number;        // 预设风格 ID
+  customPrompt?: string;    // 自定义风格描述
+  previewUrl?: string;      // 自定义风格预览图 URL
+}
+
+export interface CreationParams {
+  style: StyleSetting;
+  language: 'zh' | 'en' | 'ja' | 'ko' | string;  // 配音语种
+  aspectRatio: '16:9' | '9:16' | '1:1';           // 画面比例
+}
+
+export interface ProjectSettings {
+  workInfo: WorkInfo;
+  creationParams: CreationParams;
+}
+
+// ========== AI Chat Types ==========
+
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
 }
 
 // ========== Settings Types ==========

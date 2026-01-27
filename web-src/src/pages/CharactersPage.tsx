@@ -1,7 +1,7 @@
 /**
  * CharactersPage - Character management page
  */
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Mic,
   Image as ImageIcon,
@@ -175,6 +175,29 @@ export function CharactersPage({
   const handleResetZoom = () => {
     setImageScale(1);
   };
+
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    e.preventDefault();
+    if (e.deltaY < 0) {
+      setImageScale(prev => Math.min(prev + 0.1, 3));
+    } else {
+      setImageScale(prev => Math.max(prev - 0.1, 0.25));
+    }
+  }, []);
+
+  // ESC key listener for image viewer
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && imageViewerOpen) {
+        handleCloseImageViewer();
+      }
+    };
+    
+    if (imageViewerOpen) {
+      window.addEventListener('keydown', handleKeyDown);
+      return () => window.removeEventListener('keydown', handleKeyDown);
+    }
+  }, [imageViewerOpen]);
 
   
   const selectedCharacter = characters.find((c) => c.id === selectedCharacterId);
@@ -679,6 +702,7 @@ export function CharactersPage({
         <div
           className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4"
           onClick={handleCloseImageViewer}
+          onWheel={handleWheel}
         >
           <div className="relative max-w-full max-h-full">
             {/* Close button */}
@@ -697,7 +721,7 @@ export function CharactersPage({
                   handleZoomIn();
                 }}
                 className="p-2 bg-black/50 hover:bg-black/70 rounded-full text-white transition-colors"
-                title="放大"
+                title="放大 (滚轮向上)"
               >
                 <ZoomIn className="w-5 h-5" />
               </button>
@@ -707,7 +731,7 @@ export function CharactersPage({
                   handleZoomOut();
                 }}
                 className="p-2 bg-black/50 hover:bg-black/70 rounded-full text-white transition-colors"
-                title="缩小"
+                title="缩小 (滚轮向下)"
               >
                 <ZoomOut className="w-5 h-5" />
               </button>

@@ -22,6 +22,7 @@ import { ProjectListPage } from './pages/ProjectListPage';
 import { HomePage } from './pages/HomePage';
 import { ShotsPage } from './pages/ShotsPage';
 import { ShotBuilderPage } from './pages/ShotBuilderPage.tsx';
+import { ProjectSettingsPage } from './pages/ProjectSettingsPage';
 import { CharactersPage } from './pages/CharactersPage';
 import { ScenesPage } from './pages/ScenesPage';
 import { DubbingPage } from './pages/DubbingPage';
@@ -738,6 +739,38 @@ function App() {
     }
   };
 
+  const handleDeleteImage = async (shotId: string, imageIndex: number) => {
+    if (!api || !project) return;
+    const result = await api.delete_shot_image(shotId, imageIndex);
+    if (result.success && result.shot) {
+      setProject({
+        ...project,
+        shots: project.shots.map((s) =>
+          s.id === shotId ? result.shot! : s
+        ),
+      });
+      setIsDirty(true);
+    } else {
+      showToast('error', `删除图片失败: ${result.error || '未知错误'}`);
+    }
+  };
+
+  const handleDeleteVideo = async (shotId: string, videoIndex: number) => {
+    if (!api || !project) return;
+    const result = await api.delete_shot_video(shotId, videoIndex);
+    if (result.success && result.shot) {
+      setProject({
+        ...project,
+        shots: project.shots.map((s) =>
+          s.id === shotId ? result.shot! : s
+        ),
+      });
+      setIsDirty(true);
+    } else {
+      showToast('error', `删除视频失败: ${result.error || '未知错误'}`);
+    }
+  };
+
   const handleUpdateShot = async (shotId: string, field: string, value: string | string[] | { role: string; text: string }[]) => {
     if (!api || !project) return;
     // Update locally first for responsiveness
@@ -1282,6 +1315,8 @@ function App() {
             onGenerateAudio={handleGenerateAudio}
             onSelectImage={handleSelectImage}
             onSelectVideo={handleSelectVideo}
+            onDeleteImage={handleDeleteImage}
+            onDeleteVideo={handleDeleteVideo}
             onUpdateShot={handleUpdateShot}
             onFilterChange={setFilteredShots}
             onInsertShot={handleInsertShot}
@@ -1289,6 +1324,13 @@ function App() {
             batchModalType={batchModalType}
             onBatchModalClose={() => setBatchModalOpen(false)}
             onBatchGenerate={handleBatchGenerate}
+          />
+        );
+      case 'projectSettings':
+        return (
+          <ProjectSettingsPage
+            projectName={projectName}
+            showToast={showToast}
           />
         );
       case 'storyboard':

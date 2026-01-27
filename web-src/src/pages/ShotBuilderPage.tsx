@@ -4,6 +4,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { Play, Loader2, X } from 'lucide-react';
 import { useApi } from '../hooks/useApi';
+import { JsonlTable } from '../components/shot/JsonlTable';
 import type { ShotBuilderPrompts, ShotBuilderOutputs } from '../types';
 import type { ToastType } from '../components/ui/Toast';
 
@@ -425,33 +426,30 @@ export function ShotBuilderPage({ projectName, showToast }: ShotBuilderPageProps
             </div>
 
             {activeTab === 'role' && (
-              <textarea
+              <JsonlTable
                 value={outputs.roles}
-                onChange={(e) => {
-                  setOutputs((prev) => ({ ...prev, roles: e.target.value }));
+                onChange={(newValue) => {
+                  setOutputs((prev) => ({ ...prev, roles: newValue }));
                   scheduleSaveOutputs('roles');
                 }}
-                className="w-full h-[60vh] px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
               />
             )}
             {activeTab === 'scene' && (
-              <textarea
+              <JsonlTable
                 value={outputs.scenes}
-                onChange={(e) => {
-                  setOutputs((prev) => ({ ...prev, scenes: e.target.value }));
+                onChange={(newValue) => {
+                  setOutputs((prev) => ({ ...prev, scenes: newValue }));
                   scheduleSaveOutputs('scenes');
                 }}
-                className="w-full h-[60vh] px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
               />
             )}
             {activeTab === 'shot' && (
-              <textarea
+              <JsonlTable
                 value={outputs.shots}
-                onChange={(e) => {
-                  setOutputs((prev) => ({ ...prev, shots: e.target.value }));
+                onChange={(newValue) => {
+                  setOutputs((prev) => ({ ...prev, shots: newValue }));
                   scheduleSaveOutputs('shots');
                 }}
-                className="w-full h-[60vh] px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
               />
             )}
           </>
