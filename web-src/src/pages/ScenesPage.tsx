@@ -1,7 +1,7 @@
 /**
  * ScenesPage - Scene management page
  */
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
 import {
   Image as ImageIcon,
   Plus,
@@ -10,10 +10,8 @@ import {
   X,
   Loader2,
   Upload,
-  ZoomIn,
-  ZoomOut,
-  RotateCcw,
 } from 'lucide-react';
+import { ImagePreviewModal } from '../components/ui/ImagePreviewModal';
 import type { Scene } from '../types';
 
 interface ScenesPageProps {
@@ -40,9 +38,7 @@ export function ScenesPage({
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [sceneToDelete, setSceneToDelete] = useState<Scene | null>(null);
-  const [imageViewerOpen, setImageViewerOpen] = useState(false);
   const [viewingImage, setViewingImage] = useState<{ url: string; name: string } | null>(null);
-  const [imageScale, setImageScale] = useState(1);
   const [editing, setEditing] = useState<{ id: string | null; name: string; prompt: string }>({
     id: null,
     name: '',
@@ -105,50 +101,11 @@ export function ScenesPage({
 
   const handleImageClick = (imageUrl: string, sceneName: string) => {
     setViewingImage({ url: imageUrl, name: sceneName });
-    setImageScale(1);
-    setImageViewerOpen(true);
   };
 
   const handleCloseImageViewer = () => {
-    setImageViewerOpen(false);
     setViewingImage(null);
-    setImageScale(1);
   };
-
-  const handleZoomIn = () => {
-    setImageScale((prev) => Math.min(prev + 0.25, 3));
-  };
-
-  const handleZoomOut = () => {
-    setImageScale((prev) => Math.max(prev - 0.25, 0.25));
-  };
-
-  const handleResetZoom = () => {
-    setImageScale(1);
-  };
-
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    e.preventDefault();
-    if (e.deltaY < 0) {
-      setImageScale(prev => Math.min(prev + 0.1, 3));
-    } else {
-      setImageScale(prev => Math.max(prev - 0.1, 0.25));
-    }
-  }, []);
-
-  // ESC key listener for image viewer
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && imageViewerOpen) {
-        handleCloseImageViewer();
-      }
-    };
-    
-    if (imageViewerOpen) {
-      window.addEventListener('keydown', handleKeyDown);
-      return () => window.removeEventListener('keydown', handleKeyDown);
-    }
-  }, [imageViewerOpen]);
 
   return (
     <div className="h-full p-6 overflow-y-auto">
@@ -378,59 +335,13 @@ export function ScenesPage({
         </div>
       )}
 
-      {imageViewerOpen && viewingImage && (
-        <div
-          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center"
-          onClick={handleCloseImageViewer}
-          onWheel={handleWheel}
-        >
-          <div className="absolute top-4 right-4 flex items-center gap-2">
-            <button
-              onClick={(e) => { e.stopPropagation(); handleZoomIn(); }}
-              className="p-2 bg-slate-800/80 hover:bg-slate-700 text-slate-200 rounded-lg"
-              title="放大 (滚轮向上)"
-            >
-              <ZoomIn className="w-4 h-4" />
-            </button>
-            <button
-              onClick={(e) => { e.stopPropagation(); handleZoomOut(); }}
-              className="p-2 bg-slate-800/80 hover:bg-slate-700 text-slate-200 rounded-lg"
-              title="缩小 (滚轮向下)"
-            >
-              <ZoomOut className="w-4 h-4" />
-            </button>
-            <button
-              onClick={(e) => { e.stopPropagation(); handleResetZoom(); }}
-              className="p-2 bg-slate-800/80 hover:bg-slate-700 text-slate-200 rounded-lg"
-              title="重置缩放"
-            >
-              <RotateCcw className="w-4 h-4" />
-            </button>
-            <button
-              onClick={handleCloseImageViewer}
-              className="p-2 bg-slate-800/80 hover:bg-slate-700 text-slate-200 rounded-lg"
-              title="关闭 (Esc)"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-          {/* Scale indicator */}
-          <div className="absolute bottom-4 left-4 z-10 px-3 py-1 bg-black/50 rounded-full text-white text-sm">
-            {Math.round(imageScale * 100)}%
-          </div>
-          {/* Scene name */}
-          <div className="absolute bottom-4 right-4 z-10 px-3 py-1 bg-black/50 rounded-full text-white text-sm">
-            {viewingImage.name}
-          </div>
-          <div className="max-w-[90vw] max-h-[90vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
-            <img
-              src={viewingImage.url}
-              alt={viewingImage.name}
-              className="max-w-full max-h-full object-contain transition-transform"
-              style={{ transform: `scale(${imageScale})` }}
-            />
-          </div>
-        </div>
+      {/* Image Viewer Modal */}
+      {viewingImage && (
+        <ImagePreviewModal
+          imageUrl={viewingImage.url}
+          title={viewingImage.name}
+          onClose={handleCloseImageViewer}
+        />
       )}
     </div>
   );

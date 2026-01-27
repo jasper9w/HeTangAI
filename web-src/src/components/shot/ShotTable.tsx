@@ -3,9 +3,9 @@
  */
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Image, Film, Trash2, Loader2, Check, X, ZoomIn, Plus, Play, Pause } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { VideoModal } from '../ui/VideoModal';
+import { ImagePreviewModal } from '../ui/ImagePreviewModal';
 import { useColumnFilter } from './ColumnFilter';
 import { ColumnHeaderFilter, SearchFilter, StatusFilter } from './ExcelColumnFilter';
 import type { Shot, Character, Scene } from '../../types';
@@ -650,41 +650,12 @@ export function ShotTable({
       )}
 
       {/* Image Preview Modal */}
-      <AnimatePresence>
-        {previewImage && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-8"
-            onClick={() => setPreviewImage(null)}
-          >
-            <motion.div
-              initial={{ scale: 0.9 }}
-              animate={{ scale: 1 }}
-              exit={{ scale: 0.9 }}
-              className="relative max-w-4xl max-h-full"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <img
-                src={previewImage}
-                alt="预览"
-                className="max-w-full max-h-[80vh] rounded-lg shadow-2xl"
-              />
-              <button
-                onClick={() => setPreviewImage(null)}
-                className="absolute -top-3 -right-3 w-8 h-8 bg-slate-800 hover:bg-slate-700 rounded-full flex items-center justify-center transition-colors"
-              >
-                <X className="w-5 h-5 text-slate-300" />
-              </button>
-              {/* ESC hint */}
-              <div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 text-sm text-slate-400">
-                按 ESC 键或点击背景关闭
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {previewImage && (
+        <ImagePreviewModal
+          imageUrl={previewImage}
+          onClose={() => setPreviewImage(null)}
+        />
+      )}
 
       {/* Video Preview Modal */}
       <VideoModal

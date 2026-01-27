@@ -1,7 +1,7 @@
 /**
  * CharactersPage - Character management page
  */
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
 import {
   Mic,
   Image as ImageIcon,
@@ -11,14 +11,12 @@ import {
   X,
   Loader2,
   Sparkles,
-  ZoomIn,
-  ZoomOut,
-  RotateCcw,
   Upload,
   FileUp
 } from 'lucide-react';
 import { ReferenceAudioModal } from '../components/character/ReferenceAudioModal';
 import { CharacterImportModal } from '../components/character/CharacterImportModal';
+import { ImagePreviewModal } from '../components/ui/ImagePreviewModal';
 import type { Character } from '../types';
 
 interface CharactersPageProps {
@@ -77,9 +75,7 @@ export function CharactersPage({
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [characterToDelete, setCharacterToDelete] = useState<Character | null>(null);
-  const [imageViewerOpen, setImageViewerOpen] = useState(false);
   const [viewingImage, setViewingImage] = useState<{ url: string; name: string } | null>(null);
-  const [imageScale, setImageScale] = useState(1);
   const [editing, setEditing] = useState<{ id: string | null; name: string; description: string }>({
     id: null,
     name: '',
@@ -154,50 +150,11 @@ export function CharactersPage({
 
   const handleImageClick = (imageUrl: string, characterName: string) => {
     setViewingImage({ url: imageUrl, name: characterName });
-    setImageScale(1);
-    setImageViewerOpen(true);
   };
 
   const handleCloseImageViewer = () => {
-    setImageViewerOpen(false);
     setViewingImage(null);
-    setImageScale(1);
   };
-
-  const handleZoomIn = () => {
-    setImageScale(prev => Math.min(prev + 0.25, 3));
-  };
-
-  const handleZoomOut = () => {
-    setImageScale(prev => Math.max(prev - 0.25, 0.25));
-  };
-
-  const handleResetZoom = () => {
-    setImageScale(1);
-  };
-
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    e.preventDefault();
-    if (e.deltaY < 0) {
-      setImageScale(prev => Math.min(prev + 0.1, 3));
-    } else {
-      setImageScale(prev => Math.max(prev - 0.1, 0.25));
-    }
-  }, []);
-
-  // ESC key listener for image viewer
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && imageViewerOpen) {
-        handleCloseImageViewer();
-      }
-    };
-    
-    if (imageViewerOpen) {
-      window.addEventListener('keydown', handleKeyDown);
-      return () => window.removeEventListener('keydown', handleKeyDown);
-    }
-  }, [imageViewerOpen]);
 
   
   const selectedCharacter = characters.find((c) => c.id === selectedCharacterId);
@@ -698,75 +655,12 @@ export function CharactersPage({
       )}
 
       {/* Image Viewer Modal */}
-      {imageViewerOpen && viewingImage && (
-        <div
-          className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4"
-          onClick={handleCloseImageViewer}
-          onWheel={handleWheel}
-        >
-          <div className="relative max-w-full max-h-full">
-            {/* Close button */}
-            <button
-              onClick={handleCloseImageViewer}
-              className="absolute top-4 right-4 z-10 p-2 bg-black/50 hover:bg-black/70 rounded-full text-white transition-colors"
-            >
-              <X className="w-6 h-6" />
-            </button>
-
-            {/* Zoom controls */}
-            <div className="absolute top-4 left-4 z-10 flex flex-col gap-2">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleZoomIn();
-                }}
-                className="p-2 bg-black/50 hover:bg-black/70 rounded-full text-white transition-colors"
-                title="放大 (滚轮向上)"
-              >
-                <ZoomIn className="w-5 h-5" />
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleZoomOut();
-                }}
-                className="p-2 bg-black/50 hover:bg-black/70 rounded-full text-white transition-colors"
-                title="缩小 (滚轮向下)"
-              >
-                <ZoomOut className="w-5 h-5" />
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleResetZoom();
-                }}
-                className="p-2 bg-black/50 hover:bg-black/70 rounded-full text-white transition-colors"
-                title="重置缩放"
-              >
-                <RotateCcw className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Scale indicator */}
-            <div className="absolute bottom-4 left-4 z-10 px-3 py-1 bg-black/50 rounded-full text-white text-sm">
-              {Math.round(imageScale * 100)}%
-            </div>
-
-            {/* Character name */}
-            <div className="absolute bottom-4 right-4 z-10 px-3 py-1 bg-black/50 rounded-full text-white text-sm">
-              {viewingImage.name}
-            </div>
-
-            {/* Image */}
-            <img
-              src={viewingImage.url}
-              alt={viewingImage.name}
-              className="max-w-full max-h-full object-contain transition-transform duration-200"
-              style={{ transform: `scale(${imageScale})` }}
-              onClick={(e) => e.stopPropagation()}
-            />
-          </div>
-        </div>
+      {viewingImage && (
+        <ImagePreviewModal
+          imageUrl={viewingImage.url}
+          title={viewingImage.name}
+          onClose={handleCloseImageViewer}
+        />
       )}
     </div>
   );
