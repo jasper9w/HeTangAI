@@ -15,6 +15,50 @@ from services.file_server import LocalFileServer
 DEV = os.environ.get("DEV") == "1"
 APP_NAME = "荷塘AI - 视频创作工坊"
 
+
+def check_windows_webview2():
+    """Check if WebView2 Runtime is available on Windows"""
+    if sys.platform != "win32":
+        return True
+    
+    try:
+        import winreg
+        # Check if WebView2 Runtime is installed
+        key_paths = [
+            r"SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
+            r"SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
+        ]
+        for key_path in key_paths:
+            try:
+                with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, key_path):
+                    return True
+            except FileNotFoundError:
+                continue
+        return False
+    except Exception as e:
+        logger.warning(f"Failed to check WebView2: {e}")
+        return True  # Assume available if check fails
+
+
+def show_webview2_install_dialog():
+    """Show dialog to guide user to install WebView2 Runtime"""
+    import ctypes
+    import webbrowser
+    
+    message = (
+        "检测到系统缺少 WebView2 运行时组件。\n\n"
+        "本程序需要 Microsoft Edge WebView2 Runtime 才能正常运行。\n\n"
+        "点击「是」打开下载页面安装 WebView2 Runtime，\n"
+        "或点击「否」继续尝试启动（可能无法正常使用）。\n\n"
+        "如果您已安装最新版 Edge 浏览器，通常已自带此组件。"
+    )
+    # MB_YESNO | MB_ICONWARNING
+    result = ctypes.windll.user32.MessageBoxW(0, message, APP_NAME, 0x04 | 0x30)
+    
+    # If user clicks "Yes" (6), open download page
+    if result == 6:
+        webbrowser.open("https://developer.microsoft.com/en-us/microsoft-edge/webview2/")
+
 # Paths
 if getattr(sys, "frozen", False):
     # Running as packaged app
@@ -77,8 +121,13 @@ def main():
     # Store window reference in api for dialogs (NOT in Api class directly per CLAUDE.md)
     api.set_window(window)
 
-    webview.start(gui='qt')
-    # webview.start()
+    # Windows: check WebView2 Runtime availability
+    if sys.platform == "win32" and not check_windows_webview2():
+        show_webview2_install_dialog()
+        # Still try to start - might work if detection failed
+    
+    # Use default backend (WebKit on macOS, EdgeChromium on Windows, GTK WebKit2 on Linux)
+    webview.start(debug=DEV)
 
     # Cleanup
     file_server.stop()

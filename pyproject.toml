@@ -17,7 +17,4 @@ dependencies = [
     "openai>=2.15.0",
     "dotenv>=0.9.9",
     "pyinstaller>=6.18.0",
-    "qtpy>=2.4.3",
-    "pyqt6-webengine>=6.10.0",
-    "pyqt6>=6.10.2",
 ]
