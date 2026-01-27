@@ -732,17 +732,22 @@ class Api:
                     style_text = style_info.get("text", "")
 
                     prompt_template = """
-专业角色设计参考图，16:9横向三等分构图，纯白背景。
+专业角色设计参考图，标准四宫格构图，纯白背景。
 
-左/中/右分别展示：正面全身、右侧面全身、背面全身。
+四宫格布局（2x2）：
+- 左上：面部特写（标注"特写"）
+- 右上：正面全身（标注"正面"）
+- 左下：右侧面全身（标注"侧面"）
+- 右下：背面全身（标注"背面"）
 
 要求：
-
-同一角色三个视角：面容/服装/体型完全一致
-自然站立姿态，双臂下垂，双脚并拢
-角色占区域高度85%，头脚留白，不裁切
-电影级超高清画质，光影真实，细节精细
+- 每张图片左上角用简洁文字标注视角类型
+- 同一角色四个视角：面容/服装/体型完全一致
+- 全身图自然站立姿态，双臂下垂，双脚并拢
+- 角色占区域高度85%，头脚留白，不裁切
+- 电影级超高清画质，光影真实，细节精细
 {style_requirement}
+
 角色描述：
 {character_desc}
 """
@@ -2204,7 +2209,7 @@ class Api:
                                                 local_path = str(Path.cwd() / local_path)
 
                                             if Path(local_path).exists():
-                                                reference_image_data = compress_image_if_needed(local_path, max_size_kb=256)
+                                                reference_image_data = compress_image_if_needed(local_path, max_size_kb=768)
                                                 reference_images.append({"base64": reference_image_data})
                                                 character_references.append(char_name)
                                                 logger.info(f"Added character reference: {char_name} -> {local_path}")
@@ -2226,7 +2231,7 @@ class Api:
                                 if not local_path.startswith("/"):
                                     local_path = str(Path.cwd() / local_path)
                                 if Path(local_path).exists():
-                                    reference_image_data = compress_image_if_needed(local_path, max_size_kb=256)
+                                    reference_image_data = compress_image_if_needed(local_path, max_size_kb=768)
                                     reference_images.append({"base64": reference_image_data})
                                     logger.info(f"Added scene reference: {matched_scene.get('name', '')} -> {local_path}")
                                 else:
@@ -2236,7 +2241,7 @@ class Api:
 
                         # Add style image as reference if available
                         if style_image_path and Path(style_image_path).exists():
-                            style_image_data = compress_image_if_needed(style_image_path, max_size_kb=256)
+                            style_image_data = compress_image_if_needed(style_image_path, max_size_kb=768)
                             reference_images.append({"base64": style_image_data})
                             logger.info(f"Added style reference image: {style_image_path}")
 

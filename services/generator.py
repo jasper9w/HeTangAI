@@ -287,8 +287,8 @@ class GenerationClient:
             content = [{"type": "text", "text": prompt}]
 
             for img_path in image_paths:
-                # Compress image if needed (max 256KB)
-                image_data = compress_image_if_needed(img_path, max_size_kb=256)
+                # Compress image if needed (max 768KB)
+                image_data = compress_image_if_needed(img_path, max_size_kb=768)
 
                 content.append({
                     "type": "image_url",
