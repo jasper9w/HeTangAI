@@ -23,6 +23,7 @@ import { HomePage } from './pages/HomePage';
 import { ShotsPage } from './pages/ShotsPage';
 import { ShotBuilderPage } from './pages/ShotBuilderPage.tsx';
 import { CharactersPage } from './pages/CharactersPage';
+import { ScenesPage } from './pages/ScenesPage';
 import { DubbingPage } from './pages/DubbingPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { Toast, type ToastMessage } from './components/ui/Toast';
@@ -60,6 +61,15 @@ function App() {
   // Character modal state
   const [addCharacterModalOpen, setAddCharacterModalOpen] = useState(false);
   const [importCharacterModalOpen, setImportCharacterModalOpen] = useState(false);
+
+  // Scene modal state
+  const [addSceneModalOpen, setAddSceneModalOpen] = useState(false);
+
+  // One-click import conflict state
+  const [importConflictOpen, setImportConflictOpen] = useState(false);
+  const [importConflictTarget, setImportConflictTarget] = useState<'characters' | 'scenes' | 'shots'>('characters');
+  const [importConflictTotal, setImportConflictTotal] = useState(0);
+  const [importConflictCount, setImportConflictCount] = useState(0);
 
   // Prefix modal state
   const [shotPrefixModalOpen, setShotPrefixModalOpen] = useState(false);
@@ -353,6 +363,154 @@ function App() {
     } else if (result.error && result.error !== 'No file selected') {
       showToast('error', `角色图片上传失败: ${result.error}`);
     }
+  };
+
+  // ========== Scene Operations ==========
+
+  const handleAddScene = async (name: string, prompt: string) => {
+    if (!api || !project) return;
+    const result = await api.add_scene(name, prompt);
+    if (result.success && result.scene) {
+      setProject({
+        ...project,
+        scenes: [...(project.scenes || []), result.scene],
+      });
+      setIsDirty(true);
+    }
+  };
+
+  const handleUpdateScene = async (id: string, name: string, prompt: string) => {
+    if (!api || !project) return;
+    const result = await api.update_scene(id, name, prompt);
+    if (result.success && result.scene) {
+      setProject({
+        ...project,
+        scenes: (project.scenes || []).map((s) =>
+          s.id === id ? result.scene! : s
+        ),
+      });
+      setIsDirty(true);
+    }
+  };
+
+  const handleDeleteScene = async (id: string) => {
+    if (!api || !project) return;
+    const result = await api.delete_scene(id);
+    if (result.success) {
+      setProject({
+        ...project,
+        scenes: (project.scenes || []).filter((s) => s.id !== id),
+      });
+      setIsDirty(true);
+    }
+  };
+
+  const handleGenerateSceneImage = async (id: string) => {
+    if (!api) return;
+    setProject((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        scenes: (prev.scenes || []).map((s) =>
+          s.id === id ? { ...s, status: 'generating' as const } : s
+        ),
+      };
+    });
+
+    const result = await api.generate_scene_image(id);
+    if (result.success && result.scene) {
+      setProject((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          scenes: (prev.scenes || []).map((s) =>
+            s.id === id ? result.scene! : s
+          ),
+        };
+      });
+      setIsDirty(true);
+      showToast('success', '场景图片生成成功');
+    } else {
+      setProject((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          scenes: (prev.scenes || []).map((s) =>
+            s.id === id ? { ...s, status: 'error' as const, errorMessage: result.error } : s
+          ),
+        };
+      });
+      showToast('error', `场景图片生成失败: ${result.error || '未知错误'}`);
+    }
+  };
+
+  const handleUploadSceneImage = async (id: string) => {
+    if (!api || !project) return;
+    const result = await api.upload_scene_image(id);
+    if (result.success && result.scene) {
+      setProject((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          scenes: (prev.scenes || []).map((s) =>
+            s.id === id ? result.scene! : s
+          ),
+        };
+      });
+      setIsDirty(true);
+      showToast('success', '场景图片上传成功');
+    } else if (result.error && result.error !== 'No file selected') {
+      showToast('error', `场景图片上传失败: ${result.error}`);
+    }
+  };
+
+  // ========== One-Click Import ==========
+
+  const handleImportShotBuilder = async (
+    target: 'characters' | 'scenes' | 'shots',
+    strategy?: 'overwrite' | 'skip' | 'cancel'
+  ) => {
+    if (!api || !project) return;
+    let result;
+    if (target === 'characters') {
+      result = await api.import_shot_builder_roles(strategy);
+    } else if (target === 'scenes') {
+      result = await api.import_shot_builder_scenes(strategy);
+    } else {
+      result = await api.import_shot_builder_shots(strategy);
+    }
+
+    if (!result.success && result.conflicts && result.total !== undefined) {
+      setImportConflictTarget(target);
+      setImportConflictTotal(result.total);
+      setImportConflictCount(result.conflicts.length);
+      setImportConflictOpen(true);
+      return;
+    }
+
+    if (!result.success) {
+      if (result.error && result.error !== 'cancelled') {
+        showToast('error', `导入失败: ${result.error}`);
+      }
+      return;
+    }
+
+    // Refresh project data after import
+    const dataResult = await api.get_project_data();
+    if (dataResult.success && dataResult.data) {
+      setProject(dataResult.data);
+      setIsDirty(true);
+    }
+
+    const importedCount = result.importedCount || 0;
+    const overwrittenCount = result.overwrittenCount || 0;
+    const skippedCount = result.skippedCount || 0;
+    const summary = [
+      importedCount ? `导入 ${importedCount}` : '',
+      overwrittenCount ? `覆盖 ${overwrittenCount}` : '',
+      skippedCount ? `跳过 ${skippedCount}` : '',
+    ].filter(Boolean).join('，');
+    showToast('success', summary ? `导入完成：${summary}` : '导入完成');
   };
 
   const handleImportCharactersFromText = async (text: string) => {
@@ -876,6 +1034,13 @@ function App() {
               JSONL模板
             </button>
             <button
+              onClick={() => handleImportShotBuilder('shots')}
+              className="flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-200 transition-colors"
+            >
+              <FileUp className="w-4 h-4" />
+              一键导入
+            </button>
+            <button
               onClick={() => {
                 setShotImagePrefix(project?.promptPrefixes?.shotImagePrefix || '');
                 setShotVideoPrefix(project?.promptPrefixes?.shotVideoPrefix || '');
@@ -1002,6 +1167,13 @@ function App() {
               导入角色
             </button>
             <button
+              onClick={() => handleImportShotBuilder('characters')}
+              className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-200 transition-colors"
+            >
+              <FileUp className="w-4 h-4" />
+              一键导入
+            </button>
+            <button
               onClick={() => setAddCharacterModalOpen(true)}
               className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-200 transition-colors"
             >
@@ -1011,6 +1183,25 @@ function App() {
           </div>
         );
       }
+      case 'scenes':
+        return (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => handleImportShotBuilder('scenes')}
+              className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-200 transition-colors"
+            >
+              <FileUp className="w-4 h-4" />
+              一键导入
+            </button>
+            <button
+              onClick={() => setAddSceneModalOpen(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-500 rounded-lg text-sm text-white transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              添加场景
+            </button>
+          </div>
+        );
       default:
         return null;
     }
@@ -1076,6 +1267,19 @@ function App() {
             onAddModalOpenChange={setAddCharacterModalOpen}
             importModalOpen={importCharacterModalOpen}
             onImportModalOpenChange={setImportCharacterModalOpen}
+          />
+        );
+      case 'scenes':
+        return (
+          <ScenesPage
+            scenes={project?.scenes || []}
+            onAddScene={handleAddScene}
+            onUpdateScene={handleUpdateScene}
+            onDeleteScene={handleDeleteScene}
+            onGenerateImage={handleGenerateSceneImage}
+            onUploadImage={handleUploadSceneImage}
+            addModalOpen={addSceneModalOpen}
+            onAddModalOpenChange={setAddSceneModalOpen}
           />
         );
       case 'dubbing':
@@ -1282,6 +1486,48 @@ function App() {
                 className="px-4 py-2 bg-violet-600 hover:bg-violet-500 rounded-lg text-sm text-white transition-colors"
               >
                 保存
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* One-Click Import Conflict Modal */}
+      {importConflictOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-slate-800 rounded-xl p-6 w-[520px] max-w-[90vw]">
+            <h2 className="text-lg font-semibold text-white mb-3">发现重复ID</h2>
+            <p className="text-sm text-slate-400 mb-4">
+              从分镜JSONL导入时，检测到 {importConflictCount} 条重复（共 {importConflictTotal} 条）。
+              请选择处理方式：
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setImportConflictOpen(false);
+                  handleImportShotBuilder(importConflictTarget, 'cancel');
+                }}
+                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-200 transition-colors"
+              >
+                取消
+              </button>
+              <button
+                onClick={() => {
+                  setImportConflictOpen(false);
+                  handleImportShotBuilder(importConflictTarget, 'skip');
+                }}
+                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-200 transition-colors"
+              >
+                跳过重复
+              </button>
+              <button
+                onClick={() => {
+                  setImportConflictOpen(false);
+                  handleImportShotBuilder(importConflictTarget, 'overwrite');
+                }}
+                className="px-4 py-2 bg-violet-600 hover:bg-violet-500 rounded-lg text-sm text-white transition-colors"
+              >
+                覆盖重复
               </button>
             </div>
           </div>

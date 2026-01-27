@@ -46,6 +46,10 @@ class ProjectManager:
         """Get character directory path"""
         return self.work_dir / project_name / "角色"
 
+    def get_scene_dir(self, project_name: str) -> Path:
+        """Get scene directory path"""
+        return self.work_dir / project_name / "场景"
+
     def get_shot_dir(self, project_name: str) -> Path:
         """Get shot directory path"""
         return self.work_dir / project_name / "镜头"
@@ -81,6 +85,11 @@ class ProjectManager:
         """Get character image path"""
         char_dir = self.get_character_dir(project_name)
         return char_dir / f"{character_id}.jpg"
+
+    def get_scene_image_path(self, project_name: str, scene_id: str) -> Path:
+        """Get scene image path"""
+        scene_dir = self.get_scene_dir(project_name)
+        return scene_dir / f"{scene_id}.jpg"
 
     def list_projects(self) -> list[str]:
         """List all project names in work directory"""
@@ -136,6 +145,21 @@ class ProjectManager:
         logger.info(f"Saved character image: {image_path}")
         return image_path
 
+    def save_scene_image(
+        self, project_name: str, scene_id: str, image_data: bytes, ext: str = ".jpg"
+    ) -> Path:
+        """Save scene image to scene directory"""
+        scene_dir = self.get_scene_dir(project_name)
+        scene_dir.mkdir(parents=True, exist_ok=True)
+
+        image_path = scene_dir / f"{scene_id}{ext}"
+        with open(image_path, "wb") as f:
+            f.write(image_data)
+
+        logger.info(f"Saved scene image: {image_path}")
+        return image_path
+
+
     def copy_character_image(
         self, project_name: str, character_id: str, source_path: Path
     ) -> Path:
@@ -147,6 +171,19 @@ class ProjectManager:
         shutil.copy2(source_path, dest_path)
 
         logger.info(f"Copied character image: {source_path} -> {dest_path}")
+        return dest_path
+
+    def copy_scene_image(
+        self, project_name: str, scene_id: str, source_path: Path
+    ) -> Path:
+        """Copy scene image from source to scene directory"""
+        scene_dir = self.get_scene_dir(project_name)
+        scene_dir.mkdir(parents=True, exist_ok=True)
+
+        dest_path = scene_dir / f"{scene_id}{source_path.suffix}"
+        shutil.copy2(source_path, dest_path)
+
+        logger.info(f"Copied scene image: {source_path} -> {dest_path}")
         return dest_path
 
     def save_shot_image(

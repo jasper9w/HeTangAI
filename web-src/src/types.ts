@@ -4,7 +4,7 @@
 
 // ========== Page Types ==========
 
-export type PageType = 'projects' | 'home' | 'storyboard' | 'shots' | 'characters' | 'dubbing' | 'settings';
+export type PageType = 'projects' | 'home' | 'storyboard' | 'characters' | 'scenes' | 'shots' | 'dubbing' | 'settings';
 
 // ========== Shot Types ==========
 
@@ -65,6 +65,21 @@ export interface Character {
   errorMessage?: string;
 }
 
+// ========== Scene Types ==========
+
+export type SceneStatus = 'pending' | 'generating' | 'ready' | 'error';
+
+export interface Scene {
+  id: string;
+  name: string;
+  prompt: string;
+  imageUrl: string;
+  imageSourceUrl?: string;
+  imageMediaGenerationId?: string;
+  status: SceneStatus;
+  errorMessage?: string;
+}
+
 export interface ImportedCharacter extends Partial<Character> {
   existingId?: string;
   isDuplicate?: boolean;
@@ -92,6 +107,7 @@ export interface ProjectData {
     characterPrefix: string;
   };
   characters: Character[];
+  scenes: Scene[];
   shots: Shot[];
 }
 
@@ -130,6 +146,16 @@ export interface ShotBuilderStatus {
     scenes: number;
     shots: number;
   };
+}
+
+export interface ShotBuilderImportResult {
+  success: boolean;
+  error?: string;
+  importedCount?: number;
+  overwrittenCount?: number;
+  skippedCount?: number;
+  conflicts?: { id: string; name?: string }[];
+  total?: number;
 }
 
 export interface ShotBuilderOutputs {
@@ -203,12 +229,24 @@ export interface PyWebViewApi {
   confirm_import_characters: (characters: ImportedCharacter[]) => Promise<ApiResponse & { addedCount?: number }>;
   export_character_template: () => Promise<ApiResponse & { path?: string }>;
 
+  // Scene management
+  add_scene: (name: string, prompt?: string) => Promise<ApiResponse & { scene?: Scene }>;
+  update_scene: (sceneId: string, name: string, prompt: string) => Promise<ApiResponse & { scene?: Scene }>;
+  delete_scene: (sceneId: string) => Promise<ApiResponse>;
+  generate_scene_image: (sceneId: string) => Promise<ApiResponse & { imageUrl?: string; scene?: Scene }>;
+  upload_scene_image: (sceneId: string) => Promise<ApiResponse & { imageUrl?: string; scene?: Scene }>;
+
   // Shot management
   update_shot: (shotId: string, field: string, value: unknown) => Promise<ApiResponse & { shot?: Shot }>;
   delete_shots: (shotIds: string[]) => Promise<ApiResponse & { deletedCount?: number }>;
   select_image: (shotId: string, imageIndex: number) => Promise<ApiResponse>;
   select_video: (shotId: string, videoIndex: number) => Promise<ApiResponse>;
   insert_shot: (afterShotId: string | null) => Promise<ApiResponse & { shots?: Shot[] }>;
+
+  // Shot builder one-click import
+  import_shot_builder_roles: (strategy?: 'overwrite' | 'skip' | 'cancel') => Promise<ShotBuilderImportResult>;
+  import_shot_builder_scenes: (strategy?: 'overwrite' | 'skip' | 'cancel') => Promise<ShotBuilderImportResult>;
+  import_shot_builder_shots: (strategy?: 'overwrite' | 'skip' | 'cancel') => Promise<ShotBuilderImportResult>;
 
   // Generation
   generate_images_for_shot: (shotId: string) => Promise<GenerateResult>;

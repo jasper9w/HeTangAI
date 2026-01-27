@@ -73,6 +73,14 @@ class Api:
         chars = string.ascii_lowercase + string.digits
         return ''.join(random.choices(chars, k=6))
 
+    def _generate_scene_id(self) -> str:
+        """Generate a short random ID for scene"""
+        return f"scene_{uuid.uuid4().hex[:8]}"
+
+    def _generate_role_id(self) -> str:
+        """Generate a short random ID for role"""
+        return f"role_{uuid.uuid4().hex[:8]}"
+
     def _path_to_url(self, filepath: str) -> str:
         """Convert local file path to HTTP URL for file server"""
         # Use relative path from current directory
@@ -244,6 +252,7 @@ class Api:
                     "status": "ready",
                 }
             ],
+            "scenes": [],
             "shots": [],
         }
         self.project_path = None
@@ -297,6 +306,11 @@ class Api:
                         character["status"] = "pending"
                         logger.info(f"Cleared generating status for character {character.get('name')}")
 
+                for scene in self.project_data.get("scenes", []):
+                    if scene.get("status") == "generating":
+                        scene["status"] = "pending"
+                        logger.info(f"Cleared generating status for scene {scene.get('name')}")
+
                 # Backward compatibility: migrate old format to new format
                 for shot in self.project_data.get("shots", []):
                     if "dialogues" not in shot or not shot["dialogues"]:
@@ -305,6 +319,8 @@ class Api:
                             logger.info(f"Migrated shot {shot.get('id')} to new dialogue format")
 
                 self._ensure_prompt_prefixes(self.project_data)
+                if "scenes" not in self.project_data or not isinstance(self.project_data.get("scenes"), list):
+                    self.project_data["scenes"] = []
 
                 # Load all alternative images for each shot (slots 1-4)
                 for shot in self.project_data.get("shots", []):
@@ -454,6 +470,8 @@ class Api:
                         logger.info(f"Migrated shot {shot.get('id')} to new dialogue format")
 
             self._ensure_prompt_prefixes(self.project_data)
+            if "scenes" not in self.project_data or not isinstance(self.project_data.get("scenes"), list):
+                self.project_data["scenes"] = []
 
             return {"success": True, "data": self.project_data, "path": str(file_path)}
         except Exception as e:
@@ -856,6 +874,421 @@ class Api:
 
         except Exception as e:
             logger.error(f"Failed to upload character image: {e}")
+            return {"success": False, "error": str(e)}
+
+    # ========== Scene Management ==========
+
+    def add_scene(self, name: str, prompt: str = "") -> dict:
+        """Add a new scene"""
+        if not self.project_data:
+            return {"success": False, "error": "No project data"}
+
+        scene = {
+            "id": f"scene_{uuid.uuid4().hex[:8]}",
+            "name": name,
+            "prompt": prompt,
+            "imageUrl": "",
+            "status": "pending",
+        }
+        self.project_data.setdefault("scenes", []).append(scene)
+        logger.info(f"Added scene: {name}")
+        return {"success": True, "scene": scene}
+
+    def update_scene(self, scene_id: str, name: str, prompt: str) -> dict:
+        """Update scene info"""
+        if not self.project_data:
+            return {"success": False, "error": "No project data"}
+
+        for scene in self.project_data.get("scenes", []):
+            if scene["id"] == scene_id:
+                scene["name"] = name
+                scene["prompt"] = prompt
+                logger.info(f"Updated scene: {scene_id}")
+                return {"success": True, "scene": scene}
+
+        return {"success": False, "error": "Scene not found"}
+
+    def delete_scene(self, scene_id: str) -> dict:
+        """Delete a scene"""
+        if not self.project_data:
+            return {"success": False, "error": "No project data"}
+
+        original_len = len(self.project_data.get("scenes", []))
+        self.project_data["scenes"] = [
+            s for s in self.project_data.get("scenes", []) if s["id"] != scene_id
+        ]
+
+        if len(self.project_data["scenes"]) < original_len:
+            logger.info(f"Deleted scene: {scene_id}")
+            return {"success": True}
+
+        return {"success": False, "error": "Scene not found"}
+
+    def generate_scene_image(self, scene_id: str) -> dict:
+        """Generate scene image"""
+        if not self.project_data:
+            return {"success": False, "error": "No project data"}
+
+        for scene in self.project_data.get("scenes", []):
+            if scene["id"] == scene_id:
+                try:
+                    import asyncio
+                    import time
+
+                    scene["status"] = "generating"
+
+                    settings = self._load_settings()
+                    tti_config = settings.get("tti", {})
+                    provider = tti_config.get("provider", "openai")
+
+                    if not self.project_name:
+                        raise ValueError("Please save the project first before generating scene images")
+
+                    scene_prompt = str(scene.get("prompt", "")).strip()
+                    prompt = scene_prompt or scene.get("name", "")
+
+                    image_path = self._project_manager.get_scene_image_path(
+                        self.project_name, scene_id
+                    )
+
+                    if provider == "whisk":
+                        from services.whisk import Whisk
+
+                        if not tti_config.get("whiskToken") or not tti_config.get("whiskWorkflowId"):
+                            raise ValueError("Whisk Token and Workflow ID not configured in settings")
+
+                        whisk = Whisk(
+                            token=tti_config["whiskToken"],
+                            workflow_id=tti_config["whiskWorkflowId"]
+                        )
+
+                        whisk_image = whisk.generate_image(
+                            prompt=prompt,
+                            media_category="MEDIA_CATEGORY_SCENE",
+                            aspect_ratio="IMAGE_ASPECT_RATIO_LANDSCAPE"
+                        )
+
+                        whisk_image.save(str(image_path))
+                        scene["imageMediaGenerationId"] = whisk_image.media_generation_id
+                        scene["imageSourceUrl"] = ""
+                        logger.info(f"Generated scene image via Whisk, media_generation_id: {whisk_image.media_generation_id}")
+                    else:
+                        from services.generator import GenerationClient, download_file
+
+                        if not tti_config.get("apiUrl") or not tti_config.get("apiKey"):
+                            raise ValueError("TTI API not configured in settings")
+
+                        model_name = tti_config.get("sceneModel") or tti_config.get("model", "gemini-2.5-flash-image-landscape")
+                        client = GenerationClient(
+                            api_url=tti_config["apiUrl"],
+                            api_key=tti_config["apiKey"],
+                            model=model_name,
+                        )
+
+                        image_urls = asyncio.run(client.generate_image(prompt, count=1, task_type="scene"))
+                        if not image_urls:
+                            raise ValueError("No images returned from API")
+
+                        image_url = image_urls[0]
+                        if "?t=" in image_url:
+                            image_url = image_url.split("?t=")[0]
+
+                        asyncio.run(download_file(image_url, image_path))
+                        scene["imageSourceUrl"] = image_url
+                        scene["imageMediaGenerationId"] = ""
+
+                    timestamp = int(time.time() * 1000)
+                    scene["imageUrl"] = f"{self._path_to_url(str(image_path))}?t={timestamp}"
+                    scene["status"] = "ready"
+                    logger.info(f"Generated scene image for {scene_id}")
+                    return {"success": True, "imageUrl": scene["imageUrl"], "scene": scene}
+
+                except Exception as e:
+                    scene["status"] = "error"
+                    scene["errorMessage"] = str(e)
+                    logger.error(f"Failed to generate scene image: {e}")
+                    return {"success": False, "error": str(e)}
+
+        return {"success": False, "error": "Scene not found"}
+
+    def upload_scene_image(self, scene_id: str) -> dict:
+        """Upload scene image from file"""
+        if not self._window:
+            return {"success": False, "error": "Window not initialized"}
+
+        if not self.project_data:
+            return {"success": False, "error": "No project data"}
+
+        file_types = ("Image Files (*.png;*.jpg;*.jpeg;*.webp)",)
+        result = self._window.create_file_dialog(
+            webview.FileDialog.OPEN,
+            allow_multiple=False,
+            file_types=file_types,
+        )
+
+        if not result or len(result) == 0:
+            return {"success": False, "error": "No file selected"}
+
+        try:
+            import shutil
+            import time
+
+            if not self.project_name:
+                return {"success": False, "error": "Please save the project first before uploading scene images"}
+
+            source_path = Path(result[0])
+            output_path = self._project_manager.get_scene_image_path(
+                self.project_name, scene_id
+            )
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source_path, output_path)
+
+            for scene in self.project_data.get("scenes", []):
+                if scene["id"] == scene_id:
+                    timestamp = int(time.time() * 1000)
+                    scene["imageUrl"] = f"{self._path_to_url(str(output_path))}?t={timestamp}"
+                    scene["imageSourceUrl"] = ""
+                    scene["status"] = "ready"
+                    logger.info(f"Uploaded scene image for {scene_id}")
+                    return {"success": True, "imageUrl": scene["imageUrl"], "scene": scene}
+
+            return {"success": False, "error": "Scene not found"}
+
+        except Exception as e:
+            logger.error(f"Failed to upload scene image: {e}")
+            return {"success": False, "error": str(e)}
+
+    # ========== Shot Builder One-Click Import ==========
+
+    def _build_character_description_from_role(self, role: dict) -> str:
+        parts = []
+        dna = role.get("dna", "")
+        if dna:
+            parts.append(f"DNA: {dna}")
+        tti = role.get("tti") or {}
+        for label, key in [
+            ("提示词", "prompt"),
+            ("服装", "attire"),
+            ("体型", "physique"),
+            ("表情", "expression"),
+            ("风格", "style"),
+        ]:
+            value = str(tti.get(key, "")).strip()
+            if value:
+                parts.append(f"{label}: {value}")
+        return "\n".join(parts).strip()
+
+    def _build_scene_prompt_from_scene(self, scene: dict) -> str:
+        parts = []
+        desc = str(scene.get("desc", "")).strip()
+        if desc:
+            parts.append(desc)
+        tti = scene.get("tti") or {}
+        for label, key in [
+            ("环境", "environment"),
+            ("建筑", "architecture"),
+            ("道具", "props"),
+            ("光线", "lighting"),
+            ("氛围", "atmosphere"),
+            ("风格", "style"),
+        ]:
+            value = str(tti.get(key, "")).strip()
+            if value:
+                parts.append(f"{label}: {value}")
+        return "\n".join(parts).strip()
+
+    def import_shot_builder_roles(self, strategy: str | None = None) -> dict:
+        try:
+            if not self.project_data:
+                return {"success": False, "error": "No project data"}
+
+            output_dir = self._get_shot_builder_output_dir()
+            roles_path = output_dir / "roles.jsonl"
+            if not roles_path.exists():
+                return {"success": False, "error": "roles.jsonl 不存在"}
+
+            from services.shots import Role
+
+            roles = []
+            with open(roles_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        roles.append(Role.model_validate_json(line).model_dump())
+                    except Exception:
+                        continue
+
+            existing_names = {c.get("name", "") for c in self.project_data.get("characters", [])}
+            new_items = []
+            conflicts = []
+            for role in roles:
+                role_id = role.get("id")
+                stable_id = f"role_{role_id}" if role_id is not None else self._generate_role_id()
+                role_name = role.get("name", "")
+                if role_name in existing_names:
+                    conflicts.append({"id": stable_id, "name": role_name})
+                new_items.append({
+                    "id": stable_id,
+                    "name": role_name,
+                    "description": self._build_character_description_from_role(role),
+                    "imageUrl": "",
+                    "speed": 1.0,
+                    "isNarrator": False,
+                    "status": "pending",
+                })
+
+            if conflicts and not strategy:
+                return {"success": False, "conflicts": conflicts, "total": len(new_items)}
+
+            if strategy == "cancel":
+                return {"success": False, "error": "cancelled"}
+
+            characters = self.project_data.get("characters", [])
+            if strategy == "overwrite":
+                by_name = {c.get("name", ""): c for c in characters}
+                for item in new_items:
+                    by_name[item["name"]] = item
+                self.project_data["characters"] = list(by_name.values())
+                return {"success": True, "importedCount": len(new_items), "overwrittenCount": len(conflicts)}
+
+            if strategy == "skip":
+                filtered = [item for item in new_items if item["name"] not in existing_names]
+                self.project_data["characters"].extend(filtered)
+                return {"success": True, "importedCount": len(filtered), "skippedCount": len(conflicts)}
+
+            self.project_data["characters"].extend(new_items)
+            return {"success": True, "importedCount": len(new_items)}
+
+        except Exception as e:
+            logger.error(f"Failed to import roles: {e}")
+            return {"success": False, "error": str(e)}
+
+    def import_shot_builder_scenes(self, strategy: str | None = None) -> dict:
+        try:
+            if not self.project_data:
+                return {"success": False, "error": "No project data"}
+
+            output_dir = self._get_shot_builder_output_dir()
+            scenes_path = output_dir / "scenes.jsonl"
+            if not scenes_path.exists():
+                return {"success": False, "error": "scenes.jsonl 不存在"}
+
+            from services.shots import Scene as ShotScene
+
+            scenes = []
+            with open(scenes_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        scenes.append(ShotScene.model_validate_json(line).model_dump())
+                    except Exception:
+                        continue
+
+            existing = {s.get("id") for s in self.project_data.get("scenes", [])}
+            new_items = []
+            conflicts = []
+            for scene in scenes:
+                scene_id = scene.get("id")
+                stable_id = f"scene_{scene_id}" if scene_id is not None else self._generate_scene_id()
+                if stable_id in existing:
+                    conflicts.append({"id": stable_id, "name": scene.get("name", "")})
+                new_items.append({
+                    "id": stable_id,
+                    "name": scene.get("name", ""),
+                    "prompt": self._build_scene_prompt_from_scene(scene),
+                    "imageUrl": "",
+                    "status": "pending",
+                })
+
+            if conflicts and not strategy:
+                return {"success": False, "conflicts": conflicts, "total": len(new_items)}
+
+            if strategy == "cancel":
+                return {"success": False, "error": "cancelled"}
+
+            scenes_list = self.project_data.get("scenes", [])
+            if strategy == "overwrite":
+                by_id = {s.get("id"): s for s in scenes_list}
+                for item in new_items:
+                    by_id[item["id"]] = item
+                self.project_data["scenes"] = list(by_id.values())
+                return {"success": True, "importedCount": len(new_items), "overwrittenCount": len(conflicts)}
+
+            if strategy == "skip":
+                filtered = [item for item in new_items if item["id"] not in existing]
+                self.project_data["scenes"].extend(filtered)
+                return {"success": True, "importedCount": len(filtered), "skippedCount": len(conflicts)}
+
+            self.project_data["scenes"].extend(new_items)
+            return {"success": True, "importedCount": len(new_items)}
+
+        except Exception as e:
+            logger.error(f"Failed to import scenes: {e}")
+            return {"success": False, "error": str(e)}
+
+    def import_shot_builder_shots(self, strategy: str | None = None) -> dict:
+        try:
+            if not self.project_data:
+                return {"success": False, "error": "No project data"}
+
+            output_dir = self._get_shot_builder_output_dir()
+            shots_path = output_dir / "shots.jsonl"
+            if not shots_path.exists():
+                return {"success": False, "error": "shots.jsonl 不存在"}
+
+            from services.jsonl_parser import JsonlParser
+
+            parser = JsonlParser()
+            new_items = []
+            conflicts = []
+            existing = {s.get("id") for s in self.project_data.get("shots", [])}
+
+            with open(shots_path, "r", encoding="utf-8") as f:
+                for line_num, line in enumerate(f, 1):
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        obj = json.loads(line)
+                        shot_data = parser._parse_jsonl_object(obj, line_num)
+                        shot_number = obj.get("shot", line_num)
+                        stable_id = f"sb_{shot_number}" if shot_number is not None else self._generate_shot_id()
+                        shot_data["id"] = stable_id
+                        shot_data["sequence"] = int(shot_number) if str(shot_number).isdigit() else line_num
+                        if stable_id in existing:
+                            conflicts.append({"id": stable_id, "name": shot_data.get("scene", "")})
+                        new_items.append(shot_data)
+                    except Exception:
+                        continue
+
+            if conflicts and not strategy:
+                return {"success": False, "conflicts": conflicts, "total": len(new_items)}
+
+            if strategy == "cancel":
+                return {"success": False, "error": "cancelled"}
+
+            shots_list = self.project_data.get("shots", [])
+            if strategy == "overwrite":
+                by_id = {s.get("id"): s for s in shots_list}
+                for item in new_items:
+                    by_id[item["id"]] = item
+                self.project_data["shots"] = list(by_id.values())
+                return {"success": True, "importedCount": len(new_items), "overwrittenCount": len(conflicts)}
+
+            if strategy == "skip":
+                filtered = [item for item in new_items if item["id"] not in existing]
+                self.project_data["shots"].extend(filtered)
+                return {"success": True, "importedCount": len(filtered), "skippedCount": len(conflicts)}
+
+            self.project_data["shots"].extend(new_items)
+            return {"success": True, "importedCount": len(new_items)}
+
+        except Exception as e:
+            logger.error(f"Failed to import shots: {e}")
             return {"success": False, "error": str(e)}
 
     def set_character_reference_audio(self, character_id: str, audio_path: str) -> dict:
