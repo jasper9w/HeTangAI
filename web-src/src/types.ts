@@ -51,6 +51,7 @@ export interface Shot {
   audioTrimEnd?: number;    // 音频裁剪终点（秒），默认为音频时长
   audioDuration?: number;   // 音频时长（秒）
   videoDuration?: number;   // 视频时长（秒）
+  remark?: string;          // 备注
   status: ShotStatus;
   errorMessage?: string;
 }

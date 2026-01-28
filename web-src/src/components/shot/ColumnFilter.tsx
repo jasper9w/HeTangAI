@@ -15,6 +15,7 @@ interface FilterState {
   imageStatus: { values: string[]; inverted: boolean }; // 图片状态多选
   videoPrompt: { value: string; inverted: boolean }; // 视频提示词搜索
   videoStatus: { values: string[]; inverted: boolean }; // 视频状态多选
+  remark: { value: string; inverted: boolean }; // 备注搜索
 }
 
 interface UseColumnFilterProps {
@@ -33,6 +34,7 @@ export function useColumnFilter({ shots, characters }: UseColumnFilterProps) {
     imageStatus: { values: [], inverted: false },
     videoPrompt: { value: '', inverted: false },
     videoStatus: { values: [], inverted: false },
+    remark: { value: '', inverted: false },
   });
 
   // 缓存计算的选项
@@ -161,6 +163,15 @@ export function useColumnFilter({ shots, characters }: UseColumnFilterProps) {
       );
     }
 
+    // 备注搜索
+    if (filters.remark.value.trim()) {
+      const searchTerm = filters.remark.value.toLowerCase();
+      const matches = (shot: Shot) => (shot.remark || '').toLowerCase().includes(searchTerm);
+      filtered = filtered.filter(shot =>
+        filters.remark.inverted ? !matches(shot) : matches(shot)
+      );
+    }
+
     return filtered;
   }, [shots, filters]);
 
@@ -181,6 +192,7 @@ export function useColumnFilter({ shots, characters }: UseColumnFilterProps) {
       imageStatus: { values: [], inverted: false },
       videoPrompt: { value: '', inverted: false },
       videoStatus: { values: [], inverted: false },
+      remark: { value: '', inverted: false },
     });
   };
 

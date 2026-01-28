@@ -464,6 +464,22 @@ export function ShotTable({
               />
             </ColumnHeaderFilter>
           </div>
+
+          {/* 备注列 */}
+          <div className="w-32">
+            <ColumnHeaderFilter
+              title="备注"
+              hasActiveFilter={!!filters.remark?.value || filters.remark?.inverted}
+            >
+              <SearchFilter
+                value={filters.remark?.value || ''}
+                inverted={filters.remark?.inverted || false}
+                onChange={(value) => updateFilter('remark', { ...filters.remark, value })}
+                onInvertedChange={(inverted) => updateFilter('remark', { ...filters.remark, inverted })}
+                placeholder="搜索备注..."
+              />
+            </ColumnHeaderFilter>
+          </div>
         </div>
       </div>
 
@@ -1293,6 +1309,16 @@ function ShotRow({
               </div>
             </div>
           )}
+        </div>
+
+        {/* 备注列 */}
+        <div className="w-32 flex-shrink-0 h-[180px]">
+          <textarea
+            className="w-full h-full px-2 py-1.5 text-xs bg-slate-700/50 hover:bg-slate-700 rounded text-slate-300 placeholder-slate-500 resize-none outline-none focus:ring-1 focus:ring-violet-500"
+            value={shot.remark || ''}
+            onChange={(e) => onUpdateField('remark', e.target.value)}
+            placeholder="添加备注..."
+          />
         </div>
       </div>
 
