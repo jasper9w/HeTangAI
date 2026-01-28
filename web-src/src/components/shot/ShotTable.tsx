@@ -414,7 +414,7 @@ export function ShotTable({
 
 
           {/* 图片预览列 */}
-          <div className="w-44">
+          <div className="w-[180px]">
             <ColumnHeaderFilter
               title="图片预览"
               hasActiveFilter={filters.imageStatus.values.length > 0 || filters.imageStatus.inverted}
@@ -432,7 +432,7 @@ export function ShotTable({
           </div>
 
           {/* 视频提示词列 */}
-          <div className="w-44">
+          <div className="w-48">
             <ColumnHeaderFilter
               title="视频提示词"
               hasActiveFilter={!!filters.videoPrompt.value || filters.videoPrompt.inverted}
@@ -448,7 +448,7 @@ export function ShotTable({
           </div>
 
           {/* 视频列 */}
-          <div className="w-44">
+          <div className="w-[180px]">
             <ColumnHeaderFilter
               title="视频"
               hasActiveFilter={filters.videoStatus.values.length > 0 || filters.videoStatus.inverted}
@@ -1090,8 +1090,8 @@ function ShotRow({
 
 
         {/* Image Preview & Selection - 根据比例决定布局方向 */}
-        <div className="flex-shrink-0 relative">
-          <div className={`${isVerticalLayout ? 'flex flex-col gap-1.5 w-[180px]' : 'flex gap-1.5 h-[180px]'}`}>
+        <div className="w-[180px] flex-shrink-0 relative">
+          <div className={`${isVerticalLayout ? 'flex flex-col gap-1.5 w-full' : 'flex gap-1.5 h-[180px]'}`}>
             {/* Main preview - 按比例显示 */}
             <div
               className={`relative rounded-lg overflow-hidden cursor-pointer group ${
@@ -1193,9 +1193,9 @@ function ShotRow({
         </div>
 
         {/* Video Preview - 根据比例决定布局方向 */}
-        <div className="flex-shrink-0 relative">
+        <div className="w-[180px] flex-shrink-0 relative">
           {hasVideo ? (
-            <div className={`${isVerticalLayout ? 'flex flex-col gap-1.5 w-[180px]' : 'flex gap-1.5 h-[180px]'}`}>
+            <div className={`${isVerticalLayout ? 'flex flex-col gap-1.5 w-full' : 'flex gap-1.5 h-[180px]'}`}>
               {/* Main video preview - 按比例显示 */}
               <div
                 className={`relative rounded-lg overflow-hidden bg-slate-700 cursor-pointer group ${
@@ -1286,7 +1286,7 @@ function ShotRow({
               </div>
             </div>
           ) : (
-            <div className={`${isVerticalLayout ? 'flex flex-col gap-1.5 w-[180px]' : 'flex gap-1.5 h-[180px]'}`}>
+            <div className={`${isVerticalLayout ? 'flex flex-col gap-1.5 w-full' : 'flex gap-1.5 h-[180px]'}`}>
               {/* Empty main preview - 按比例显示 */}
               <div
                 className={`relative rounded-lg bg-slate-700/50 flex flex-col items-center justify-center text-slate-500 ${
