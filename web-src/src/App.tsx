@@ -9,7 +9,6 @@ import {
   Loader2,
   ArrowLeft,
   FileUp,
-  Download,
   Image,
   Video,
   Mic,
@@ -28,6 +27,7 @@ import { ScenesPage } from './pages/ScenesPage';
 import { DubbingPage } from './pages/DubbingPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { Toast, type ToastMessage } from './components/ui/Toast';
+import { ImportDropdown } from './components/ui/ImportDropdown';
 import type { ProjectData, Shot, PageType, ImportedCharacter } from './types';
 
 function App() {
@@ -236,6 +236,26 @@ function App() {
   const handleExportJsonlTemplate = async () => {
     if (!api) return;
     await api.export_jsonl_template();
+  };
+
+  const handleImportExcel = async () => {
+    if (!api) return;
+    const result = await api.import_excel();
+    if (result.success && result.data) {
+      setProject(result.data);
+      setIsDirty(true);
+      if (result.count > 0) {
+        showToast('success', `成功导入 ${result.count} 个镜头`);
+      }
+      if (result.errors.length > 0) {
+        console.warn('Import warnings:', result.errors);
+      }
+    }
+  };
+
+  const handleExportExcelTemplate = async () => {
+    if (!api) return;
+    await api.export_excel_template();
   };
 
   // ========== Character Operations ==========
@@ -779,12 +799,15 @@ function App() {
 
   const handleUpdateShot = async (shotId: string, field: string, value: string | string[] | { role: string; text: string }[]) => {
     if (!api || !project) return;
-    // Update locally first for responsiveness
-    setProject({
-      ...project,
-      shots: project.shots.map((s) =>
-        s.id === shotId ? { ...s, [field]: value } : s
-      ),
+    // Update locally first for responsiveness - 使用函数式更新确保连续调用时状态正确
+    setProject(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        shots: prev.shots.map((s) =>
+          s.id === shotId ? { ...s, [field]: value } : s
+        ),
+      };
     });
     setIsDirty(true);
     // Then sync to backend
@@ -1077,27 +1100,13 @@ function App() {
 
         return (
           <div className="flex items-center gap-2">
-            <button
-              onClick={handleImportJsonl}
-              className="flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-200 transition-colors"
-            >
-              <FileUp className="w-4 h-4" />
-              导入JSONL
-            </button>
-            <button
-              onClick={handleExportJsonlTemplate}
-              className="flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-200 transition-colors"
-            >
-              <Download className="w-4 h-4" />
-              JSONL模板
-            </button>
-            <button
-              onClick={() => handleImportShotBuilder('shots')}
-              className="flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-200 transition-colors"
-            >
-              <FileUp className="w-4 h-4" />
-              一键导入
-            </button>
+            <ImportDropdown
+              onOneClickImport={() => handleImportShotBuilder('shots')}
+              onImportExcel={handleImportExcel}
+              onExportExcelTemplate={handleExportExcelTemplate}
+              onImportJsonl={handleImportJsonl}
+              onExportJsonlTemplate={handleExportJsonlTemplate}
+            />
             <button
               onClick={() => {
                 setShotImagePrefix(project?.promptPrefixes?.shotImagePrefix || '');

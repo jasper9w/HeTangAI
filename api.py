@@ -3,6 +3,7 @@ API class exposed to frontend via pywebview
 """
 import base64
 import json
+import math
 import random
 import string
 import uuid
@@ -627,6 +628,84 @@ class Api:
             return {"success": True, "path": result}
         except Exception as e:
             logger.error(f"Failed to export JSONL template: {e}")
+            return {"success": False, "error": str(e)}
+
+    def import_excel(self) -> dict:
+        """Import shots from Excel file"""
+        if not self._window:
+            return {"success": False, "error": "Window not initialized"}
+        file_types = ("Excel Files (*.xlsx;*.xls)", "CSV Files (*.csv)")
+        result = self._window.create_file_dialog(
+            webview.FileDialog.OPEN,
+            allow_multiple=False,
+            file_types=file_types,
+        )
+
+        if not result or len(result) == 0:
+            return {"success": False, "error": "No file selected"}
+
+        file_path = Path(result[0])
+        logger.info(f"Importing Excel from: {file_path}")
+
+        try:
+            from services.excel_parser import ExcelParser
+
+            parser = ExcelParser()
+            shots, characters, errors = parser.parse(file_path)
+
+            if not self.project_data:
+                self.new_project()
+
+            # Add shots to project
+            self.project_data["shots"].extend(shots)
+
+            # Add new characters (avoid duplicates)
+            existing_names = {c["name"] for c in self.project_data["characters"]}
+            for char_name in characters:
+                if char_name not in existing_names:
+                    self.project_data["characters"].append({
+                        "id": f"char_{uuid.uuid4().hex[:8]}",
+                        "name": char_name,
+                        "description": "",
+                        "imageUrl": "",
+                        "status": "pending",
+                    })
+                    existing_names.add(char_name)
+
+            return {
+                "success": True,
+                "count": len(shots),
+                "characters": list(characters),
+                "errors": errors,
+                "data": self.project_data,
+            }
+        except Exception as e:
+            logger.error(f"Failed to import Excel: {e}")
+            return {"success": False, "error": str(e), "errors": [str(e)]}
+
+    def export_excel_template(self) -> dict:
+        """Export Excel template file"""
+        if not self._window:
+            return {"success": False, "error": "Window not initialized"}
+
+        result = self._window.create_file_dialog(
+            webview.FileDialog.SAVE,
+            save_filename="template.xlsx",
+            file_types=("Excel Files (*.xlsx)",),
+        )
+
+        if not result:
+            return {"success": False, "error": "No file selected"}
+
+        try:
+            from services.excel_parser import ExcelParser
+
+            parser = ExcelParser()
+            parser.export_template(Path(result))
+            logger.info(f"Excel template exported to: {result}")
+            return {"success": True, "path": result}
+        except Exception as e:
+            logger.error(f"Failed to export Excel template: {e}")
             return {"success": False, "error": str(e)}
 
     # ========== Character Management ==========
@@ -3308,8 +3387,10 @@ class Api:
             # Add tracks: video, text, and audio (TTS audio will be added directly to segments)
             script.add_track(cc.TrackType.video).add_track(cc.TrackType.audio).add_track(cc.TrackType.text)
 
-            # Process shots
-            current_time = 0.0
+            # Process shots - 各轨道独立追踪时间位置
+            video_current_time = 0.0
+            audio_current_time = 0.0
+            text_current_time = 0.0
             shots = self.project_data.get("shots", [])
 
             for shot in shots:
@@ -3434,78 +3515,109 @@ class Api:
                             logger.info(f"    裁剪后音频时长: {trimmed_audio_duration:.2f}s")
                             logger.info(f"    倍速后音频时长: {trimmed_audio_duration:.2f}s / {custom_audio_speed:.2f}x = {effective_audio_duration:.2f}s")
                         
-                        # 片段时长 = 音频有效时长
-                        segment_duration = effective_audio_duration
+                        # 时间精度处理函数（对齐到 0.01s）
+                        # target 用 round，source 用 floor 确保不超出素材时长
+                        def align_time(t: float) -> float:
+                            return round(t, 2)
+                        def floor_time(t: float) -> float:
+                            return math.floor(t * 100) / 100
                         
-                        # 计算视频倍速
-                        if is_edited and custom_speed is not None and 0.5 <= custom_speed <= 3.0:
-                            speed = custom_speed
-                            logger.info(f"    使用自定义视频倍速: {speed:.2f}x")
+                        # 片段时长 = 音频有效时长（所有镜头的基准），对齐精度
+                        segment_duration = align_time(effective_audio_duration)
+                        
+                        # 计算视频倍速（统一逻辑，无论是否编辑过）
+                        if custom_speed is not None and 0.5 <= custom_speed <= 3.0:
+                            video_speed = custom_speed
+                            logger.info(f"    使用自定义视频倍速: {video_speed:.2f}x")
                         else:
-                            speed = video_duration / effective_audio_duration
-                            speed = max(0.5, min(3.0, speed))
-                            logger.info(f"    自动计算视频倍速: {video_duration:.2f}s / {effective_audio_duration:.2f}s = {speed:.2f}x")
+                            video_speed = video_duration / segment_duration
+                            video_speed = max(0.5, min(3.0, video_speed))
+                            logger.info(f"    自动计算视频倍速: {video_duration:.2f}s / {segment_duration:.2f}s = {video_speed:.2f}x")
                         
-                        logger.info(f"  视频参数: target=[{current_time:.3f}s, {segment_duration:.3f}s], speed={speed:.3f}x")
+                        # 视频 source 计算（统一逻辑），使用 floor 确保不超出素材时长
+                        video_source_start = floor_time(custom_audio_offset * video_speed)
+                        video_source_duration = floor_time(segment_duration * video_speed)
+                        # 确保不超出素材范围
+                        video_source_start = max(0, min(video_source_start, floor_time(video_duration - 0.1)))
+                        video_source_duration = min(video_source_duration, floor_time(video_duration - video_source_start - 0.01))
+                        video_source_duration = max(0.1, video_source_duration)
                         
-                        # 统一使用简单模式（不使用 source_timerange），测试是否能解决冲突
+                        # 音频 source 计算（统一逻辑），使用 floor 确保不超出素材时长
+                        audio_source_start = floor_time(trim_start)
+                        audio_source_duration = floor_time(trimmed_audio_duration)
+                        # 确保不超出素材范围
+                        audio_source_duration = min(audio_source_duration, floor_time(audio_duration - audio_source_start - 0.01))
+                        audio_source_duration = max(0.1, audio_source_duration)
+                        
+                        # 对齐当前时间
+                        video_target_start = align_time(video_current_time)
+                        audio_target_start = align_time(audio_current_time)
+                        
+                        logger.info(f"  视频: target=[{video_target_start:.2f}s, {segment_duration:.2f}s], source=[{video_source_start:.2f}s, {video_source_duration:.2f}s], speed={video_speed:.3f}x")
+                        logger.info(f"  音频: target=[{audio_target_start:.2f}s, {segment_duration:.2f}s], source=[{audio_source_start:.2f}s, {audio_source_duration:.2f}s], speed={custom_audio_speed:.3f}x")
+                        
+                        # 创建并添加视频片段
                         video_segment = cc.VideoSegment(
                             video_material,
-                            trange(f"{current_time}s", f"{segment_duration}s"),
-                            speed=speed,
+                            target_timerange=trange(f"{video_target_start}s", f"{segment_duration}s"),
+                            source_timerange=trange(f"{video_source_start}s", f"{video_source_duration}s"),
+                            speed=video_speed,
                             volume=0.0
                         )
-                    else:
-                        # No audio: use video duration
-                        segment_duration = video_duration
-                        video_segment = cc.VideoSegment(
-                            video_material,
-                            trange(f"{current_time}s", f"{video_duration}s"),
-                            volume=0.0
-                        )
-                        logger.info(f"Shot {shot_id}: no audio, using video duration {video_duration:.2f}s")
-
-                    script.add_segment(video_segment)
-
-                    # 预设下一片段起点（默认用视频的 end）
-                    segment_end_time = current_time + segment_duration
-                    
-                    # Add audio segment if available
-                    if audio_path and audio_duration is not None:
-                        try:
-                            logger.info(f"  音频参数: target=[{current_time:.3f}s, {segment_duration:.3f}s]")
-                            
-                            # 统一使用简单模式（不使用 source_timerange）
+                        script.add_segment(video_segment)
+                        video_current_time = align_time(video_target_start + segment_duration)
+                        
+                        # 创建并添加音频片段
+                        if audio_path:
                             audio_segment = cc.AudioSegment(
                                 audio_material,
-                                trange(f"{current_time}s", f"{segment_duration}s")
+                                target_timerange=trange(f"{audio_target_start}s", f"{segment_duration}s"),
+                                source_timerange=trange(f"{audio_source_start}s", f"{audio_source_duration}s"),
+                                speed=custom_audio_speed
                             )
-                            
                             script.add_segment(audio_segment)
-                            segment_end_time = current_time + segment_duration
-                            logger.info(f"  音频添加成功, 下一片段起点: {segment_end_time:.3f}s")
-                        except Exception as e:
-                            logger.warning(f"  音频添加失败: {e}")
+                            audio_current_time = align_time(audio_target_start + segment_duration)
+                        
+                        logger.info(f"  下一起点: video={video_current_time:.2f}s, audio={audio_current_time:.2f}s")
+                        
+                    else:
+                        # No audio: use video duration
+                        def align_time(t: float) -> float:
+                            return round(t, 2)
+                        
+                        segment_duration = align_time(video_duration)
+                        video_source_start = 0.0
+                        video_source_duration = align_time(video_duration - 0.01)
+                        video_target_start = align_time(video_current_time)
+                        
+                        logger.info(f"  无音频, 视频: target=[{video_target_start:.2f}s, {segment_duration:.2f}s]")
+                        
+                        video_segment = cc.VideoSegment(
+                            video_material,
+                            target_timerange=trange(f"{video_target_start}s", f"{segment_duration}s"),
+                            source_timerange=trange(f"{video_source_start}s", f"{video_source_duration}s"),
+                            speed=1.0,
+                            volume=0.0
+                        )
+                        script.add_segment(video_segment)
+                        video_current_time = align_time(video_target_start + segment_duration)
+                        audio_current_time = video_current_time  # 保持同步
 
                     # Add text segment with script
                     script_text = shot.get("script", "")
                     if script_text:
-                        try:
-                            text_segment = cc.TextSegment(
-                                script_text,
-                                trange(f"{current_time}s", f"{segment_duration}s"),
-                                clip_settings=cc.ClipSettings(transform_y=-0.8)
-                            )
-                            script.add_segment(text_segment)
-                        except Exception as e:
-                            logger.warning(f"Failed to add text for shot {shot_id}: {e}")
-
-                    # 更新 current_time 为下一片段的起点
-                    current_time = segment_end_time
+                        text_target_start = align_time(text_current_time)
+                        text_segment = cc.TextSegment(
+                            script_text,
+                            trange(f"{text_target_start}s", f"{segment_duration}s"),
+                            clip_settings=cc.ClipSettings(transform_y=-0.8)
+                        )
+                        script.add_segment(text_segment)
+                        text_current_time = align_time(text_target_start + segment_duration)
 
                 except Exception as e:
                     logger.error(f"Failed to process shot {shot_id}: {e}")
-                    continue
+                    raise  # 不允许异常后继续，必须正确
 
             # Save draft
             script.save()

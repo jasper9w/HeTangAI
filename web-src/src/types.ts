@@ -221,6 +221,8 @@ export interface PyWebViewApi {
   // Import/Export
   import_jsonl: () => Promise<ImportResult>;
   export_jsonl_template: () => Promise<ApiResponse & { path?: string }>;
+  import_excel: () => Promise<ImportResult>;
+  export_excel_template: () => Promise<ApiResponse & { path?: string }>;
 
   // Character management
   add_character: (name: string, description?: string) => Promise<ApiResponse & { character?: Character }>;
@@ -370,6 +372,7 @@ export interface AppSettings {
     // Whisk 模式配置
     whiskToken: string;
     whiskWorkflowId: string;
+    whiskCookie: string;
     concurrency: number;
   };
   ttv: {

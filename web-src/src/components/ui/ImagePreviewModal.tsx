@@ -54,7 +54,6 @@ export function ImagePreviewModal({ imageUrl, title, onClose }: ImagePreviewModa
     e.stopPropagation();
     
     // Mac trackpad pinch sends wheel events with ctrlKey
-    const delta = e.ctrlKey ? e.deltaY * 0.01 : e.deltaY * 0.001;
     const zoomFactor = e.ctrlKey ? 0.1 : 0.1;
     
     if (e.deltaY < 0) {

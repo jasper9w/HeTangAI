@@ -563,17 +563,23 @@ export function ShotTable({
                       onEditVideo={() => {
                         const selectedVideo = shot.videos[shot.selectedVideoIndex || 0];
                         if (selectedVideo) {
+                          // 将字符串转换为数字（后端存储时可能是字符串）
+                          const parseNum = (val: string | number | undefined): number | undefined => {
+                            if (val === undefined || val === null) return undefined;
+                            const num = typeof val === 'string' ? parseFloat(val) : val;
+                            return isNaN(num) ? undefined : num;
+                          };
                           setVideoEditorData({
                             shotId: shot.id,
                             videoUrl: selectedVideo,
                             audioUrl: shot.audioUrl || undefined,
-                            videoDuration: shot.videoDuration,
-                            audioDuration: shot.audioDuration,
-                            videoSpeed: shot.videoSpeed,
-                            audioSpeed: shot.audioSpeed,
-                            audioOffset: shot.audioOffset,
-                            audioTrimStart: shot.audioTrimStart,
-                            audioTrimEnd: shot.audioTrimEnd,
+                            videoDuration: parseNum(shot.videoDuration),
+                            audioDuration: parseNum(shot.audioDuration),
+                            videoSpeed: parseNum(shot.videoSpeed),
+                            audioSpeed: parseNum(shot.audioSpeed),
+                            audioOffset: parseNum(shot.audioOffset),
+                            audioTrimStart: parseNum(shot.audioTrimStart),
+                            audioTrimEnd: parseNum(shot.audioTrimEnd),
                           });
                         }
                       }}
@@ -705,8 +711,9 @@ export function ShotTable({
         title={previewVideo?.title || ''}
       />
 
-      {/* Video Editor Modal */}
+      {/* Video Editor Modal - 使用 key 确保切换镜头时重新挂载组件 */}
       <VideoEditorModal
+        key={videoEditorData?.shotId || 'closed'}
         isOpen={!!videoEditorData}
         onClose={() => setVideoEditorData(null)}
         videoUrl={videoEditorData?.videoUrl || ''}
@@ -720,14 +727,12 @@ export function ShotTable({
         initialAudioTrimEnd={videoEditorData?.audioTrimEnd}
         onSave={(settings) => {
           if (videoEditorData) {
-            // Update video editing settings
+            // Update video editing settings (不保存 videoDuration/audioDuration，应从媒体文件读取)
             onUpdateShot(videoEditorData.shotId, 'videoSpeed', settings.videoSpeed.toString());
             onUpdateShot(videoEditorData.shotId, 'audioSpeed', settings.audioSpeed.toString());
             onUpdateShot(videoEditorData.shotId, 'audioOffset', settings.audioOffset.toString());
             onUpdateShot(videoEditorData.shotId, 'audioTrimStart', settings.audioTrimStart.toString());
             onUpdateShot(videoEditorData.shotId, 'audioTrimEnd', settings.audioTrimEnd.toString());
-            onUpdateShot(videoEditorData.shotId, 'videoDuration', settings.videoDuration.toString());
-            onUpdateShot(videoEditorData.shotId, 'audioDuration', settings.audioDuration.toString());
           }
           setVideoEditorData(null);
         }}

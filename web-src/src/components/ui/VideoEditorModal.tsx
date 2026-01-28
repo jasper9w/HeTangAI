@@ -2,7 +2,7 @@
  * VideoEditorModal - Professional video editor with waveform and thumbnails
  */
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { X, Play, Pause, GripHorizontal, RotateCcw } from 'lucide-react';
+import { X, Play, Pause, RotateCcw } from 'lucide-react';
 
 interface VideoEditorModalProps {
   isOpen: boolean;
@@ -44,16 +44,16 @@ export function VideoEditorModal({
   onSave,
 }: VideoEditorModalProps) {
   // Media durations
-  const [videoDuration, setVideoDuration] = useState(initialVideoDuration || 0);
-  const [audioDuration, setAudioDuration] = useState(initialAudioDuration || 0);
+  const [videoDuration, setVideoDuration] = useState(initialVideoDuration ?? 0);
+  const [audioDuration, setAudioDuration] = useState(initialAudioDuration ?? 0);
   
-  // Editor state
-  const [videoSpeed, setVideoSpeed] = useState(initialVideoSpeed || 1);
-  const [audioSpeed, setAudioSpeed] = useState(initialAudioSpeed || 1);
-  const [audioOffset, setAudioOffset] = useState(initialAudioOffset);
-  const [audioTrimStart, setAudioTrimStart] = useState(initialAudioTrimStart);
+  // Editor state - 使用 ?? 确保 0 不被视为 falsy
+  const [videoSpeed, setVideoSpeed] = useState(initialVideoSpeed ?? 1);
+  const [audioSpeed, setAudioSpeed] = useState(initialAudioSpeed ?? 1);
+  const [audioOffset, setAudioOffset] = useState(initialAudioOffset ?? 0);
+  const [audioTrimStart, setAudioTrimStart] = useState(initialAudioTrimStart ?? 0);
   const [audioTrimEnd, setAudioTrimEnd] = useState(
-    (initialAudioTrimEnd && initialAudioTrimEnd > 0) ? initialAudioTrimEnd : (initialAudioDuration || 0)
+    (initialAudioTrimEnd !== undefined && initialAudioTrimEnd > 0) ? initialAudioTrimEnd : (initialAudioDuration ?? 0)
   );
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -77,9 +77,9 @@ export function VideoEditorModal({
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
 
-  // Calculate default speed
+  // Calculate default speed - 只有当没有保存的视频倍速时才自动计算
   const calculateDefaultSpeed = useCallback(() => {
-    if (videoDuration > 0 && audioDuration > 0 && !initialVideoSpeed) {
+    if (videoDuration > 0 && audioDuration > 0 && initialVideoSpeed === undefined) {
       const defaultSpeed = Math.min(Math.max(videoDuration / audioDuration, 0.5), 3.0);
       setVideoSpeed(defaultSpeed);
     }
@@ -275,8 +275,8 @@ export function VideoEditorModal({
     if (audioRef.current) {
       const duration = audioRef.current.duration;
       setAudioDuration(duration);
-      // Initialize trim end to full duration if not set
-      if (audioTrimEnd === 0 || audioTrimEnd > duration) {
+      // Initialize trim end to full duration if not set or invalid
+      if (audioTrimEnd <= 0 || audioTrimEnd > duration) {
         setAudioTrimEnd(duration);
       }
     }
