@@ -10,7 +10,7 @@ interface FilterDropdownProps {
   onClose: () => void;
   title: string;
   children: React.ReactNode;
-  anchorRef: React.RefObject<HTMLElement>;
+  anchorRef: React.RefObject<HTMLElement | null>;
 }
 
 function FilterDropdown({ isOpen, onClose, title, children, anchorRef }: FilterDropdownProps) {
