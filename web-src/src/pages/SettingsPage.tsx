@@ -2,7 +2,7 @@
  * SettingsPage - Application settings page
  */
 import { useState, useEffect, useCallback } from 'react';
-import { FolderOpen, Loader2, Mic, Image, Video, Clapperboard } from 'lucide-react';
+import { FolderOpen, Loader2, Mic, Image, Video, MessageSquare } from 'lucide-react';
 import type { AppSettings } from '../types';
 
 interface SettingsPageProps {
@@ -25,7 +25,7 @@ export function SettingsPage({}: SettingsPageProps) {
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
   const [isLoading, setIsLoading] = useState(true);
   const [saveMessage, setSaveMessage] = useState('');
-  const [activeTab, setActiveTab] = useState<TabType>('tts');
+  const [activeTab, setActiveTab] = useState<TabType>('shotBuilder');
 
   useEffect(() => {
     loadSettings();
@@ -169,10 +169,10 @@ export function SettingsPage({}: SettingsPageProps) {
   };
 
   const tabs = [
-    { id: 'tts' as TabType, label: '配音接口', icon: Mic, color: 'orange' },
+    { id: 'shotBuilder' as TabType, label: '对话接口', icon: MessageSquare, color: 'blue' },
     { id: 'tti' as TabType, label: '生图接口', icon: Image, color: 'violet' },
     { id: 'ttv' as TabType, label: '生视频接口', icon: Video, color: 'emerald' },
-    { id: 'shotBuilder' as TabType, label: '分镜接口', icon: Clapperboard, color: 'blue' },
+    { id: 'tts' as TabType, label: '配音接口', icon: Mic, color: 'orange' },
   ];
 
   const renderTabContent = () => {
@@ -222,16 +222,18 @@ export function SettingsPage({}: SettingsPageProps) {
             </p>
           </div>
         )}
-        <div>
-          <label className="block text-sm text-slate-400 mb-2">API 地址</label>
-          <input
-            type="text"
-            value={config.apiUrl}
-            onChange={(e) => updateSetting(activeTab, 'apiUrl', e.target.value)}
-            placeholder={placeholders[activeTab].apiUrl}
-            className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
-          />
-        </div>
+        {(activeTab === 'tts' || activeTab === 'shotBuilder') && (
+          <div>
+            <label className="block text-sm text-slate-400 mb-2">API 地址</label>
+            <input
+              type="text"
+              value={config.apiUrl}
+              onChange={(e) => updateSetting(activeTab, 'apiUrl', e.target.value)}
+              placeholder={placeholders[activeTab].apiUrl}
+              className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+            />
+          </div>
+        )}
         {activeTab === 'tti' ? (
           <div className="space-y-4">
             {/* Provider Selection */}
@@ -486,15 +488,6 @@ export function SettingsPage({}: SettingsPageProps) {
           </div>
         ) : activeTab === 'shotBuilder' ? (
           <div className="space-y-4">
-            <div className="bg-blue-600/10 border border-blue-600/20 rounded-lg p-4">
-              <h4 className="font-medium text-blue-300 mb-2 flex items-center gap-2">
-                <Clapperboard className="w-4 h-4" />
-                分镜接口说明
-              </h4>
-              <p className="text-sm text-slate-300">
-                分镜生成使用该模型配置进行角色/场景/分镜结构化输出。
-              </p>
-            </div>
             <div>
               <label className="block text-sm text-slate-400 mb-2">API 密钥</label>
               <input

@@ -8,7 +8,7 @@ import { VideoModal } from '../ui/VideoModal';
 import { VideoEditorModal } from '../ui/VideoEditorModal';
 import { ImagePreviewModal } from '../ui/ImagePreviewModal';
 import { useColumnFilter } from './ColumnFilter';
-import { ColumnHeaderFilter, SearchFilter, StatusFilter } from './ExcelColumnFilter';
+import { ColumnHeaderFilter, SearchFilter, CharacterSelectFilter, SceneSelectFilter, PromptFilter, PreviewFilter } from './ExcelColumnFilter';
 import type { Shot, Character, Scene } from '../../types';
 
 // 角色颜色映射 - 使用柔和但可辨识的颜色
@@ -185,12 +185,13 @@ export function ShotTable({
   // 使用列筛选钩子
   const {
     filters,
+    options: filterOptions,
     updateFilter,
     clearAllFilters,
     hasActiveFilters,
     filteredShots,
     filteredCount,
-  } = useColumnFilter({ shots, characters });
+  } = useColumnFilter({ shots, characters, scenes });
 
   // 设置虚拟列表 - 使用固定高度避免重叠
   const rowVirtualizer = useVirtualizer({
@@ -308,7 +309,7 @@ export function ShotTable({
   return (
     <div className="h-full flex flex-col">
       {/* Table Header with Excel-style Filters */}
-      <div className="bg-slate-800 border-b border-slate-700 flex-shrink-0">
+      <div className="bg-slate-800 border-b border-slate-700 flex-shrink-0 relative z-20">
         {/* Selection bar */}
         <div className="px-4 py-2 border-b border-slate-700/50">
           <div className="flex items-center gap-4">
@@ -364,116 +365,168 @@ export function ShotTable({
             />
           </div>
 
-          {/* 配音列 */}
+          {/* 配音列 - 按角色多选 */}
           <div className="w-44">
             <ColumnHeaderFilter
               title="配音"
-              hasActiveFilter={!!filters.script.value || filters.script.inverted}
+              hasActiveFilter={filters.dialogueCharacters.values.length > 0 || filters.dialogueCharacters.inverted}
             >
-              <SearchFilter
-                value={filters.script.value}
-                inverted={filters.script.inverted}
-                onChange={(value) => updateFilter('script', { ...filters.script, value })}
-                onInvertedChange={(inverted) => updateFilter('script', { ...filters.script, inverted })}
-                placeholder="搜索配音内容..."
+              <CharacterSelectFilter
+                selectedValues={filters.dialogueCharacters.values}
+                inverted={filters.dialogueCharacters.inverted}
+                onChange={(values) => updateFilter('dialogueCharacters', { ...filters.dialogueCharacters, values })}
+                onInvertedChange={(inverted) => updateFilter('dialogueCharacters', { ...filters.dialogueCharacters, inverted })}
+                characters={characters}
+                shots={shots}
               />
             </ColumnHeaderFilter>
           </div>
 
-          {/* 场景列 */}
+          {/* 场景列 - 按场景名多选 */}
           <div className="w-[101px] flex-shrink-0">
             <ColumnHeaderFilter
               title="场景"
-              hasActiveFilter={!!filters.scene.value || filters.scene.inverted}
+              hasActiveFilter={filters.scene.values.length > 0 || filters.scene.inverted}
             >
-              <SearchFilter
-                value={filters.scene.value}
+              <SceneSelectFilter
+                selectedValues={filters.scene.values}
                 inverted={filters.scene.inverted}
-                onChange={(value) => updateFilter('scene', { ...filters.scene, value })}
+                onChange={(values) => updateFilter('scene', { ...filters.scene, values })}
                 onInvertedChange={(inverted) => updateFilter('scene', { ...filters.scene, inverted })}
-                placeholder="搜索场景..."
+                scenes={filterOptions.scenes}
+                shots={shots}
               />
             </ColumnHeaderFilter>
           </div>
 
-          {/* 图片提示词列 */}
+          {/* 图片提示词列 - 角色多选 + 文本搜索 */}
           <div className="w-44">
             <ColumnHeaderFilter
               title="图片提示词"
-              hasActiveFilter={!!filters.imagePrompt.value || filters.imagePrompt.inverted}
+              hasActiveFilter={
+                filters.imagePromptCharacters.values.length > 0 ||
+                filters.imagePromptCharacters.inverted ||
+                !!filters.imagePromptText.value ||
+                filters.imagePromptText.inverted
+              }
             >
-              <SearchFilter
-                value={filters.imagePrompt.value}
-                inverted={filters.imagePrompt.inverted}
-                onChange={(value) => updateFilter('imagePrompt', { ...filters.imagePrompt, value })}
-                onInvertedChange={(inverted) => updateFilter('imagePrompt', { ...filters.imagePrompt, inverted })}
+              <PromptFilter
+                characterValues={filters.imagePromptCharacters.values}
+                characterInverted={filters.imagePromptCharacters.inverted}
+                onCharacterChange={(values) => updateFilter('imagePromptCharacters', { ...filters.imagePromptCharacters, values })}
+                onCharacterInvertedChange={(inverted) => updateFilter('imagePromptCharacters', { ...filters.imagePromptCharacters, inverted })}
+                textValue={filters.imagePromptText.value}
+                textInverted={filters.imagePromptText.inverted}
+                onTextChange={(value) => updateFilter('imagePromptText', { ...filters.imagePromptText, value })}
+                onTextInvertedChange={(inverted) => updateFilter('imagePromptText', { ...filters.imagePromptText, inverted })}
+                characters={characters}
+                shots={shots}
+                promptField="imagePrompt"
                 placeholder="搜索提示词..."
               />
             </ColumnHeaderFilter>
           </div>
 
 
-          {/* 图片预览列 */}
+          {/* 图片预览列 - 状态 + 无主图 + 备选数量 */}
           <div className="w-[180px]">
             <ColumnHeaderFilter
               title="图片预览"
-              hasActiveFilter={filters.imageStatus.values.length > 0 || filters.imageStatus.inverted}
+              hasActiveFilter={
+                filters.imageStatus.values.length > 0 ||
+                filters.imageStatus.inverted ||
+                filters.imageNoMain ||
+                filters.imageCount.values.length > 0 ||
+                filters.imageCount.inverted
+              }
             >
-              <StatusFilter
-                selectedValues={filters.imageStatus.values}
-                inverted={filters.imageStatus.inverted}
-                onChange={(values) => updateFilter('imageStatus', { ...filters.imageStatus, values })}
-                onInvertedChange={(inverted) => updateFilter('imageStatus', { ...filters.imageStatus, inverted })}
+              <PreviewFilter
+                statusValues={filters.imageStatus.values}
+                statusInverted={filters.imageStatus.inverted}
+                onStatusChange={(values) => updateFilter('imageStatus', { ...filters.imageStatus, values })}
+                onStatusInvertedChange={(inverted) => updateFilter('imageStatus', { ...filters.imageStatus, inverted })}
+                noMain={filters.imageNoMain}
+                onNoMainChange={(value) => updateFilter('imageNoMain', value)}
+                countValues={filters.imageCount.values}
+                countInverted={filters.imageCount.inverted}
+                onCountChange={(values) => updateFilter('imageCount', { ...filters.imageCount, values })}
+                onCountInvertedChange={(inverted) => updateFilter('imageCount', { ...filters.imageCount, inverted })}
                 shots={shots}
                 getStatus={getImageStatus}
                 statusLabels={imageStatusLabels}
+                type="image"
               />
             </ColumnHeaderFilter>
           </div>
 
-          {/* 视频提示词列 */}
+          {/* 视频提示词列 - 角色多选 + 文本搜索 */}
           <div className="w-48">
             <ColumnHeaderFilter
               title="视频提示词"
-              hasActiveFilter={!!filters.videoPrompt.value || filters.videoPrompt.inverted}
+              hasActiveFilter={
+                filters.videoPromptCharacters.values.length > 0 ||
+                filters.videoPromptCharacters.inverted ||
+                !!filters.videoPromptText.value ||
+                filters.videoPromptText.inverted
+              }
             >
-              <SearchFilter
-                value={filters.videoPrompt.value}
-                inverted={filters.videoPrompt.inverted}
-                onChange={(value) => updateFilter('videoPrompt', { ...filters.videoPrompt, value })}
-                onInvertedChange={(inverted) => updateFilter('videoPrompt', { ...filters.videoPrompt, inverted })}
+              <PromptFilter
+                characterValues={filters.videoPromptCharacters.values}
+                characterInverted={filters.videoPromptCharacters.inverted}
+                onCharacterChange={(values) => updateFilter('videoPromptCharacters', { ...filters.videoPromptCharacters, values })}
+                onCharacterInvertedChange={(inverted) => updateFilter('videoPromptCharacters', { ...filters.videoPromptCharacters, inverted })}
+                textValue={filters.videoPromptText.value}
+                textInverted={filters.videoPromptText.inverted}
+                onTextChange={(value) => updateFilter('videoPromptText', { ...filters.videoPromptText, value })}
+                onTextInvertedChange={(inverted) => updateFilter('videoPromptText', { ...filters.videoPromptText, inverted })}
+                characters={characters}
+                shots={shots}
+                promptField="videoPrompt"
                 placeholder="搜索提示词..."
               />
             </ColumnHeaderFilter>
           </div>
 
-          {/* 视频列 */}
+          {/* 视频列 - 状态 + 无主视频 + 备选数量 */}
           <div className="w-[180px]">
             <ColumnHeaderFilter
               title="视频"
-              hasActiveFilter={filters.videoStatus.values.length > 0 || filters.videoStatus.inverted}
+              hasActiveFilter={
+                filters.videoStatus.values.length > 0 ||
+                filters.videoStatus.inverted ||
+                filters.videoNoMain ||
+                filters.videoCount.values.length > 0 ||
+                filters.videoCount.inverted
+              }
             >
-              <StatusFilter
-                selectedValues={filters.videoStatus.values}
-                inverted={filters.videoStatus.inverted}
-                onChange={(values) => updateFilter('videoStatus', { ...filters.videoStatus, values })}
-                onInvertedChange={(inverted) => updateFilter('videoStatus', { ...filters.videoStatus, inverted })}
+              <PreviewFilter
+                statusValues={filters.videoStatus.values}
+                statusInverted={filters.videoStatus.inverted}
+                onStatusChange={(values) => updateFilter('videoStatus', { ...filters.videoStatus, values })}
+                onStatusInvertedChange={(inverted) => updateFilter('videoStatus', { ...filters.videoStatus, inverted })}
+                noMain={filters.videoNoMain}
+                onNoMainChange={(value) => updateFilter('videoNoMain', value)}
+                countValues={filters.videoCount.values}
+                countInverted={filters.videoCount.inverted}
+                onCountChange={(values) => updateFilter('videoCount', { ...filters.videoCount, values })}
+                onCountInvertedChange={(inverted) => updateFilter('videoCount', { ...filters.videoCount, inverted })}
                 shots={shots}
                 getStatus={getVideoStatus}
                 statusLabels={videoStatusLabels}
+                type="video"
               />
             </ColumnHeaderFilter>
           </div>
 
-          {/* 备注列 */}
+          {/* 备注列 - 文本搜索 */}
           <div className="w-32">
             <ColumnHeaderFilter
               title="备注"
-              hasActiveFilter={!!filters.remark?.value || filters.remark?.inverted}
+              hasActiveFilter={!!filters.remark.value || filters.remark.inverted}
             >
               <SearchFilter
-                value={filters.remark?.value || ''}
-                inverted={filters.remark?.inverted || false}
+                value={filters.remark.value}
+                inverted={filters.remark.inverted}
                 onChange={(value) => updateFilter('remark', { ...filters.remark, value })}
                 onInvertedChange={(inverted) => updateFilter('remark', { ...filters.remark, inverted })}
                 placeholder="搜索备注..."
@@ -484,7 +537,7 @@ export function ShotTable({
       </div>
 
       {/* Table Content */}
-      <div ref={parentRef} className="flex-1 overflow-auto">
+      <div ref={parentRef} className="flex-1 overflow-auto relative z-10">
         {filteredShots.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-slate-500">
             <Film className="w-16 h-16 mb-4 opacity-30" />

@@ -3,68 +3,89 @@
  */
 import { useState, useMemo } from 'react';
 import { Search, ChevronDown, X, Check } from 'lucide-react';
-import type { Shot, Character } from '../../types';
+import type { Shot, Character, Scene } from '../../types';
 
 interface FilterState {
-  sequence: { value: string; inverted: boolean }; // 序号搜索
-  voiceActor: { values: string[]; inverted: boolean }; // 配音角色多选
-  scene: { value: string; inverted: boolean }; // 场景名搜索
-  script: { value: string; inverted: boolean }; // 文案搜索
-  imagePrompt: { value: string; inverted: boolean }; // 图片提示词搜索
-  characters: { values: string[]; inverted: boolean }; // 出场角色多选
-  imageStatus: { values: string[]; inverted: boolean }; // 图片状态多选
-  videoPrompt: { value: string; inverted: boolean }; // 视频提示词搜索
-  videoStatus: { values: string[]; inverted: boolean }; // 视频状态多选
-  remark: { value: string; inverted: boolean }; // 备注搜索
+  // 配音列 - 按角色多选
+  dialogueCharacters: { values: string[]; inverted: boolean };
+  // 场景列 - 按场景名多选
+  scene: { values: string[]; inverted: boolean };
+  // 图片提示词 - 角色多选 + 文本搜索
+  imagePromptCharacters: { values: string[]; inverted: boolean };
+  imagePromptText: { value: string; inverted: boolean };
+  // 视频提示词 - 角色多选 + 文本搜索
+  videoPromptCharacters: { values: string[]; inverted: boolean };
+  videoPromptText: { value: string; inverted: boolean };
+  // 图片预览 - 状态 + 无主图 + 备选数量
+  imageStatus: { values: string[]; inverted: boolean };
+  imageNoMain: boolean;
+  imageCount: { values: number[]; inverted: boolean };
+  // 视频预览 - 状态 + 无主视频 + 备选数量
+  videoStatus: { values: string[]; inverted: boolean };
+  videoNoMain: boolean;
+  videoCount: { values: number[]; inverted: boolean };
+  // 备注 - 文本搜索
+  remark: { value: string; inverted: boolean };
 }
 
 interface UseColumnFilterProps {
   shots: Shot[];
   characters: Character[];
+  scenes: Scene[];
 }
 
-export function useColumnFilter({ shots, characters }: UseColumnFilterProps) {
+export function useColumnFilter({ shots, characters, scenes }: UseColumnFilterProps) {
   const [filters, setFilters] = useState<FilterState>({
-    sequence: { value: '', inverted: false },
-    voiceActor: { values: [], inverted: false },
-    scene: { value: '', inverted: false },
-    script: { value: '', inverted: false },
-    imagePrompt: { value: '', inverted: false },
-    characters: { values: [], inverted: false },
+    // 配音列 - 按角色多选
+    dialogueCharacters: { values: [], inverted: false },
+    // 场景列 - 按场景名多选
+    scene: { values: [], inverted: false },
+    // 图片提示词 - 角色多选 + 文本搜索
+    imagePromptCharacters: { values: [], inverted: false },
+    imagePromptText: { value: '', inverted: false },
+    // 视频提示词 - 角色多选 + 文本搜索
+    videoPromptCharacters: { values: [], inverted: false },
+    videoPromptText: { value: '', inverted: false },
+    // 图片预览 - 状态 + 无主图 + 备选数量
     imageStatus: { values: [], inverted: false },
-    videoPrompt: { value: '', inverted: false },
+    imageNoMain: false,
+    imageCount: { values: [], inverted: false },
+    // 视频预览 - 状态 + 无主视频 + 备选数量
     videoStatus: { values: [], inverted: false },
+    videoNoMain: false,
+    videoCount: { values: [], inverted: false },
+    // 备注 - 文本搜索
     remark: { value: '', inverted: false },
   });
 
   // 缓存计算的选项
   const options = useMemo(() => {
-    const voiceActors = Array.from(new Set(shots.map(s => s.voiceActor).filter(Boolean)));
-    const allCharacters = characters.map(c => c.name);
+    const allCharacters = characters.map(c => c.name).filter(Boolean);
+    const allScenes = scenes.map(s => s.name).filter(Boolean);
 
     return {
-      voiceActors,
       characters: allCharacters,
-      imageStatusOptions: [
+      scenes: allScenes,
+      statusOptions: [
         { value: 'generated', label: '已生成' },
         { value: 'pending', label: '待生成' },
         { value: 'generating', label: '生成中' },
         { value: 'error', label: '错误' },
       ],
-      videoStatusOptions: [
-        { value: 'generated', label: '已生成' },
-        { value: 'pending', label: '待生成' },
-        { value: 'generating', label: '生成中' },
-        { value: 'error', label: '错误' },
+      countOptions: [
+        { value: 1, label: '1个' },
+        { value: 2, label: '2个' },
+        { value: 3, label: '3个' },
+        { value: 4, label: '4个' },
       ],
     };
-  }, [shots, characters]);
+  }, [characters, scenes]);
 
   // 获取图片状态
   const getImageStatus = (shot: Shot): string => {
     if (shot.status === 'generating_images') return 'generating';
     if (shot.status === 'error') return 'error';
-    if (shot.images.length > 0) return 'generated';
+    if (shot.images && shot.images.length > 0) return 'generated';
     return 'pending';
   };
 
@@ -72,67 +93,86 @@ export function useColumnFilter({ shots, characters }: UseColumnFilterProps) {
   const getVideoStatus = (shot: Shot): string => {
     if (shot.status === 'generating_video') return 'generating';
     if (shot.status === 'error') return 'error';
-    if (shot.videoUrl) return 'generated';
+    if (shot.videos && shot.videos.length > 0) return 'generated';
     return 'pending';
+  };
+
+  // 从镜头中提取对话角色
+  const getShotDialogueCharacters = (shot: Shot): string[] => {
+    if (!shot.dialogues || shot.dialogues.length === 0) {
+      return shot.voiceActor ? [shot.voiceActor] : [];
+    }
+    return [...new Set(shot.dialogues.map(d => d.role).filter(Boolean))];
+  };
+
+  // 检查文本中是否包含角色名
+  const textContainsCharacter = (text: string, characterNames: string[]): boolean => {
+    if (!text) return false;
+    const lowerText = text.toLowerCase();
+    return characterNames.some(name => lowerText.includes(name.toLowerCase()));
   };
 
   // 应用筛选逻辑
   const filteredShots = useMemo(() => {
     let filtered = shots;
 
-    // 序号筛选
-    if (filters.sequence.value.trim()) {
-      const searchTerm = filters.sequence.value.toLowerCase();
-      const matches = (shot: Shot) => shot.sequence.toString().includes(searchTerm);
+    // 配音列 - 按角色多选筛选
+    if (filters.dialogueCharacters.values.length > 0) {
+      const matches = (shot: Shot) => {
+        const shotCharacters = getShotDialogueCharacters(shot);
+        return filters.dialogueCharacters.values.some(char => shotCharacters.includes(char));
+      };
       filtered = filtered.filter(shot =>
-        filters.sequence.inverted ? !matches(shot) : matches(shot)
+        filters.dialogueCharacters.inverted ? !matches(shot) : matches(shot)
       );
     }
 
-    // 配音角色筛选
-    if (filters.voiceActor.values.length > 0) {
-      const matches = (shot: Shot) => filters.voiceActor.values.includes(shot.voiceActor);
-      filtered = filtered.filter(shot =>
-        filters.voiceActor.inverted ? !matches(shot) : matches(shot)
-      );
-    }
-
-    // 场景名搜索
-    if (filters.scene.value.trim()) {
-      const searchTerm = filters.scene.value.toLowerCase();
-      const matches = (shot: Shot) => (shot.scene || '').toLowerCase().includes(searchTerm);
+    // 场景列 - 按场景名多选筛选
+    if (filters.scene.values.length > 0) {
+      const matches = (shot: Shot) => {
+        const sceneName = (shot.scene || '').trim();
+        return filters.scene.values.includes(sceneName);
+      };
       filtered = filtered.filter(shot =>
         filters.scene.inverted ? !matches(shot) : matches(shot)
       );
     }
 
-    // 文案搜索
-    if (filters.script.value.trim()) {
-      const searchTerm = filters.script.value.toLowerCase();
-      const matches = (shot: Shot) => shot.script.toLowerCase().includes(searchTerm);
+    // 图片提示词 - 角色筛选
+    if (filters.imagePromptCharacters.values.length > 0) {
+      const matches = (shot: Shot) => textContainsCharacter(shot.imagePrompt, filters.imagePromptCharacters.values);
       filtered = filtered.filter(shot =>
-        filters.script.inverted ? !matches(shot) : matches(shot)
+        filters.imagePromptCharacters.inverted ? !matches(shot) : matches(shot)
       );
     }
 
-    // 图片提示词搜索
-    if (filters.imagePrompt.value.trim()) {
-      const searchTerm = filters.imagePrompt.value.toLowerCase();
-      const matches = (shot: Shot) => shot.imagePrompt.toLowerCase().includes(searchTerm);
+    // 图片提示词 - 文本搜索
+    if (filters.imagePromptText.value.trim()) {
+      const searchTerm = filters.imagePromptText.value.toLowerCase();
+      const matches = (shot: Shot) => (shot.imagePrompt || '').toLowerCase().includes(searchTerm);
       filtered = filtered.filter(shot =>
-        filters.imagePrompt.inverted ? !matches(shot) : matches(shot)
+        filters.imagePromptText.inverted ? !matches(shot) : matches(shot)
       );
     }
 
-    // 出场角色筛选
-    if (filters.characters.values.length > 0) {
-      const matches = (shot: Shot) => filters.characters.values.some(char => shot.characters.includes(char));
+    // 视频提示词 - 角色筛选
+    if (filters.videoPromptCharacters.values.length > 0) {
+      const matches = (shot: Shot) => textContainsCharacter(shot.videoPrompt, filters.videoPromptCharacters.values);
       filtered = filtered.filter(shot =>
-        filters.characters.inverted ? !matches(shot) : matches(shot)
+        filters.videoPromptCharacters.inverted ? !matches(shot) : matches(shot)
       );
     }
 
-    // 图片状态筛选
+    // 视频提示词 - 文本搜索
+    if (filters.videoPromptText.value.trim()) {
+      const searchTerm = filters.videoPromptText.value.toLowerCase();
+      const matches = (shot: Shot) => (shot.videoPrompt || '').toLowerCase().includes(searchTerm);
+      filtered = filtered.filter(shot =>
+        filters.videoPromptText.inverted ? !matches(shot) : matches(shot)
+      );
+    }
+
+    // 图片预览 - 状态筛选
     if (filters.imageStatus.values.length > 0) {
       const matches = (shot: Shot) => {
         const status = getImageStatus(shot);
@@ -143,16 +183,28 @@ export function useColumnFilter({ shots, characters }: UseColumnFilterProps) {
       );
     }
 
-    // 视频提示词搜索
-    if (filters.videoPrompt.value.trim()) {
-      const searchTerm = filters.videoPrompt.value.toLowerCase();
-      const matches = (shot: Shot) => shot.videoPrompt.toLowerCase().includes(searchTerm);
+    // 图片预览 - 无主图筛选
+    if (filters.imageNoMain) {
+      filtered = filtered.filter(shot => {
+        const hasImages = shot.images && shot.images.length > 0;
+        if (!hasImages) return true; // 没有图片也算无主图
+        const selectedIdx = shot.selectedImageIndex || 0;
+        return !shot.images[selectedIdx]; // 选中的索引对应的图片不存在
+      });
+    }
+
+    // 图片预览 - 备选数量筛选
+    if (filters.imageCount.values.length > 0) {
+      const matches = (shot: Shot) => {
+        const count = shot.images ? shot.images.length : 0;
+        return filters.imageCount.values.includes(count);
+      };
       filtered = filtered.filter(shot =>
-        filters.videoPrompt.inverted ? !matches(shot) : matches(shot)
+        filters.imageCount.inverted ? !matches(shot) : matches(shot)
       );
     }
 
-    // 视频状态筛选
+    // 视频预览 - 状态筛选
     if (filters.videoStatus.values.length > 0) {
       const matches = (shot: Shot) => {
         const status = getVideoStatus(shot);
@@ -163,7 +215,28 @@ export function useColumnFilter({ shots, characters }: UseColumnFilterProps) {
       );
     }
 
-    // 备注搜索
+    // 视频预览 - 无主视频筛选
+    if (filters.videoNoMain) {
+      filtered = filtered.filter(shot => {
+        const hasVideos = shot.videos && shot.videos.length > 0;
+        if (!hasVideos) return true; // 没有视频也算无主视频
+        const selectedIdx = shot.selectedVideoIndex || 0;
+        return !shot.videos[selectedIdx]; // 选中的索引对应的视频不存在
+      });
+    }
+
+    // 视频预览 - 备选数量筛选
+    if (filters.videoCount.values.length > 0) {
+      const matches = (shot: Shot) => {
+        const count = shot.videos ? shot.videos.length : 0;
+        return filters.videoCount.values.includes(count);
+      };
+      filtered = filtered.filter(shot =>
+        filters.videoCount.inverted ? !matches(shot) : matches(shot)
+      );
+    }
+
+    // 备注 - 文本搜索
     if (filters.remark.value.trim()) {
       const searchTerm = filters.remark.value.toLowerCase();
       const matches = (shot: Shot) => (shot.remark || '').toLowerCase().includes(searchTerm);
@@ -183,28 +256,40 @@ export function useColumnFilter({ shots, characters }: UseColumnFilterProps) {
   // 清除所有筛选
   const clearAllFilters = () => {
     setFilters({
-      sequence: { value: '', inverted: false },
-      voiceActor: { values: [], inverted: false },
-      scene: { value: '', inverted: false },
-      script: { value: '', inverted: false },
-      imagePrompt: { value: '', inverted: false },
-      characters: { values: [], inverted: false },
+      dialogueCharacters: { values: [], inverted: false },
+      scene: { values: [], inverted: false },
+      imagePromptCharacters: { values: [], inverted: false },
+      imagePromptText: { value: '', inverted: false },
+      videoPromptCharacters: { values: [], inverted: false },
+      videoPromptText: { value: '', inverted: false },
       imageStatus: { values: [], inverted: false },
-      videoPrompt: { value: '', inverted: false },
+      imageNoMain: false,
+      imageCount: { values: [], inverted: false },
       videoStatus: { values: [], inverted: false },
+      videoNoMain: false,
+      videoCount: { values: [], inverted: false },
       remark: { value: '', inverted: false },
     });
   };
 
   // 检查是否有激活的筛选
-  const hasActiveFilters = Object.values(filters).some(filter => {
-    if ('value' in filter) {
-      return filter.value.trim() !== '';
-    } else if ('values' in filter) {
-      return filter.values.length > 0;
-    }
-    return false;
-  });
+  const hasActiveFilters = useMemo(() => {
+    return (
+      filters.dialogueCharacters.values.length > 0 ||
+      filters.scene.values.length > 0 ||
+      filters.imagePromptCharacters.values.length > 0 ||
+      filters.imagePromptText.value.trim() !== '' ||
+      filters.videoPromptCharacters.values.length > 0 ||
+      filters.videoPromptText.value.trim() !== '' ||
+      filters.imageStatus.values.length > 0 ||
+      filters.imageNoMain ||
+      filters.imageCount.values.length > 0 ||
+      filters.videoStatus.values.length > 0 ||
+      filters.videoNoMain ||
+      filters.videoCount.values.length > 0 ||
+      filters.remark.value.trim() !== ''
+    );
+  }, [filters]);
 
   return {
     filters,
