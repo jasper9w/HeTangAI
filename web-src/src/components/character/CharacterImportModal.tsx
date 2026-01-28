@@ -1,7 +1,7 @@
 /**
  * CharacterImportModal - 从文本或文件导入角色的模态框
  */
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   X,
   FileSpreadsheet,
@@ -131,6 +131,17 @@ export function CharacterImportModal({
   const handleRemoveCharacter = (index: number) => {
     setParsedCharacters((prev) => prev.filter((_, i) => i !== index));
   };
+
+  // ESC key to close modal
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        handleClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen]);
 
   const handleExportTemplate = async () => {
     setIsLoading(true);

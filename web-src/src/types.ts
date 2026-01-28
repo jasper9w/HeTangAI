@@ -43,6 +43,14 @@ export interface Shot {
   selectedVideoIndex: number;  // 选中的备选视频索引
   videoUrl: string;     // 视频文件URL
   audioUrl: string;     // 配音文件URL
+  // 视频编辑参数
+  videoSpeed?: number;      // 视频倍速，默认根据音频计算
+  audioSpeed?: number;      // 音频倍速，默认 1
+  audioOffset?: number;     // 音频相对视频开始的偏移（秒），默认 0
+  audioTrimStart?: number;  // 音频裁剪起点（秒），默认 0
+  audioTrimEnd?: number;    // 音频裁剪终点（秒），默认为音频时长
+  audioDuration?: number;   // 音频时长（秒）
+  videoDuration?: number;   // 视频时长（秒）
   status: ShotStatus;
   errorMessage?: string;
 }

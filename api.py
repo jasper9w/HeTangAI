@@ -3294,7 +3294,7 @@ class Api:
             # Import pycapcut
             try:
                 import pycapcut as cc
-                from pycapcut import trange, tim
+                from pycapcut import trange
             except ImportError:
                 return {"success": False, "error": "pycapcut not installed"}
 
@@ -3305,8 +3305,8 @@ class Api:
             draft_name = self.project_name
             script = draft_folder.create_draft(draft_name, 1920, 1080, allow_replace=True)
 
-            # Add tracks
-            script.add_track(cc.TrackType.audio).add_track(cc.TrackType.video).add_track(cc.TrackType.text)
+            # Add tracks: video, text, and audio (TTS audio will be added directly to segments)
+            script.add_track(cc.TrackType.video).add_track(cc.TrackType.audio).add_track(cc.TrackType.text)
 
             # Process shots
             current_time = 0.0
@@ -3342,64 +3342,150 @@ class Api:
                 # Get video duration using pycapcut
                 try:
                     video_material = cc.VideoMaterial(video_path)
-                    video_duration = video_material.duration
+                    # Duration is in microseconds, convert to seconds
+                    video_duration = video_material.duration / 1_000_000
 
                     # Get audio duration if available
                     audio_duration = None
                     if audio_path:
                         try:
                             audio_material = cc.AudioMaterial(audio_path)
-                            audio_duration = audio_material.duration
+                            # Duration is in microseconds, convert to seconds
+                            audio_duration = audio_material.duration / 1_000_000
                         except Exception as e:
                             logger.warning(f"Failed to load audio for shot {shot_id}: {e}")
                             audio_path = None
 
+                    # Get custom video settings if saved
+                    custom_speed = shot.get("videoSpeed")
+                    custom_audio_offset = shot.get("audioOffset", 0.0)
+                    custom_audio_speed = shot.get("audioSpeed", 1.0)
+                    custom_audio_trim_start = shot.get("audioTrimStart", 0.0)
+                    custom_audio_trim_end = shot.get("audioTrimEnd")  # None means use full audio
+                    
+                    # Convert from string if necessary (frontend may send as string)
+                    if isinstance(custom_speed, str):
+                        try:
+                            custom_speed = float(custom_speed)
+                        except (ValueError, TypeError):
+                            custom_speed = None
+                    if isinstance(custom_audio_offset, str):
+                        try:
+                            custom_audio_offset = float(custom_audio_offset)
+                        except (ValueError, TypeError):
+                            custom_audio_offset = 0.0
+                    if isinstance(custom_audio_speed, str):
+                        try:
+                            custom_audio_speed = float(custom_audio_speed)
+                        except (ValueError, TypeError):
+                            custom_audio_speed = 1.0
+                    if isinstance(custom_audio_trim_start, str):
+                        try:
+                            custom_audio_trim_start = float(custom_audio_trim_start)
+                        except (ValueError, TypeError):
+                            custom_audio_trim_start = 0.0
+                    if isinstance(custom_audio_trim_end, str):
+                        try:
+                            custom_audio_trim_end = float(custom_audio_trim_end)
+                        except (ValueError, TypeError):
+                            custom_audio_trim_end = None
+                    
+                    # Clamp audio speed to valid range
+                    custom_audio_speed = max(0.5, min(2.0, custom_audio_speed))
+                    
+                    # 判断是否是编辑过的镜头
+                    is_edited = shot.get('videoSpeed') is not None or shot.get('audioSpeed') is not None or shot.get('audioOffset') is not None or shot.get('audioTrimStart') is not None or shot.get('audioTrimEnd') is not None
+                    
+                    if is_edited:
+                        logger.info(f"===== 镜头 {shot_id} [已编辑] =====")
+                        logger.info(f"  原始参数:")
+                        logger.info(f"    视频倍速: {shot.get('videoSpeed')}")
+                        logger.info(f"    音频倍速: {shot.get('audioSpeed')}")
+                        logger.info(f"    音频偏移: {shot.get('audioOffset')}")
+                        logger.info(f"    音频裁剪起点: {shot.get('audioTrimStart')}")
+                        logger.info(f"    音频裁剪终点: {shot.get('audioTrimEnd')}")
+                        logger.info(f"  解析后参数:")
+                        logger.info(f"    视频倍速: {custom_speed}")
+                        logger.info(f"    音频倍速: {custom_audio_speed}")
+                        logger.info(f"    音频偏移: {custom_audio_offset}")
+                        logger.info(f"    音频裁剪: {custom_audio_trim_start} - {custom_audio_trim_end}")
+                    else:
+                        logger.info(f"===== 镜头 {shot_id} [未编辑] =====")
+
                     # Determine segment duration and video settings
                     if audio_duration is not None:
-                        # Use audio duration as the segment duration
-                        segment_duration = audio_duration
-
-                        if video_duration > audio_duration:
-                            # Video is longer than audio: use first N seconds of video
-                            video_segment = cc.VideoSegment(
-                                video_material,
-                                trange(tim(current_time), audio_duration),
-                                source_timerange=trange(0, audio_duration),
-                                volume=0.0  # Mute video audio track
-                            )
-                            logger.info(f"Shot {shot_id}: video {video_duration:.2f}s > audio {audio_duration:.2f}s, using first {audio_duration:.2f}s of video")
+                        # Calculate effective audio duration after trim and speed
+                        trim_start = custom_audio_trim_start
+                        # Use full audio if trim_end is not set or invalid (0 or None)
+                        trim_end = custom_audio_trim_end if custom_audio_trim_end and custom_audio_trim_end > 0 else audio_duration
+                        # Clamp trim values to valid range
+                        trim_start = max(0.0, min(trim_start, audio_duration))
+                        trim_end = max(trim_start + 0.1, min(trim_end, audio_duration))  # Ensure at least 0.1s duration
+                        trimmed_audio_duration = trim_end - trim_start
+                        # Effective audio duration after speed adjustment
+                        effective_audio_duration = trimmed_audio_duration / custom_audio_speed
+                        
+                        if is_edited:
+                            logger.info(f"  素材时长:")
+                            logger.info(f"    视频原始时长: {video_duration:.2f}s")
+                            logger.info(f"    音频原始时长: {audio_duration:.2f}s")
+                            logger.info(f"  计算结果:")
+                            logger.info(f"    音频裁剪范围: {trim_start:.2f}s - {trim_end:.2f}s")
+                            logger.info(f"    裁剪后音频时长: {trimmed_audio_duration:.2f}s")
+                            logger.info(f"    倍速后音频时长: {trimmed_audio_duration:.2f}s / {custom_audio_speed:.2f}x = {effective_audio_duration:.2f}s")
+                        
+                        # 片段时长 = 音频有效时长
+                        segment_duration = effective_audio_duration
+                        
+                        # 计算视频倍速
+                        if is_edited and custom_speed is not None and 0.5 <= custom_speed <= 3.0:
+                            speed = custom_speed
+                            logger.info(f"    使用自定义视频倍速: {speed:.2f}x")
                         else:
-                            # Audio is longer than video: slow down video to match audio duration
-                            speed = video_duration / audio_duration
-                            video_segment = cc.VideoSegment(
-                                video_material,
-                                trange(tim(current_time), audio_duration),
-                                speed=speed,
-                                volume=0.0  # Mute video audio track
-                            )
-                            logger.info(f"Shot {shot_id}: audio {audio_duration:.2f}s > video {video_duration:.2f}s, slowing video to {speed:.2f}x speed")
+                            speed = video_duration / effective_audio_duration
+                            speed = max(0.5, min(3.0, speed))
+                            logger.info(f"    自动计算视频倍速: {video_duration:.2f}s / {effective_audio_duration:.2f}s = {speed:.2f}x")
+                        
+                        logger.info(f"  视频参数: target=[{current_time:.3f}s, {segment_duration:.3f}s], speed={speed:.3f}x")
+                        
+                        # 统一使用简单模式（不使用 source_timerange），测试是否能解决冲突
+                        video_segment = cc.VideoSegment(
+                            video_material,
+                            trange(f"{current_time}s", f"{segment_duration}s"),
+                            speed=speed,
+                            volume=0.0
+                        )
                     else:
                         # No audio: use video duration
                         segment_duration = video_duration
                         video_segment = cc.VideoSegment(
                             video_material,
-                            trange(tim(current_time), video_duration),
-                            volume=0.0  # Mute video audio track
+                            trange(f"{current_time}s", f"{video_duration}s"),
+                            volume=0.0
                         )
                         logger.info(f"Shot {shot_id}: no audio, using video duration {video_duration:.2f}s")
 
                     script.add_segment(video_segment)
 
+                    # 预设下一片段起点（默认用视频的 end）
+                    segment_end_time = current_time + segment_duration
+                    
                     # Add audio segment if available
                     if audio_path and audio_duration is not None:
                         try:
+                            logger.info(f"  音频参数: target=[{current_time:.3f}s, {segment_duration:.3f}s]")
+                            
+                            # 统一使用简单模式（不使用 source_timerange）
                             audio_segment = cc.AudioSegment(
                                 audio_material,
-                                trange(tim(current_time), audio_duration)
+                                trange(f"{current_time}s", f"{segment_duration}s")
                             )
+                            
                             script.add_segment(audio_segment)
+                            segment_end_time = current_time + segment_duration
+                            logger.info(f"  音频添加成功, 下一片段起点: {segment_end_time:.3f}s")
                         except Exception as e:
-                            logger.warning(f"Failed to add audio for shot {shot_id}: {e}")
+                            logger.warning(f"  音频添加失败: {e}")
 
                     # Add text segment with script
                     script_text = shot.get("script", "")
@@ -3407,14 +3493,15 @@ class Api:
                         try:
                             text_segment = cc.TextSegment(
                                 script_text,
-                                trange(tim(current_time), segment_duration),
+                                trange(f"{current_time}s", f"{segment_duration}s"),
                                 clip_settings=cc.ClipSettings(transform_y=-0.8)
                             )
                             script.add_segment(text_segment)
                         except Exception as e:
                             logger.warning(f"Failed to add text for shot {shot_id}: {e}")
 
-                    current_time += segment_duration
+                    # 更新 current_time 为下一片段的起点
+                    current_time = segment_end_time
 
                 except Exception as e:
                     logger.error(f"Failed to process shot {shot_id}: {e}")

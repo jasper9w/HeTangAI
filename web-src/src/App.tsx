@@ -195,7 +195,7 @@ function App() {
     };
   }, []);
 
-  // Keyboard shortcut: Cmd+S / Ctrl+S
+  // Keyboard shortcut: Cmd+S / Ctrl+S and ESC to close modals
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 's') {
@@ -204,11 +204,17 @@ function App() {
           handleSaveProject();
         }
       }
+      // ESC to close import conflict modal
+      if (e.key === 'Escape') {
+        if (importConflictOpen) {
+          setImportConflictOpen(false);
+        }
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [api, project, handleSaveProject]);
+  }, [api, project, handleSaveProject, importConflictOpen]);
 
   // ========== Import/Export ==========
 

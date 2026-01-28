@@ -2,9 +2,10 @@
  * Shot Table - Main content area for displaying shots with Excel-style column filters
  */
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { Image, Film, Trash2, Loader2, Check, X, ZoomIn, Plus, Play, Pause } from 'lucide-react';
+import { Image, Film, Trash2, Loader2, Check, X, ZoomIn, Plus, Play, Pause, Pencil } from 'lucide-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { VideoModal } from '../ui/VideoModal';
+import { VideoEditorModal } from '../ui/VideoEditorModal';
 import { ImagePreviewModal } from '../ui/ImagePreviewModal';
 import { useColumnFilter } from './ColumnFilter';
 import { ColumnHeaderFilter, SearchFilter, StatusFilter } from './ExcelColumnFilter';
@@ -127,6 +128,18 @@ export function ShotTable({
                       : 'aspect-video';
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [previewVideo, setPreviewVideo] = useState<{ url: string; title: string } | null>(null);
+  const [videoEditorData, setVideoEditorData] = useState<{
+    shotId: string;
+    videoUrl: string;
+    audioUrl?: string;
+    videoDuration?: number;
+    audioDuration?: number;
+    videoSpeed?: number;
+    audioSpeed?: number;
+    audioOffset?: number;
+    audioTrimStart?: number;
+    audioTrimEnd?: number;
+  } | null>(null);
   const [isSceneModalOpen, setIsSceneModalOpen] = useState(false);
   const [sceneModalShotId, setSceneModalShotId] = useState<string | null>(null);
   const [sceneModalShotSceneName, setSceneModalShotSceneName] = useState<string>('');
@@ -547,6 +560,23 @@ export function ShotTable({
                       onDelete={() => onDeleteShots([shot.id])}
                       onPreviewImage={setPreviewImage}
                       onPreviewVideo={(url, title) => setPreviewVideo({ url, title })}
+                      onEditVideo={() => {
+                        const selectedVideo = shot.videos[shot.selectedVideoIndex || 0];
+                        if (selectedVideo) {
+                          setVideoEditorData({
+                            shotId: shot.id,
+                            videoUrl: selectedVideo,
+                            audioUrl: shot.audioUrl || undefined,
+                            videoDuration: shot.videoDuration,
+                            audioDuration: shot.audioDuration,
+                            videoSpeed: shot.videoSpeed,
+                            audioSpeed: shot.audioSpeed,
+                            audioOffset: shot.audioOffset,
+                            audioTrimStart: shot.audioTrimStart,
+                            audioTrimEnd: shot.audioTrimEnd,
+                          });
+                        }
+                      }}
                       onUpdateField={(field, value) => onUpdateShot(shot.id, field, value)}
                       onPlayAudio={(audioUrl) => handleAudioPlay(shot.id, audioUrl)}
                     />
@@ -674,6 +704,34 @@ export function ShotTable({
         videoUrl={previewVideo?.url || ''}
         title={previewVideo?.title || ''}
       />
+
+      {/* Video Editor Modal */}
+      <VideoEditorModal
+        isOpen={!!videoEditorData}
+        onClose={() => setVideoEditorData(null)}
+        videoUrl={videoEditorData?.videoUrl || ''}
+        audioUrl={videoEditorData?.audioUrl}
+        initialVideoDuration={videoEditorData?.videoDuration}
+        initialAudioDuration={videoEditorData?.audioDuration}
+        initialVideoSpeed={videoEditorData?.videoSpeed}
+        initialAudioSpeed={videoEditorData?.audioSpeed}
+        initialAudioOffset={videoEditorData?.audioOffset}
+        initialAudioTrimStart={videoEditorData?.audioTrimStart}
+        initialAudioTrimEnd={videoEditorData?.audioTrimEnd}
+        onSave={(settings) => {
+          if (videoEditorData) {
+            // Update video editing settings
+            onUpdateShot(videoEditorData.shotId, 'videoSpeed', settings.videoSpeed.toString());
+            onUpdateShot(videoEditorData.shotId, 'audioSpeed', settings.audioSpeed.toString());
+            onUpdateShot(videoEditorData.shotId, 'audioOffset', settings.audioOffset.toString());
+            onUpdateShot(videoEditorData.shotId, 'audioTrimStart', settings.audioTrimStart.toString());
+            onUpdateShot(videoEditorData.shotId, 'audioTrimEnd', settings.audioTrimEnd.toString());
+            onUpdateShot(videoEditorData.shotId, 'videoDuration', settings.videoDuration.toString());
+            onUpdateShot(videoEditorData.shotId, 'audioDuration', settings.audioDuration.toString());
+          }
+          setVideoEditorData(null);
+        }}
+      />
     </div>
   );
 }
@@ -698,6 +756,7 @@ interface ShotRowProps {
   onDelete: () => void;
   onPreviewImage: (url: string) => void;
   onPreviewVideo: (url: string, title: string) => void;
+  onEditVideo: () => void;
   onUpdateField: (field: string, value: string | string[] | { role: string; text: string }[]) => void;
   onPlayAudio: (audioUrl: string) => void;
 }
@@ -796,6 +855,7 @@ function ShotRow({
   onDelete: _onDelete,
   onPreviewImage,
   onPreviewVideo,
+  onEditVideo,
   onUpdateField,
   onPlayAudio,
 }: ShotRowProps) {
@@ -1135,8 +1195,18 @@ function ShotRow({
                         video.currentTime = 0.1;
                       }}
                     />
-                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
                       <Play className="w-6 h-6 text-white" />
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onEditVideo();
+                        }}
+                        className="p-1.5 bg-violet-600/80 hover:bg-violet-600 rounded-full transition-colors"
+                        title="编辑视频"
+                      >
+                        <Pencil className="w-4 h-4 text-white" />
+                      </button>
                     </div>
                   </>
                 )}

@@ -88,6 +88,17 @@ export function ReferenceAudioModal({
     }
   }, [isOpen, currentAudioPath, currentSpeed, loadSettingsAndAudios]);
 
+  // ESC key to close modal
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        handleClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen]);
+
   const handlePlayAudio = async (audio: ReferenceAudio) => {
     if (playingAudio === audio.path) {
       audioRef.current?.pause();

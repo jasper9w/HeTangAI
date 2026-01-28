@@ -1,7 +1,7 @@
 /**
  * CharactersPage - Character management page
  */
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Mic,
   Image as ImageIcon,
@@ -112,6 +112,26 @@ export function CharactersPage({
     description: '',
   });
   const [newCharacter, setNewCharacter] = useState({ name: '', description: '' });
+
+  // ESC key to close modals
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (deleteConfirmOpen) {
+          setCharacterToDelete(null);
+          setDeleteConfirmOpen(false);
+        } else if (editModalOpen) {
+          setEditing({ id: null, name: '', description: '' });
+          setEditModalOpen(false);
+        } else if (addModalOpen) {
+          setNewCharacter({ name: '', description: '' });
+          onAddModalOpenChange(false);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [addModalOpen, editModalOpen, deleteConfirmOpen, onAddModalOpenChange]);
 
   const handleOpenAudioModal = (characterId: string) => {
     setSelectedCharacterId(characterId);

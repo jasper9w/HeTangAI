@@ -135,6 +135,19 @@ export function ProjectSettingsPage({ projectName, showToast, onSettingsChange }
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages]);
 
+  // ESC key to close modals
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (aiChatModalOpen) {
+          setAiChatModalOpen(false);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [aiChatModalOpen]);
+
   // Auto-save settings
   const scheduleSaveSettings = () => {
     if (!api || !projectName) return;

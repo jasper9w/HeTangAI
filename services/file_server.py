@@ -5,7 +5,7 @@ Based on Bottle framework
 import os
 from pathlib import Path
 from threading import Thread
-from bottle import Bottle, static_file, route
+from bottle import Bottle, static_file, route, response
 from loguru import logger
 
 
@@ -21,6 +21,13 @@ class LocalFileServer:
 
     def _setup_routes(self):
         """Setup bottle routes"""
+        # Add CORS headers to all responses
+        @self.app.hook('after_request')
+        def enable_cors():
+            response.headers['Access-Control-Allow-Origin'] = '*'
+            response.headers['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
+            response.headers['Access-Control-Allow-Headers'] = 'Origin, Content-Type'
+
         @self.app.route('/<filepath:path>')
         def server_static(filepath):
             # Try absolute path first

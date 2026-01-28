@@ -198,6 +198,17 @@ export function ShotBuilderPage({ projectName, showToast }: ShotBuilderPageProps
     promptsRef.current = prompts;
   }, [prompts]);
 
+  // ESC key to close modals
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && promptModalOpen) {
+        handlePromptCancel();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [promptModalOpen]);
+
   const scheduleSaveOutputs = (field: 'roles' | 'scenes' | 'shots') => {
     if (!api || !projectName) return;
     dirtyOutputsRef.current[field] = true;

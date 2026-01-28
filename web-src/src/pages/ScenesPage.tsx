@@ -1,7 +1,7 @@
 /**
  * ScenesPage - Scene management page
  */
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Image as ImageIcon,
   Plus,
@@ -76,6 +76,26 @@ export function ScenesPage({
     prompt: '',
   });
   const [newScene, setNewScene] = useState({ name: '', prompt: '' });
+
+  // ESC key to close modals
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (deleteConfirmOpen) {
+          setSceneToDelete(null);
+          setDeleteConfirmOpen(false);
+        } else if (editModalOpen) {
+          setEditing({ id: null, name: '', prompt: '' });
+          setEditModalOpen(false);
+        } else if (addModalOpen) {
+          setNewScene({ name: '', prompt: '' });
+          onAddModalOpenChange(false);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [addModalOpen, editModalOpen, deleteConfirmOpen, onAddModalOpenChange]);
 
   const handleStartEdit = (scene: Scene) => {
     setEditing({
