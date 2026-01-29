@@ -600,7 +600,7 @@ export function ReferenceAudioModal({
                     onClick={() => setUsageTab('smart')}
                     className={`px-3 py-1.5 rounded text-xs font-medium flex items-center gap-1.5 transition-colors ${
                       usageTab === 'smart'
-                        ? 'bg-violet-600 text-white'
+                        ? 'bg-teal-600 text-white'
                         : 'bg-slate-700 text-slate-400 hover:bg-slate-600'
                     }`}
                   >
@@ -719,7 +719,7 @@ export function ReferenceAudioModal({
                       {allTags.length > 0 && (
                         <div className="relative group">
                           <button className={`px-2 py-1.5 rounded text-xs flex items-center gap-1 transition-colors ${
-                            selectedTags.length > 0 ? 'bg-violet-600 text-white' : 'bg-slate-700 text-slate-400 hover:bg-slate-600'
+                            selectedTags.length > 0 ? 'bg-teal-600 text-white' : 'bg-slate-700 text-slate-400 hover:bg-slate-600'
                           }`}>
                             <span>标签</span>
                             {selectedTags.length > 0 && <span className="px-1 bg-white/20 rounded">{selectedTags.length}</span>}
@@ -732,7 +732,7 @@ export function ReferenceAudioModal({
                                 value={tagSearch}
                                 onChange={(e) => setTagSearch(e.target.value)}
                                 placeholder="搜索标签..."
-                                className="w-full px-2 py-1 bg-slate-700 rounded text-xs text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                                className="w-full px-2 py-1 bg-slate-700 rounded text-xs text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
                                 onClick={(e) => e.stopPropagation()}
                               />
                             </div>

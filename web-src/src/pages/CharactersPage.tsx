@@ -13,7 +13,6 @@ import {
   Upload,
   FileUp,
   Wand2,
-  Play,
   Pause,
   Volume2,
 } from 'lucide-react';
