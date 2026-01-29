@@ -20,6 +20,24 @@ from loguru import logger
 from services.project_manager import ProjectManager
 
 
+def change_audio_speed(audio, speed: float):
+    """
+    调整音频速度
+    Args:
+        audio: pydub AudioSegment 对象
+        speed: 速度倍率，> 1 加快，< 1 减慢
+    Returns:
+        调整后的 AudioSegment 对象
+    注意: 此方法通过改变帧率实现变速，会导致轻微音调变化
+    """
+    if speed == 1.0:
+        return audio
+    new_frame_rate = int(audio.frame_rate * speed)
+    return audio._spawn(audio.raw_data, overrides={
+        "frame_rate": new_frame_rate
+    }).set_frame_rate(audio.frame_rate)
+
+
 class Api:
     """pywebview API for frontend communication"""
 
@@ -2873,8 +2891,11 @@ class Api:
 
                         temp_files.append(temp_path)
 
-                        # Load audio segment
+                        # Load audio segment and apply speed adjustment
                         segment = AudioSegment.from_file(str(temp_path))
+                        if character_speed != 1.0:
+                            logger.info(f"Applying speed adjustment: {character_speed}x for {role}")
+                            segment = change_audio_speed(segment, character_speed)
                         audio_segments.append(segment)
 
                         # Add 300ms silence between dialogues
@@ -4192,6 +4213,180 @@ class Api:
 
         except Exception as e:
             logger.error(f"Failed to export JianYing draft: {e}")
+            return {"success": False, "error": str(e)}
+
+    def export_audio_srt(self) -> dict:
+        """Export audio as SRT subtitle file and concatenated WAV file"""
+        try:
+            if not self.project_data or not self.project_name:
+                return {"success": False, "error": "No project loaded"}
+
+            shots = self.project_data.get("shots", [])
+            if not shots:
+                return {"success": False, "error": "No shots in project"}
+
+            # Collect audio files and build SRT content
+            srt_entries = []
+            audio_segments = []
+            current_time = 0.0
+            entry_index = 1
+
+            from pydub import AudioSegment
+
+            for shot in shots:
+                audio_url = shot.get("audioUrl", "")
+                if not audio_url:
+                    continue
+
+                audio_path = self._url_to_path(audio_url)
+                if not audio_path or not Path(audio_path).exists():
+                    logger.warning(f"Audio file not found: {audio_path}")
+                    continue
+
+                # Get dialogues text (without role names)
+                dialogues = shot.get("dialogues", [])
+                if not dialogues and shot.get("script"):
+                    # Fallback to old format
+                    dialogues = [{"text": shot["script"]}]
+
+                text_lines = []
+                for d in dialogues:
+                    text = d.get("text", "").strip()
+                    if text:
+                        text_lines.append(text)
+
+                if not text_lines:
+                    continue
+
+                # Load audio to get duration
+                try:
+                    audio_segment = AudioSegment.from_file(audio_path)
+                    duration = len(audio_segment) / 1000.0  # ms to seconds
+                except Exception as e:
+                    logger.warning(f"Failed to load audio {audio_path}: {e}")
+                    continue
+
+                audio_segments.append(audio_segment)
+
+                # Build SRT entry
+                start_time = current_time
+                end_time = current_time + duration
+
+                srt_entries.append({
+                    "index": entry_index,
+                    "start": start_time,
+                    "end": end_time,
+                    "text": "\n".join(text_lines)
+                })
+
+                current_time = end_time
+                entry_index += 1
+
+            if not srt_entries:
+                return {"success": False, "error": "No audio entries found"}
+
+            # Generate SRT content
+            def format_srt_time(seconds: float) -> str:
+                hours = int(seconds // 3600)
+                minutes = int((seconds % 3600) // 60)
+                secs = int(seconds % 60)
+                millis = int((seconds % 1) * 1000)
+                return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
+
+            srt_content = ""
+            for entry in srt_entries:
+                srt_content += f"{entry['index']}\n"
+                srt_content += f"{format_srt_time(entry['start'])} --> {format_srt_time(entry['end'])}\n"
+                srt_content += f"{entry['text']}\n\n"
+
+            # Concatenate audio segments
+            combined_audio = audio_segments[0]
+            for segment in audio_segments[1:]:
+                combined_audio += segment
+
+            # Show save dialog for SRT file
+            srt_result = self._window.create_file_dialog(
+                webview.FileDialog.SAVE,
+                save_filename=f"{self.project_name}.srt",
+                file_types=("SRT Files (*.srt)", "All files (*.*)")
+            )
+
+            if not srt_result:
+                return {"success": False, "error": "User cancelled"}
+
+            srt_path = Path(srt_result) if isinstance(srt_result, str) else Path(srt_result[0])
+
+            # Determine WAV path (same directory, same name but .wav extension)
+            wav_path = srt_path.with_suffix(".wav")
+
+            # Save SRT file
+            with open(srt_path, "w", encoding="utf-8") as f:
+                f.write(srt_content)
+
+            # Export combined audio as WAV
+            combined_audio.export(str(wav_path), format="wav")
+
+            logger.info(f"Exported SRT to: {srt_path}")
+            logger.info(f"Exported WAV to: {wav_path}")
+
+            return {
+                "success": True,
+                "srtPath": str(srt_path),
+                "wavPath": str(wav_path)
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to export audio SRT: {e}")
+            return {"success": False, "error": str(e)}
+
+    def export_audio_text(self) -> dict:
+        """Export audio dialogue text as plain text file (one line per dialogue, no role names)"""
+        try:
+            if not self.project_data or not self.project_name:
+                return {"success": False, "error": "No project loaded"}
+
+            shots = self.project_data.get("shots", [])
+            if not shots:
+                return {"success": False, "error": "No shots in project"}
+
+            # Collect all dialogue texts
+            text_lines = []
+            for shot in shots:
+                dialogues = shot.get("dialogues", [])
+                if not dialogues and shot.get("script"):
+                    # Fallback to old format
+                    dialogues = [{"text": shot["script"]}]
+
+                for d in dialogues:
+                    text = d.get("text", "").strip()
+                    if text:
+                        text_lines.append(text)
+
+            if not text_lines:
+                return {"success": False, "error": "No dialogue text found"}
+
+            # Show save dialog
+            result = self._window.create_file_dialog(
+                webview.FileDialog.SAVE,
+                save_filename=f"{self.project_name}_dialogues.txt",
+                file_types=("Text Files (*.txt)", "All files (*.*)")
+            )
+
+            if not result:
+                return {"success": False, "error": "User cancelled"}
+
+            file_path = Path(result) if isinstance(result, str) else Path(result[0])
+
+            # Save text file
+            with open(file_path, "w", encoding="utf-8") as f:
+                f.write("\n".join(text_lines))
+
+            logger.info(f"Exported dialogue text to: {file_path}")
+
+            return {"success": True, "path": str(file_path)}
+
+        except Exception as e:
+            logger.error(f"Failed to export audio text: {e}")
             return {"success": False, "error": str(e)}
 
     # ========== Project Settings APIs (作品信息与创作参数) ==========

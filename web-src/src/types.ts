@@ -281,6 +281,8 @@ export interface PyWebViewApi {
   select_work_dir: () => Promise<ApiResponse & { path?: string }>;
   select_jianying_draft_dir: () => Promise<ApiResponse & { path?: string }>;
   export_jianying_draft: () => Promise<ApiResponse & { path?: string }>;
+  export_audio_srt: () => Promise<ApiResponse & { srtPath?: string; wavPath?: string }>;
+  export_audio_text: () => Promise<ApiResponse & { path?: string }>;
 
   // Reference Audio
   scan_reference_audios: (directory: string) => Promise<ApiResponse & { audios?: Array<{ path: string; name: string; relativePath: string }> }>;

@@ -28,6 +28,7 @@ import { DubbingPage } from './pages/DubbingPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { Toast, type ToastMessage } from './components/ui/Toast';
 import { ImportDropdown } from './components/ui/ImportDropdown';
+import { ExportDropdown } from './components/ui/ExportDropdown';
 import type { ProjectData, Shot, PageType, ImportedCharacter } from './types';
 
 function App() {
@@ -980,6 +981,38 @@ function App() {
     }
   };
 
+  const handleExportAudioSrt = async () => {
+    if (!api) return;
+
+    try {
+      const result = await api.export_audio_srt();
+      if (result.success) {
+        alert(`导出成功！\nSRT文件: ${result.srtPath}\nWAV文件: ${result.wavPath}`);
+      } else {
+        alert(`导出失败: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Failed to export audio SRT:', error);
+      alert('导出失败');
+    }
+  };
+
+  const handleExportAudioText = async () => {
+    if (!api) return;
+
+    try {
+      const result = await api.export_audio_text();
+      if (result.success) {
+        alert(`导出成功！\n文件位置: ${result.path}`);
+      } else {
+        alert(`导出失败: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Failed to export audio text:', error);
+      alert('导出失败');
+    }
+  };
+
   const handleBatchGenerate = async (shotIds: string[], _forceRegenerate: boolean) => {
     if (!api || shotIds.length === 0) return;
 
@@ -1189,14 +1222,12 @@ function App() {
               )}
             </button>
             <div className="w-px h-6 bg-slate-700 mx-2" />
-            <button
-              onClick={handleExportJianyingDraft}
+            <ExportDropdown
+              onExportJianyingDraft={handleExportJianyingDraft}
+              onExportAudioSrt={handleExportAudioSrt}
+              onExportAudioText={handleExportAudioText}
               disabled={!project}
-              className="flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm text-white transition-colors"
-            >
-              <Film className="w-4 h-4" />
-              导出剪映草稿
-            </button>
+            />
           </div>
         );
       }
