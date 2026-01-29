@@ -36,9 +36,9 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
           <button
             key={item.id}
             onClick={() => onPageChange(item.id)}
-            className={`w-12 h-12 mb-2 rounded-lg flex flex-col items-center justify-center transition-colors ${
+            className={`w-12 h-12 mb-2 rounded-lg flex flex-col items-center justify-center transition-all ${
               isActive
-                ? 'bg-violet-500 text-white'
+                ? 'bg-teal-500/20 text-teal-400 shadow-lg shadow-teal-500/10'
                 : 'text-slate-400 hover:bg-slate-700 hover:text-slate-200'
             }`}
             title={item.label}

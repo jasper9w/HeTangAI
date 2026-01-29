@@ -179,7 +179,7 @@ export function CharacterImportModal({
                 onClick={() => setActiveTab('paste')}
                 className={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors ${
                   activeTab === 'paste'
-                    ? 'text-violet-400 border-b-2 border-violet-400'
+                    ? 'text-teal-400 border-b-2 border-teal-400'
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
@@ -190,7 +190,7 @@ export function CharacterImportModal({
                 onClick={() => setActiveTab('file')}
                 className={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors ${
                   activeTab === 'file'
-                    ? 'text-violet-400 border-b-2 border-violet-400'
+                    ? 'text-teal-400 border-b-2 border-teal-400'
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
@@ -201,7 +201,7 @@ export function CharacterImportModal({
                 onClick={() => setActiveTab('template')}
                 className={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors ${
                   activeTab === 'template'
-                    ? 'text-violet-400 border-b-2 border-violet-400'
+                    ? 'text-teal-400 border-b-2 border-teal-400'
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
@@ -223,7 +223,7 @@ export function CharacterImportModal({
                       onChange={(e) => setPasteText(e.target.value)}
                       placeholder={`格式示例:\n\n2列 (姓名, 描述):\nAlice\t黑长直的年轻女性\nBob\t穿西装的中年男性\n\n3列 (姓名, 参考音频, 描述):\nAlice\t/path/to/audio.wav\t黑长直的年轻女性\nBob\t/path/to/audio2.wav\t穿西装的中年男性\n\nJSONL:\n{"name":"Alice","dna":"黑长直的年轻女性","tti":{"prompt":"young woman"}}`}
                       rows={10}
-                      className="w-full px-3 py-2 bg-slate-700 rounded-lg text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500 resize-none font-mono text-sm"
+                      className="w-full px-3 py-2 bg-slate-700 rounded-lg text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none font-mono text-sm"
                     />
                   </div>
 
@@ -257,7 +257,7 @@ export function CharacterImportModal({
                     <button
                       onClick={handleImportFile}
                       disabled={isLoading}
-                      className="px-4 py-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 rounded-lg text-sm text-white transition-colors"
+                      className="px-4 py-2 bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-500 hover:to-teal-400 disabled:opacity-50 rounded-lg text-sm text-white transition-colors"
                     >
                       {isLoading ? (
                         <span className="flex items-center gap-2">
@@ -358,7 +358,7 @@ export function CharacterImportModal({
                 <button
                   onClick={handleParseText}
                   disabled={isLoading || !pasteText.trim()}
-                  className="px-4 py-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 rounded-lg text-sm text-white transition-colors"
+                  className="px-4 py-2 bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-500 hover:to-teal-400 disabled:opacity-50 rounded-lg text-sm text-white transition-colors"
                 >
                   {isLoading ? (
                     <span className="flex items-center gap-2">
@@ -383,7 +383,7 @@ export function CharacterImportModal({
                   </span>
                   <button
                     onClick={() => setShowPreview(false)}
-                    className="text-xs text-violet-400 hover:text-violet-300"
+                    className="text-xs text-teal-400 hover:text-teal-300"
                   >
                     返回编辑
                   </button>
@@ -433,7 +433,7 @@ export function CharacterImportModal({
                             </span>
                           )}
                           {char.referenceAudioPath && (
-                            <span className="text-xs px-1.5 py-0.5 bg-violet-600/30 text-violet-300 rounded">
+                            <span className="text-xs px-1.5 py-0.5 bg-teal-600/30 text-teal-300 rounded">
                               Has Audio
                             </span>
                           )}
@@ -485,7 +485,7 @@ export function CharacterImportModal({
                   <button
                     onClick={() => handleConfirm('overwrite')}
                     disabled={isLoading || parsedCharacters.length === 0}
-                    className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 rounded-lg text-sm text-white transition-colors"
+                    className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-500 hover:to-teal-400 disabled:opacity-50 rounded-lg text-sm text-white transition-colors"
                   >
                     {isLoading ? (
                       <>
@@ -504,7 +504,7 @@ export function CharacterImportModal({
                 <button
                   onClick={() => handleConfirm()}
                   disabled={isLoading || parsedCharacters.length === 0}
-                  className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 rounded-lg text-sm text-white transition-colors"
+                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-500 hover:to-teal-400 disabled:opacity-50 rounded-lg text-sm text-white transition-colors"
                 >
                   {isLoading ? (
                     <>

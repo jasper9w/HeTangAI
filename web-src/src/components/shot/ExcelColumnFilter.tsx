@@ -81,7 +81,7 @@ function SearchFilter({ value, inverted, onChange, onInvertedChange, placeholder
           type="checkbox"
           checked={inverted}
           onChange={(e) => onInvertedChange(e.target.checked)}
-          className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-violet-600 focus:ring-violet-500"
+          className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-teal-600 focus:ring-teal-500"
         />
         <span className="text-sm text-slate-200">反选（不包含）</span>
       </label>
@@ -94,7 +94,7 @@ function SearchFilter({ value, inverted, onChange, onInvertedChange, placeholder
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
-          className="w-full pl-10 pr-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-slate-200 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500"
+          className="w-full pl-10 pr-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-slate-200 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500"
           autoFocus
         />
         {value && (
@@ -162,7 +162,7 @@ function MultiSelectFilter({
             type="checkbox"
             checked={inverted}
             onChange={(e) => onInvertedChange(e.target.checked)}
-            className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-violet-600 focus:ring-violet-500"
+            className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-teal-600 focus:ring-teal-500"
           />
           <span className="text-sm text-slate-200">反选（排除选中项）</span>
         </label>
@@ -182,7 +182,7 @@ function MultiSelectFilter({
             value={searchValue}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder="搜索选项..."
-            className="w-full pl-10 pr-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-slate-200 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500"
+            className="w-full pl-10 pr-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-slate-200 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500"
           />
         </div>
       </div>
@@ -203,14 +203,14 @@ function MultiSelectFilter({
                 type="checkbox"
                 checked={selectedValues.includes(option.value)}
                 onChange={() => handleToggleOption(option.value)}
-                className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-violet-600 focus:ring-violet-500"
+                className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-teal-600 focus:ring-teal-500"
               />
               <span className="text-slate-200 flex-1 truncate">{option.label}</span>
               {option.count !== undefined && (
                 <span className="text-slate-400 text-xs">({option.count})</span>
               )}
               {selectedValues.includes(option.value) && (
-                <Check className="w-4 h-4 text-violet-400" />
+                <Check className="w-4 h-4 text-teal-400" />
               )}
             </label>
           ))
@@ -278,7 +278,7 @@ export function ColumnHeaderFilter({ title, hasActiveFilter, children }: ColumnH
           ref={anchorRef}
           onClick={() => setIsOpen(!isOpen)}
           className={`p-1 rounded hover:bg-slate-700 transition-colors ${
-            hasActiveFilter ? 'text-violet-400' : 'text-slate-500 hover:text-slate-300'
+            hasActiveFilter ? 'text-teal-400' : 'text-slate-500 hover:text-slate-300'
           }`}
           title={`筛选 ${title}`}
         >
@@ -497,13 +497,13 @@ function PromptFilter({
           onClick={() => setActiveTab('character')}
           className={`flex-1 px-3 py-2 text-sm ${
             activeTab === 'character'
-              ? 'text-violet-400 border-b-2 border-violet-400'
+              ? 'text-teal-400 border-b-2 border-teal-400'
               : 'text-slate-400 hover:text-slate-200'
           }`}
         >
           按角色
           {characterValues.length > 0 && (
-            <span className="ml-1 px-1.5 py-0.5 bg-violet-500/20 rounded text-xs">
+            <span className="ml-1 px-1.5 py-0.5 bg-teal-500/20 rounded text-xs">
               {characterValues.length}
             </span>
           )}
@@ -512,13 +512,13 @@ function PromptFilter({
           onClick={() => setActiveTab('text')}
           className={`flex-1 px-3 py-2 text-sm ${
             activeTab === 'text'
-              ? 'text-violet-400 border-b-2 border-violet-400'
+              ? 'text-teal-400 border-b-2 border-teal-400'
               : 'text-slate-400 hover:text-slate-200'
           }`}
         >
           按文本
           {textValue && (
-            <span className="ml-1 px-1.5 py-0.5 bg-violet-500/20 rounded text-xs">1</span>
+            <span className="ml-1 px-1.5 py-0.5 bg-teal-500/20 rounded text-xs">1</span>
           )}
         </button>
       </div>
@@ -638,13 +638,13 @@ function PreviewFilter({
           onClick={() => setActiveTab('status')}
           className={`flex-1 px-3 py-2 text-sm ${
             activeTab === 'status'
-              ? 'text-violet-400 border-b-2 border-violet-400'
+              ? 'text-teal-400 border-b-2 border-teal-400'
               : 'text-slate-400 hover:text-slate-200'
           }`}
         >
           按状态
           {(statusValues.length > 0 || noMain) && (
-            <span className="ml-1 px-1.5 py-0.5 bg-violet-500/20 rounded text-xs">
+            <span className="ml-1 px-1.5 py-0.5 bg-teal-500/20 rounded text-xs">
               {statusValues.length + (noMain ? 1 : 0)}
             </span>
           )}
@@ -653,13 +653,13 @@ function PreviewFilter({
           onClick={() => setActiveTab('count')}
           className={`flex-1 px-3 py-2 text-sm ${
             activeTab === 'count'
-              ? 'text-violet-400 border-b-2 border-violet-400'
+              ? 'text-teal-400 border-b-2 border-teal-400'
               : 'text-slate-400 hover:text-slate-200'
           }`}
         >
           按数量
           {countValues.length > 0 && (
-            <span className="ml-1 px-1.5 py-0.5 bg-violet-500/20 rounded text-xs">
+            <span className="ml-1 px-1.5 py-0.5 bg-teal-500/20 rounded text-xs">
               {countValues.length}
             </span>
           )}
@@ -676,7 +676,7 @@ function PreviewFilter({
                 type="checkbox"
                 checked={noMain}
                 onChange={(e) => onNoMainChange(e.target.checked)}
-                className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-violet-600 focus:ring-violet-500"
+                className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-teal-600 focus:ring-teal-500"
               />
               <span className="text-sm text-slate-200">
                 {type === 'image' ? '无主图' : '无主视频'}
@@ -704,7 +704,7 @@ function PreviewFilter({
                 type="checkbox"
                 checked={countInverted}
                 onChange={(e) => onCountInvertedChange(e.target.checked)}
-                className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-violet-600 focus:ring-violet-500"
+                className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-teal-600 focus:ring-teal-500"
               />
               <span className="text-sm text-slate-200">反选（排除选中项）</span>
             </label>
@@ -721,12 +721,12 @@ function PreviewFilter({
                   type="checkbox"
                   checked={countValues.includes(option.value)}
                   onChange={() => handleToggleCount(option.value)}
-                  className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-violet-600 focus:ring-violet-500"
+                  className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-teal-600 focus:ring-teal-500"
                 />
                 <span className="text-slate-200 flex-1">{option.label}</span>
                 <span className="text-slate-400 text-xs">({option.count})</span>
                 {countValues.includes(option.value) && (
-                  <Check className="w-4 h-4 text-violet-400" />
+                  <Check className="w-4 h-4 text-teal-400" />
                 )}
               </label>
             ))}

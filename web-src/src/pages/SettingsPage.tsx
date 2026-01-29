@@ -170,7 +170,7 @@ export function SettingsPage({}: SettingsPageProps) {
 
   const tabs = [
     { id: 'shotBuilder' as TabType, label: '对话接口', icon: MessageSquare, color: 'blue' },
-    { id: 'tti' as TabType, label: '生图接口', icon: Image, color: 'violet' },
+    { id: 'tti' as TabType, label: '生图接口', icon: Image, color: 'teal' },
     { id: 'ttv' as TabType, label: '生视频接口', icon: Video, color: 'emerald' },
     { id: 'tts' as TabType, label: '配音接口', icon: Mic, color: 'orange' },
   ];
@@ -230,7 +230,7 @@ export function SettingsPage({}: SettingsPageProps) {
               value={config.apiUrl}
               onChange={(e) => updateSetting(activeTab, 'apiUrl', e.target.value)}
               placeholder={placeholders[activeTab].apiUrl}
-              className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+              className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
             />
           </div>
         )}
@@ -246,7 +246,7 @@ export function SettingsPage({}: SettingsPageProps) {
                     name="tti-provider"
                     checked={settings.tti.provider === 'openai'}
                     onChange={() => updateSetting('tti', 'provider', 'openai')}
-                    className="w-4 h-4 text-violet-600 bg-slate-700 border-slate-500 focus:ring-violet-500"
+                    className="w-4 h-4 text-teal-600 bg-slate-700 border-slate-500 focus:ring-teal-500"
                   />
                   <span className="text-sm text-slate-300">OpenAI 兼容</span>
                 </label>
@@ -256,7 +256,7 @@ export function SettingsPage({}: SettingsPageProps) {
                     name="tti-provider"
                     checked={settings.tti.provider === 'whisk'}
                     onChange={() => updateSetting('tti', 'provider', 'whisk')}
-                    className="w-4 h-4 text-violet-600 bg-slate-700 border-slate-500 focus:ring-violet-500"
+                    className="w-4 h-4 text-teal-600 bg-slate-700 border-slate-500 focus:ring-teal-500"
                   />
                   <span className="text-sm text-slate-300">Whisk</span>
                 </label>
@@ -273,7 +273,7 @@ export function SettingsPage({}: SettingsPageProps) {
                     value={settings.tti.apiUrl}
                     onChange={(e) => updateSetting('tti', 'apiUrl', e.target.value)}
                     placeholder={placeholders.tti.apiUrl}
-                    className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                    className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
                   />
                 </div>
                 <div>
@@ -283,7 +283,7 @@ export function SettingsPage({}: SettingsPageProps) {
                     value={settings.tti.apiKey}
                     onChange={(e) => updateSetting('tti', 'apiKey', e.target.value)}
                     placeholder="sk-..."
-                    className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                    className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
                   />
                 </div>
                 <div className="space-y-3">
@@ -294,7 +294,7 @@ export function SettingsPage({}: SettingsPageProps) {
                       value={settings.tti.characterModel}
                       onChange={(e) => updateSetting('tti', 'characterModel', e.target.value)}
                       placeholder={placeholders.tti.characterModel}
-                      className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                      className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
                     />
                   </div>
                   <div>
@@ -304,7 +304,7 @@ export function SettingsPage({}: SettingsPageProps) {
                       value={settings.tti.sceneModel}
                       onChange={(e) => updateSetting('tti', 'sceneModel', e.target.value)}
                       placeholder={placeholders.tti.sceneModel}
-                      className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                      className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
                     />
                   </div>
                   <div>
@@ -314,7 +314,7 @@ export function SettingsPage({}: SettingsPageProps) {
                       value={settings.tti.shotModel}
                       onChange={(e) => updateSetting('tti', 'shotModel', e.target.value)}
                       placeholder={placeholders.tti.shotModel}
-                      className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                      className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
                     />
                   </div>
                 </div>
@@ -322,8 +322,8 @@ export function SettingsPage({}: SettingsPageProps) {
             ) : (
               <>
                 {/* Whisk Mode Settings */}
-                <div className="bg-violet-600/10 border border-violet-600/20 rounded-lg p-4">
-                  <h4 className="font-medium text-violet-300 mb-2 flex items-center gap-2">
+                <div className="bg-teal-600/10 border border-teal-600/20 rounded-lg p-4">
+                  <h4 className="font-medium text-teal-300 mb-2 flex items-center gap-2">
                     <Image className="w-4 h-4" />
                     Whisk 接口说明
                   </h4>
@@ -338,7 +338,7 @@ export function SettingsPage({}: SettingsPageProps) {
                     value={settings.tti.whiskToken}
                     onChange={(e) => updateSetting('tti', 'whiskToken', e.target.value)}
                     placeholder="ya29.xxx..."
-                    className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                    className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
                   />
                 </div>
                 <div>
@@ -348,7 +348,7 @@ export function SettingsPage({}: SettingsPageProps) {
                     value={settings.tti.whiskWorkflowId}
                     onChange={(e) => updateSetting('tti', 'whiskWorkflowId', e.target.value)}
                     placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                    className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                    className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
                   />
                 </div>
                 <div>
@@ -358,7 +358,7 @@ export function SettingsPage({}: SettingsPageProps) {
                     onChange={(e) => updateSetting('tti', 'whiskCookie', e.target.value)}
                     placeholder="从浏览器开发者工具复制 Cookie..."
                     rows={3}
-                    className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-violet-500 resize-none"
+                    className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500 resize-none"
                   />
                 </div>
               </>
@@ -372,7 +372,7 @@ export function SettingsPage({}: SettingsPageProps) {
                 max="10"
                 value={settings.tti.concurrency}
                 onChange={(e) => updateSetting('tti', 'concurrency', parseInt(e.target.value) || 1)}
-                className="w-32 px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                className="w-32 px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 focus:outline-none focus:ring-1 focus:ring-teal-500"
               />
             </div>
           </div>
@@ -552,7 +552,7 @@ export function SettingsPage({}: SettingsPageProps) {
   if (isLoading) {
     return (
       <div className="h-full flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-violet-500 animate-spin" />
+        <Loader2 className="w-8 h-8 text-teal-500 animate-spin" />
       </div>
     );
   }
@@ -571,7 +571,7 @@ export function SettingsPage({}: SettingsPageProps) {
 
       <div className="space-y-6 max-w-4xl">
         {/* Reference Audio Directory */}
-        <div className="bg-slate-800 rounded-lg p-4">
+        <div className="bg-slate-800/80 backdrop-blur-sm rounded-lg p-4 border border-slate-700/50 shadow-lg shadow-black/20">
           <h3 className="text-base font-medium text-slate-100 mb-3">参考音频目录</h3>
           <p className="text-xs text-slate-500 mb-2">设置角色选择参考音频时使用的目录</p>
           <div className="flex gap-2">
@@ -593,7 +593,7 @@ export function SettingsPage({}: SettingsPageProps) {
         </div>
 
         {/* JianYing Draft Directory */}
-        <div className="bg-slate-800 rounded-lg p-4">
+        <div className="bg-slate-800/80 backdrop-blur-sm rounded-lg p-4 border border-slate-700/50 shadow-lg shadow-black/20">
           <h3 className="text-base font-medium text-slate-100 mb-3">剪映草稿目录</h3>
           <div className="flex gap-2">
             <input
@@ -614,7 +614,7 @@ export function SettingsPage({}: SettingsPageProps) {
         </div>
 
         {/* API Settings Tabs */}
-        <div className="bg-slate-800 rounded-lg p-6">
+        <div className="bg-slate-800/80 backdrop-blur-sm rounded-lg p-6 border border-slate-700/50 shadow-lg shadow-black/20">
           <h3 className="text-lg font-medium text-slate-100 mb-4">API 接口配置</h3>
 
           {/* Tab Navigation */}
@@ -628,8 +628,8 @@ export function SettingsPage({}: SettingsPageProps) {
                   case 'orange':
                     activeClass = 'bg-orange-600 text-white';
                     break;
-                  case 'violet':
-                    activeClass = 'bg-violet-600 text-white';
+                  case 'teal':
+                    activeClass = 'bg-teal-600 text-white';
                     break;
                   case 'emerald':
                     activeClass = 'bg-emerald-600 text-white';
@@ -661,7 +661,7 @@ export function SettingsPage({}: SettingsPageProps) {
         </div>
 
         {/* Work Directory */}
-        <div className="bg-slate-800 rounded-lg p-4">
+        <div className="bg-slate-800/80 backdrop-blur-sm rounded-lg p-4 border border-slate-700/50 shadow-lg shadow-black/20">
           <h3 className="text-base font-medium text-slate-100 mb-3">工作目录</h3>
           <div className="flex gap-2">
             <input
@@ -681,7 +681,7 @@ export function SettingsPage({}: SettingsPageProps) {
           </div>
         </div>
 
-        <div className="bg-slate-800 rounded-lg p-4">
+        <div className="bg-slate-800/80 backdrop-blur-sm rounded-lg p-4 border border-slate-700/50 shadow-lg shadow-black/20">
           <h3 className="text-sm font-medium text-slate-200 mb-2">关于</h3>
           <div className="space-y-1 text-xs text-slate-400">
             <p>荷塘AI - 视频创作工坊</p>

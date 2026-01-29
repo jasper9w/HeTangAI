@@ -6,6 +6,7 @@ import json
 import math
 import random
 import string
+import sys
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from threading import Semaphore
@@ -196,6 +197,97 @@ class Api:
             except Exception as e:
                 logger.error(f"Failed to load settings: {e}")
         return {}
+
+    def _get_audio_preferences_file(self) -> Path:
+        """Get path to audio preferences file"""
+        return Path.home() / ".hetangai" / "audio_preferences.json"
+
+    def _load_audio_preferences(self) -> dict:
+        """Load audio preferences from file"""
+        prefs_file = self._get_audio_preferences_file()
+        if prefs_file.exists():
+            try:
+                with open(prefs_file, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except Exception as e:
+                logger.error(f"Failed to load audio preferences: {e}")
+        return {"speeds": {}, "favorites": [], "recentlyUsed": []}
+
+    def _save_audio_preferences(self, data: dict) -> bool:
+        """Save audio preferences to file"""
+        prefs_file = self._get_audio_preferences_file()
+        try:
+            prefs_file.parent.mkdir(parents=True, exist_ok=True)
+            with open(prefs_file, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            return True
+        except Exception as e:
+            logger.error(f"Failed to save audio preferences: {e}")
+            return False
+
+    def get_audio_preferences(self) -> dict:
+        """Get audio preferences for frontend"""
+        prefs = self._load_audio_preferences()
+        return {
+            "success": True,
+            "speeds": prefs.get("speeds", {}),
+            "favorites": prefs.get("favorites", []),
+            "recentlyUsed": prefs.get("recentlyUsed", [])
+        }
+
+    def set_audio_speed(self, audio_path: str, speed: float) -> dict:
+        """Set speed for a specific audio"""
+        prefs = self._load_audio_preferences()
+        prefs["speeds"][audio_path] = speed
+        success = self._save_audio_preferences(prefs)
+        return {"success": success}
+
+    def toggle_audio_favorite(self, audio_path: str) -> dict:
+        """Toggle favorite status for an audio"""
+        prefs = self._load_audio_preferences()
+        favorites = prefs.get("favorites", [])
+        
+        if audio_path in favorites:
+            favorites.remove(audio_path)
+            is_favorite = False
+        else:
+            favorites.append(audio_path)
+            is_favorite = True
+        
+        prefs["favorites"] = favorites
+        success = self._save_audio_preferences(prefs)
+        return {"success": success, "isFavorite": is_favorite}
+
+    def record_audio_usage(self, audio_path: str) -> dict:
+        """Record usage of an audio"""
+        from datetime import datetime
+        
+        prefs = self._load_audio_preferences()
+        recently_used = prefs.get("recentlyUsed", [])
+        
+        # Find existing entry
+        existing = None
+        for item in recently_used:
+            if item.get("path") == audio_path:
+                existing = item
+                break
+        
+        if existing:
+            existing["lastUsed"] = datetime.now().isoformat()
+            existing["useCount"] = existing.get("useCount", 0) + 1
+        else:
+            recently_used.append({
+                "path": audio_path,
+                "lastUsed": datetime.now().isoformat(),
+                "useCount": 1
+            })
+        
+        # Keep only last 50 recently used
+        recently_used.sort(key=lambda x: x.get("lastUsed", ""), reverse=True)
+        prefs["recentlyUsed"] = recently_used[:50]
+        
+        success = self._save_audio_preferences(prefs)
+        return {"success": success}
 
     def _ensure_prompt_prefixes(self, project_data: dict) -> None:
         """Ensure prompt prefixes exist in project data"""
@@ -2942,11 +3034,19 @@ class Api:
         return {"success": True, "path": str(dir_path)}
 
     def get_reference_audio_data(self, file_path: str) -> dict:
-        """Read audio file and return as base64 data"""
+        """Read audio file and return as base64 data
+        
+        Supports both preset: prefixed paths and absolute paths
+        """
         import base64
         import mimetypes
 
         try:
+            # Handle preset audio paths
+            if file_path.startswith("preset:"):
+                relative_path = file_path[7:]  # Remove "preset:" prefix
+                return self.get_preset_audio_data(relative_path)
+
             audio_path = Path(file_path)
             if not audio_path.exists() or not audio_path.is_file():
                 return {"success": False, "error": "File not found"}
@@ -2979,6 +3079,469 @@ class Api:
 
         except Exception as e:
             logger.error(f"Failed to read audio file: {e}")
+            return {"success": False, "error": str(e)}
+
+    # ========== Preset Audio ==========
+
+    def _get_preset_audios_csv_path(self) -> Path:
+        """Get the path to the preset audios CSV file"""
+        # In development mode, use the local assets directory
+        # In production mode, use the bundled assets
+        if getattr(sys, 'frozen', False):
+            # Running in PyInstaller bundle
+            base_path = Path(sys._MEIPASS)
+        else:
+            # Running in development
+            base_path = Path(__file__).parent
+        return base_path / "assets" / "audios" / "audios.csv"
+
+    def _get_preset_audios_dir(self) -> Path:
+        """Get the directory containing preset audio files"""
+        if getattr(sys, 'frozen', False):
+            base_path = Path(sys._MEIPASS)
+        else:
+            base_path = Path(__file__).parent
+        return base_path / "assets" / "audios"
+
+    def get_preset_audios(self) -> dict:
+        """Get list of preset reference audios from CSV"""
+        import csv
+
+        try:
+            csv_path = self._get_preset_audios_csv_path()
+            if not csv_path.exists():
+                logger.warning(f"Preset audios CSV not found: {csv_path}")
+                return {"success": True, "audios": []}
+
+            audios = []
+            with open(csv_path, "r", encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    # Skip empty rows (CSV headers are in Chinese)
+                    name = row.get("名称", "")
+                    if not name:
+                        continue
+                    
+                    # Parse tags from pipe-separated string
+                    tags_str = row.get("标签", "")
+                    tags = [t.strip() for t in tags_str.split("|") if t.strip()]
+                    
+                    audio = {
+                        "name": name,
+                        "path": row.get("相对路径", ""),
+                        "gender": row.get("性别", ""),
+                        "ageGroup": row.get("年龄段", ""),
+                        "age": row.get("预测年龄", ""),
+                        "speed": row.get("语速", ""),
+                        "usage": row.get("用途", ""),
+                        "tags": tags,
+                        "typicalRoles": row.get("典型角色", ""),
+                        "description": row.get("描述", ""),
+                    }
+                    audios.append(audio)
+
+            logger.info(f"Loaded {len(audios)} preset audios from CSV")
+            return {"success": True, "audios": audios}
+
+        except Exception as e:
+            logger.error(f"Failed to load preset audios: {e}")
+            return {"success": False, "error": str(e)}
+
+    def get_preset_audio_data(self, relative_path: str) -> dict:
+        """Read preset audio file and return as base64 data"""
+        import base64
+        import mimetypes
+
+        try:
+            audios_dir = self._get_preset_audios_dir()
+            audio_path = audios_dir / relative_path
+
+            if not audio_path.exists() or not audio_path.is_file():
+                logger.warning(f"Preset audio file not found: {audio_path}")
+                return {"success": False, "error": "File not found"}
+
+            # Read file as binary
+            with open(audio_path, "rb") as f:
+                audio_data = f.read()
+
+            # Encode to base64
+            base64_data = base64.b64encode(audio_data).decode("utf-8")
+
+            # Determine MIME type
+            mime_type, _ = mimetypes.guess_type(str(audio_path))
+            if not mime_type:
+                ext = audio_path.suffix.lower()
+                mime_map = {
+                    ".mp3": "audio/mpeg",
+                    ".wav": "audio/wav",
+                    ".m4a": "audio/mp4",
+                    ".flac": "audio/flac",
+                    ".aac": "audio/aac",
+                    ".ogg": "audio/ogg",
+                    ".wma": "audio/x-ms-wma",
+                }
+                mime_type = mime_map.get(ext, "audio/mpeg")
+
+            logger.info(f"Read preset audio file: {relative_path} ({len(audio_data)} bytes)")
+            return {"success": True, "data": base64_data, "mimeType": mime_type}
+
+        except Exception as e:
+            logger.error(f"Failed to read preset audio file: {e}")
+            return {"success": False, "error": str(e)}
+
+    def smart_assign_audios(self, mode: str = "empty_only") -> dict:
+        """Smart assign reference audios to characters
+        
+        Args:
+            mode: 'empty_only' - only assign to characters without audio
+                  'all' - reassign all characters
+        """
+        import random
+
+        try:
+            if not self.project_data:
+                return {"success": False, "error": "No project loaded"}
+
+            # Get preset audios
+            preset_result = self.get_preset_audios()
+            if not preset_result.get("success"):
+                return {"success": False, "error": "Failed to load preset audios"}
+            
+            all_audios = preset_result.get("audios", [])
+            if not all_audios:
+                return {"success": False, "error": "No preset audios available"}
+
+            # Separate audios by usage type
+            narration_audios = [a for a in all_audios if "旁白" in a.get("usage", "")]
+            voiceover_audios = [a for a in all_audios if "配音" in a.get("usage", "")]
+            
+            # Further separate by gender
+            def get_audios_by_gender(audios: list, gender: str) -> list:
+                return [a for a in audios if a.get("gender") == gender]
+
+            narration_male = get_audios_by_gender(narration_audios, "男")
+            narration_female = get_audios_by_gender(narration_audios, "女")
+            voiceover_male = get_audios_by_gender(voiceover_audios, "男")
+            voiceover_female = get_audios_by_gender(voiceover_audios, "女")
+
+            # Keywords for gender inference
+            female_keywords = ["女", "娘", "姐", "妈", "母", "婆", "妹", "姑", "婶", "嫂", "她", "公主", "王后", "女王", "夫人", "小姐"]
+            male_keywords = ["男", "哥", "弟", "爸", "父", "爷", "叔", "伯", "他", "王子", "国王", "先生", "大叔", "少爷"]
+
+            def infer_gender(name: str) -> str:
+                """Infer gender from character name"""
+                for kw in female_keywords:
+                    if kw in name:
+                        return "女"
+                for kw in male_keywords:
+                    if kw in name:
+                        return "男"
+                return "random"
+
+            def select_audio(is_narrator: bool, gender: str, used_paths: set) -> dict:
+                """Select an audio based on character attributes"""
+                if is_narrator:
+                    if gender == "女":
+                        pool = narration_female or narration_audios
+                    elif gender == "男":
+                        pool = narration_male or narration_audios
+                    else:
+                        pool = narration_audios
+                else:
+                    if gender == "女":
+                        pool = voiceover_female or voiceover_audios
+                    elif gender == "男":
+                        pool = voiceover_male or voiceover_audios
+                    else:
+                        pool = voiceover_audios
+
+                # Fall back to all audios if pool is empty
+                if not pool:
+                    pool = all_audios
+
+                # Try to find an unused audio first
+                unused = [a for a in pool if a.get("path") not in used_paths]
+                if unused:
+                    return random.choice(unused)
+                
+                # If all are used, just pick randomly
+                return random.choice(pool)
+
+            # Track used audio paths to avoid duplicates
+            used_paths = set()
+            assignments = []
+            assigned_count = 0
+            skipped_count = 0
+
+            characters = self.project_data.get("characters", [])
+            
+            for char in characters:
+                # Skip if mode is empty_only and character already has audio
+                if mode == "empty_only" and char.get("referenceAudioPath"):
+                    skipped_count += 1
+                    continue
+
+                is_narrator = char.get("isNarrator", False)
+                char_name = char.get("name", "")
+                
+                # Infer gender from name
+                gender = infer_gender(char_name)
+                
+                # Select audio
+                audio = select_audio(is_narrator, gender, used_paths)
+                
+                if audio:
+                    audio_path = audio.get("path", "")
+                    # Store the path with preset: prefix to distinguish from user audios
+                    full_path = f"preset:{audio_path}"
+                    char["referenceAudioPath"] = full_path
+                    used_paths.add(audio_path)
+                    
+                    assignments.append({
+                        "characterId": char.get("id"),
+                        "characterName": char_name,
+                        "audioName": audio.get("name", ""),
+                        "audioPath": full_path,
+                    })
+                    assigned_count += 1
+
+            logger.info(f"Smart assign completed: {assigned_count} assigned, {skipped_count} skipped")
+            return {
+                "success": True,
+                "assignedCount": assigned_count,
+                "skippedCount": skipped_count,
+                "assignments": assignments,
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to smart assign audios: {e}")
+            return {"success": False, "error": str(e), "assignedCount": 0, "skippedCount": 0}
+
+    def smart_assign_audios_with_llm(self, mode: str = "empty_only") -> dict:
+        """Smart assign reference audios using LLM for better matching
+        
+        Args:
+            mode: 'empty_only' - only assign to characters without audio
+                  'all' - reassign all characters
+        
+        Returns:
+            dict with recommendations for each character
+        """
+        import json
+        import re
+        from services.stream_llm import call_llm_stream
+
+        try:
+            if not self.project_data:
+                return {"success": False, "error": "No project loaded", "assignedCount": 0, "skippedCount": 0}
+
+            # Get settings for LLM config
+            settings = self._load_settings()
+            shot_builder_config = settings.get("shotBuilder", {})
+            api_url = shot_builder_config.get("apiUrl", "")
+            api_key = shot_builder_config.get("apiKey", "")
+            model = shot_builder_config.get("model", "")
+
+            if not api_key:
+                return {"success": False, "error": "Please configure LLM API settings first", "assignedCount": 0, "skippedCount": 0}
+
+            # Get preset audios
+            preset_result = self.get_preset_audios()
+            if not preset_result.get("success"):
+                return {"success": False, "error": "Failed to load preset audios", "assignedCount": 0, "skippedCount": 0}
+            
+            all_audios = preset_result.get("audios", [])
+            if not all_audios:
+                return {"success": False, "error": "No preset audios available", "assignedCount": 0, "skippedCount": 0}
+
+            # Get characters to assign
+            characters = self.project_data.get("characters", [])
+            if mode == "empty_only":
+                chars_to_assign = [c for c in characters if not c.get("referenceAudioPath")]
+            else:
+                chars_to_assign = characters
+
+            if not chars_to_assign:
+                return {"success": True, "assignedCount": 0, "skippedCount": len(characters), "recommendations": {}}
+
+            # Build audio library description (without file paths)
+            narration_audios = []
+            voiceover_audios = []
+            for audio in all_audios:
+                usage = audio.get("usage", "")
+                audio_info = {
+                    "name": audio.get("name", ""),
+                    "gender": audio.get("gender", ""),
+                    "ageGroup": audio.get("ageGroup", ""),
+                    "age": audio.get("age", ""),
+                    "speed": audio.get("speed", ""),
+                    "tags": audio.get("tags", [])[:5],  # Limit tags
+                    "typicalRoles": audio.get("typicalRoles", ""),
+                    "description": audio.get("description", "")[:100],  # Limit description
+                }
+                if "旁白" in usage:
+                    narration_audios.append(audio_info)
+                if "配音" in usage:
+                    voiceover_audios.append(audio_info)
+
+            # Build character list description
+            char_list = []
+            for char in chars_to_assign:
+                char_list.append({
+                    "id": char.get("id", ""),
+                    "name": char.get("name", ""),
+                    "isNarrator": char.get("isNarrator", False),
+                    "description": char.get("description", "")[:200] if char.get("description") else "",
+                })
+
+            # Construct prompt
+            prompt = f"""你是一个专业的配音导演，需要为短剧角色分配合适的配音参考音。
+
+## 旁白参考音库（适合旁白角色）
+{json.dumps(narration_audios, ensure_ascii=False, indent=2)}
+
+## 角色配音参考音库（适合对话角色）
+{json.dumps(voiceover_audios, ensure_ascii=False, indent=2)}
+
+## 待分配角色
+{json.dumps(char_list, ensure_ascii=False, indent=2)}
+
+## 任务
+为每个角色推荐3-5个最合适的参考音，按匹配度从高到低排序。
+
+## 匹配原则
+1. 旁白角色(isNarrator=true)只能从旁白参考音库中选择，且必须同时推荐男声和女声（旁白可以是任意性别）
+2. 对话角色(isNarrator=false)只能从角色配音参考音库中选择，根据角色性别选择对应性别的声音
+3. 根据角色名称和描述推断角色性别和年龄特点
+4. 根据角色性格特点匹配声音标签（如温柔、霸气、搞笑等）
+5. 考虑角色的情感表达需求
+
+## 输出格式
+请直接输出JSON，不要有其他内容：
+{{
+  "recommendations": [
+    {{
+      "characterId": "角色ID",
+      "characterName": "角色名称", 
+      "audios": [
+        {{
+          "audioName": "参考音名称（必须是音库中存在的）",
+          "reason": "推荐原因（15字以内）"
+        }}
+      ]
+    }}
+  ]
+}}"""
+
+            # Call LLM
+            logger.info("Calling LLM for smart audio assignment...")
+            response_lines = []
+            for line in call_llm_stream(prompt, model=model, api_key=api_key, base_url=api_url, use_env=False):
+                response_lines.append(line)
+            response = "\n".join(response_lines)
+
+            # Parse JSON response
+            # Try to extract JSON from response (may be wrapped in markdown code block)
+            json_match = re.search(r'\{[\s\S]*\}', response)
+            if not json_match:
+                logger.error(f"Failed to parse LLM response: {response}")
+                return {"success": False, "error": "Failed to parse LLM response", "assignedCount": 0, "skippedCount": 0}
+
+            try:
+                result = json.loads(json_match.group())
+            except json.JSONDecodeError as e:
+                logger.error(f"JSON decode error: {e}, response: {response}")
+                return {"success": False, "error": f"Invalid JSON response: {str(e)}", "assignedCount": 0, "skippedCount": 0}
+
+            # Build audio name to path mapping
+            audio_name_to_path = {a.get("name"): a.get("path") for a in all_audios}
+
+            # Process recommendations and update characters
+            recommendations_by_id = {}
+            assigned_count = 0
+
+            for rec in result.get("recommendations", []):
+                char_id = rec.get("characterId", "")
+                audios = rec.get("audios", [])
+                
+                # Convert audio names to full recommendation objects
+                full_recs = []
+                for audio in audios:
+                    audio_name = audio.get("audioName", "")
+                    audio_path = audio_name_to_path.get(audio_name)
+                    if audio_path:
+                        full_recs.append({
+                            "audioPath": audio_path,
+                            "audioName": audio_name,
+                            "reason": audio.get("reason", "")
+                        })
+
+                if full_recs:
+                    recommendations_by_id[char_id] = full_recs
+                    
+                    # Update character with first recommendation
+                    for char in characters:
+                        if char.get("id") == char_id:
+                            first_rec = full_recs[0]
+                            char["referenceAudioPath"] = f"preset:{first_rec['audioPath']}"
+                            char["referenceAudioName"] = first_rec["audioName"]
+                            char["audioRecommendations"] = full_recs
+                            char["selectedRecommendationIndex"] = 0
+                            assigned_count += 1
+                            break
+
+            skipped_count = len(characters) - assigned_count
+
+            logger.info(f"LLM smart assign completed: {assigned_count} assigned, {skipped_count} skipped")
+            return {
+                "success": True,
+                "assignedCount": assigned_count,
+                "skippedCount": skipped_count,
+                "recommendations": recommendations_by_id,
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to smart assign audios with LLM: {e}")
+            import traceback
+            traceback.print_exc()
+            return {"success": False, "error": str(e), "assignedCount": 0, "skippedCount": 0}
+
+    def select_character_recommendation(self, character_id: str, recommendation_index: int) -> dict:
+        """Select a specific recommendation for a character
+        
+        Args:
+            character_id: The character ID
+            recommendation_index: Index of the recommendation to select (0-based)
+        
+        Returns:
+            dict with updated character
+        """
+        try:
+            if not self.project_data:
+                return {"success": False, "error": "No project loaded"}
+
+            characters = self.project_data.get("characters", [])
+            for char in characters:
+                if char.get("id") == character_id:
+                    recommendations = char.get("audioRecommendations", [])
+                    if not recommendations:
+                        return {"success": False, "error": "No recommendations available for this character"}
+                    
+                    if recommendation_index < 0 or recommendation_index >= len(recommendations):
+                        return {"success": False, "error": f"Invalid recommendation index: {recommendation_index}"}
+                    
+                    selected_rec = recommendations[recommendation_index]
+                    char["referenceAudioPath"] = f"preset:{selected_rec['audioPath']}"
+                    char["referenceAudioName"] = selected_rec["audioName"]
+                    char["selectedRecommendationIndex"] = recommendation_index
+                    
+                    logger.info(f"Selected recommendation {recommendation_index} for character {character_id}: {selected_rec['audioName']}")
+                    return {"success": True, "character": char}
+
+            return {"success": False, "error": "Character not found"}
+
+        except Exception as e:
+            logger.error(f"Failed to select character recommendation: {e}")
             return {"success": False, "error": str(e)}
 
 

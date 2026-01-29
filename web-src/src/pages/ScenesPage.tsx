@@ -227,7 +227,7 @@ export function ScenesPage({
                   <button
                     onClick={() => onGenerateImage(scene.id)}
                     disabled={scene.status === 'generating' || !scene.prompt.trim()}
-                    className="flex items-center gap-2 px-3 py-1.5 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 rounded-lg text-xs text-white transition-colors"
+                    className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-500 hover:to-teal-400 disabled:opacity-50 rounded-lg text-xs text-white transition-colors"
                   >
                     {scene.status === 'generating' ? (
                       <>
@@ -253,7 +253,7 @@ export function ScenesPage({
           <p className="text-slate-500 mb-4">点击&quot;添加场景&quot;创建新场景</p>
           <button
             onClick={() => onAddModalOpenChange(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-500 rounded-lg text-sm text-white transition-colors mx-auto"
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-500 hover:to-teal-400 rounded-lg text-sm text-white transition-colors mx-auto"
           >
             <Plus className="w-4 h-4" />
             添加场景
@@ -280,7 +280,7 @@ export function ScenesPage({
                   type="text"
                   value={newScene.name}
                   onChange={(e) => setNewScene({ ...newScene, name: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-violet-500"
+                  className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500"
                   placeholder="输入场景名称"
                 />
               </div>
@@ -289,7 +289,7 @@ export function ScenesPage({
                 <textarea
                   value={newScene.prompt}
                   onChange={(e) => setNewScene({ ...newScene, prompt: e.target.value })}
-                  className="w-full h-32 px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-violet-500 resize-none"
+                  className="w-full h-32 px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
                   placeholder="输入场景提示词"
                 />
               </div>
@@ -303,7 +303,7 @@ export function ScenesPage({
               </button>
               <button
                 onClick={handleAddScene}
-                className="px-4 py-2 bg-violet-600 hover:bg-violet-500 rounded-lg text-sm text-white transition-colors"
+                className="px-4 py-2 bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-500 hover:to-teal-400 rounded-lg text-sm text-white transition-colors"
               >
                 添加
               </button>
@@ -331,7 +331,7 @@ export function ScenesPage({
                   type="text"
                   value={editing.name}
                   onChange={(e) => setEditing({ ...editing, name: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-violet-500"
+                  className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500"
                 />
               </div>
               <div>
@@ -339,7 +339,7 @@ export function ScenesPage({
                 <textarea
                   value={editing.prompt}
                   onChange={(e) => setEditing({ ...editing, prompt: e.target.value })}
-                  className="w-full h-32 px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-violet-500 resize-none"
+                  className="w-full h-32 px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
                 />
               </div>
             </div>
@@ -352,7 +352,7 @@ export function ScenesPage({
               </button>
               <button
                 onClick={handleSaveEdit}
-                className="px-4 py-2 bg-violet-600 hover:bg-violet-500 rounded-lg text-sm text-white transition-colors"
+                className="px-4 py-2 bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-500 hover:to-teal-400 rounded-lg text-sm text-white transition-colors"
               >
                 保存
               </button>

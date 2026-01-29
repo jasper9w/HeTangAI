@@ -340,7 +340,7 @@ export function ProjectSettingsPage({ projectName, showToast, onSettingsChange }
   if (isLoading) {
     return (
       <div className="h-full flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-violet-500 animate-spin" />
+        <Loader2 className="w-8 h-8 text-teal-500 animate-spin" />
       </div>
     );
   }
@@ -364,7 +364,7 @@ export function ProjectSettingsPage({ projectName, showToast, onSettingsChange }
               <button
                 onClick={handleGenerateWorkInfo}
                 disabled={isGeneratingWorkInfo}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 rounded-lg text-xs text-white transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-500 hover:to-teal-400 disabled:opacity-50 rounded-lg text-xs text-white transition-colors"
               >
                 {isGeneratingWorkInfo ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -388,7 +388,7 @@ export function ProjectSettingsPage({ projectName, showToast, onSettingsChange }
             <div>
               <label className="block text-xs text-slate-400 mb-2">作品封面</label>
               <div
-                className="aspect-[3/4] bg-slate-700 rounded-lg overflow-hidden flex items-center justify-center cursor-pointer hover:ring-2 hover:ring-violet-500 transition-all relative group"
+                className="aspect-[3/4] bg-slate-700 rounded-lg overflow-hidden flex items-center justify-center cursor-pointer hover:ring-2 hover:ring-teal-500 transition-all relative group"
                 onClick={handleUploadCover}
               >
                 {projectSettings.workInfo.coverImage ? (
@@ -442,7 +442,7 @@ export function ProjectSettingsPage({ projectName, showToast, onSettingsChange }
                   value={projectSettings.workInfo.title}
                   onChange={(e) => updateWorkInfo({ title: e.target.value })}
                   placeholder="输入作品名称"
-                  className="w-full px-4 py-3 bg-slate-700 rounded-lg text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500"
+                  className="w-full px-4 py-3 bg-slate-700 rounded-lg text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-teal-500"
                 />
               </div>
               <div>
@@ -452,7 +452,7 @@ export function ProjectSettingsPage({ projectName, showToast, onSettingsChange }
                   onChange={(e) => updateWorkInfo({ description: e.target.value })}
                   placeholder="输入作品介绍..."
                   rows={5}
-                  className="w-full px-4 py-3 bg-slate-700 rounded-lg text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500 resize-none"
+                  className="w-full px-4 py-3 bg-slate-700 rounded-lg text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
                 />
               </div>
             </div>
@@ -467,7 +467,7 @@ export function ProjectSettingsPage({ projectName, showToast, onSettingsChange }
             {/* Style */}
             <div className="flex items-center justify-between py-4 border-b border-slate-700">
               <div className="flex items-center gap-3">
-                <Palette className="w-5 h-5 text-violet-400" />
+                <Palette className="w-5 h-5 text-teal-400" />
                 <div>
                   <p className="text-sm text-white">画面风格</p>
                   <p className="text-xs text-slate-500">视频的整体美术风格</p>
@@ -513,7 +513,7 @@ export function ProjectSettingsPage({ projectName, showToast, onSettingsChange }
               <select
                 value={projectSettings.creationParams.language}
                 onChange={(e) => updateLanguage(e.target.value)}
-                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-violet-500 min-w-[120px]"
+                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 min-w-[120px]"
               >
                 {languageOptions.map((opt) => (
                   <option key={opt.value} value={opt.value}>
@@ -539,7 +539,7 @@ export function ProjectSettingsPage({ projectName, showToast, onSettingsChange }
                     onClick={() => updateAspectRatio(opt.value as '16:9' | '9:16' | '1:1')}
                     className={`px-4 py-2 text-sm transition-colors ${
                       projectSettings.creationParams.aspectRatio === opt.value
-                        ? 'bg-violet-600 text-white'
+                        ? 'bg-teal-600 text-white'
                         : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
                     }`}
                   >
@@ -608,7 +608,7 @@ export function ProjectSettingsPage({ projectName, showToast, onSettingsChange }
                     key={i}
                     className={`p-3 rounded-lg ${
                       msg.role === 'user'
-                        ? 'bg-violet-600/30 text-violet-200 ml-12'
+                        ? 'bg-teal-600/30 text-teal-200 ml-12'
                         : 'bg-slate-700 text-slate-300 mr-12'
                     }`}
                   >

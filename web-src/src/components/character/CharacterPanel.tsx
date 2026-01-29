@@ -83,7 +83,7 @@ export function CharacterPanel({
             <button
               onClick={onGenerateAllImages}
               disabled={isGenerating}
-              className="flex items-center gap-1 px-2 py-1 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 rounded text-xs text-white transition-colors"
+              className="flex items-center gap-1 px-2 py-1 bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-500 hover:to-teal-400 disabled:opacity-50 rounded text-xs text-white transition-colors"
               title="批量生成所有角色图"
             >
               {isGenerating ? (
@@ -120,20 +120,20 @@ export function CharacterPanel({
                       type="text"
                       value={editing.name}
                       onChange={(e) => setEditing({ ...editing, name: e.target.value })}
-                      className="w-full px-2 py-1 bg-slate-600 rounded text-sm text-slate-100 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                      className="w-full px-2 py-1 bg-slate-600 rounded text-sm text-slate-100 focus:outline-none focus:ring-1 focus:ring-teal-500"
                       placeholder="角色名称"
                     />
                     <textarea
                       value={editing.description}
                       onChange={(e) => setEditing({ ...editing, description: e.target.value })}
-                      className="w-full px-2 py-1 bg-slate-600 rounded text-xs text-slate-300 resize-none focus:outline-none focus:ring-1 focus:ring-violet-500"
+                      className="w-full px-2 py-1 bg-slate-600 rounded text-xs text-slate-300 resize-none focus:outline-none focus:ring-1 focus:ring-teal-500"
                       placeholder="角色描述（用于生成3视图）"
                       rows={3}
                     />
                     <div className="flex gap-2">
                       <button
                         onClick={handleSaveEdit}
-                        className="flex-1 px-2 py-1 bg-violet-600 hover:bg-violet-500 rounded text-xs text-white transition-colors"
+                        className="flex-1 px-2 py-1 bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-500 hover:to-teal-400 rounded text-xs text-white transition-colors"
                       >
                         保存
                       </button>
@@ -191,13 +191,13 @@ export function CharacterPanel({
                           <button
                             onClick={() => onGenerateImage(char.id)}
                             disabled={isCharGenerating}
-                            className="p-1 hover:bg-violet-600/20 rounded transition-colors"
+                            className="p-1 hover:bg-teal-600/20 rounded transition-colors"
                             title="生成角色图"
                           >
                             {isCharGenerating ? (
                               <Loader2 className="w-3.5 h-3.5 text-blue-400 animate-spin" />
                             ) : (
-                              <Image className="w-3.5 h-3.5 text-violet-400" />
+                              <Image className="w-3.5 h-3.5 text-teal-400" />
                             )}
                           </button>
                           <button
@@ -258,21 +258,21 @@ export function CharacterPanel({
               type="text"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+              className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
               placeholder="角色名称"
               autoFocus
             />
             <textarea
               value={newDescription}
               onChange={(e) => setNewDescription(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-700 rounded-lg text-xs text-slate-300 placeholder-slate-500 resize-none focus:outline-none focus:ring-1 focus:ring-violet-500"
+              className="w-full px-3 py-2 bg-slate-700 rounded-lg text-xs text-slate-300 placeholder-slate-500 resize-none focus:outline-none focus:ring-1 focus:ring-teal-500"
               placeholder="角色描述（用于生成3视图提示词）"
               rows={3}
             />
             <button
               onClick={handleAdd}
               disabled={!newName.trim()}
-              className="w-full py-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm text-white font-medium transition-colors"
+              className="w-full py-2 bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-500 hover:to-teal-400 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm text-white font-medium transition-colors"
             >
               添加角色
             </button>

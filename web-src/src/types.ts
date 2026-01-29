@@ -68,6 +68,9 @@ export interface Character {
   imageSourceUrl?: string; // 3视图图片原始URL
   imageMediaGenerationId?: string; // Whisk返回的media_generation_id
   referenceAudioPath?: string;  // 参考音文件路径
+  referenceAudioName?: string;  // 参考音名称（用于显示）
+  audioRecommendations?: AudioRecommendation[];  // 大模型推荐的参考音列表
+  selectedRecommendationIndex?: number;  // 当前选中的推荐索引（0-based）
   speed: number;        // 配音倍速，默认1.0
   isNarrator: boolean;  // 是否为旁白角色
   status: CharacterStatus;
@@ -284,6 +287,19 @@ export interface PyWebViewApi {
   select_reference_audio_dir: () => Promise<ApiResponse & { path?: string }>;
   get_reference_audio_data: (filePath: string) => Promise<ApiResponse & { data?: string; mimeType?: string }>;
 
+  // Preset Audio
+  get_preset_audios: () => Promise<ApiResponse & { audios?: PresetAudio[] }>;
+  get_preset_audio_data: (relativePath: string) => Promise<ApiResponse & { data?: string; mimeType?: string }>;
+  smart_assign_audios: (mode: 'empty_only' | 'all') => Promise<SmartAssignResult>;
+  smart_assign_audios_with_llm: (mode: 'empty_only' | 'all') => Promise<SmartAssignResult>;
+  select_character_recommendation: (characterId: string, recommendationIndex: number) => Promise<ApiResponse & { character?: Character }>;
+
+  // Audio preferences (global)
+  get_audio_preferences: () => Promise<ApiResponse & AudioPreferences>;
+  set_audio_speed: (audioPath: string, speed: number) => Promise<ApiResponse>;
+  toggle_audio_favorite: (audioPath: string) => Promise<ApiResponse & { isFavorite?: boolean }>;
+  record_audio_usage: (audioPath: string) => Promise<ApiResponse>;
+
   // Shot Builder
   get_shot_builder_prompts: () => Promise<ApiResponse & { prompts?: ShotBuilderPrompts }>;
   save_shot_builder_prompts: (prompts: ShotBuilderPrompts) => Promise<ApiResponse>;
@@ -348,6 +364,68 @@ export interface ProjectSettings {
 export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
+}
+
+// ========== Reference Audio Types ==========
+
+// 预置参考音（来自 assets/audios/audios.csv）
+export interface PresetAudio {
+  name: string;           // 名称，如"岚风"
+  path: string;           // 相对路径
+  gender: '男' | '女';    // 性别
+  ageGroup: string;       // 年龄段：儿童/少年/青年/中年/老年
+  age: string;            // 预测年龄，如"28岁"
+  speed: string;          // 语速：较慢/适中/较快
+  usage: string;          // 用途：旁白/配音/配音+旁白
+  tags: string[];         // 标签数组
+  typicalRoles: string;   // 典型角色
+  description: string;    // 描述
+}
+
+// 用户自定义参考音
+export interface ReferenceAudio {
+  path: string;
+  name: string;
+  relativePath: string;
+}
+
+// 参考音筛选条件
+export interface AudioFilter {
+  usage: 'narration' | 'voiceover' | 'all';  // 旁白/配音/全部
+  gender: '男' | '女' | 'all';
+  ageGroup: string | 'all';
+  speed: string | 'all';
+  searchQuery: string;
+}
+
+// 参考音推荐项
+export interface AudioRecommendation {
+  audioPath: string;      // 预置音路径（不含 preset: 前缀）
+  audioName: string;      // 预置音名称
+  reason: string;         // 推荐原因
+}
+
+// 音频使用记录
+export interface AudioUsageRecord {
+  path: string;
+  lastUsed: string;
+  useCount: number;
+}
+
+// 音频偏好配置
+export interface AudioPreferences {
+  speeds: Record<string, number>;
+  favorites: string[];
+  recentlyUsed: AudioUsageRecord[];
+}
+
+// 智能分配结果（大模型版本）
+export interface SmartAssignResult {
+  success: boolean;
+  assignedCount: number;
+  skippedCount: number;
+  error?: string;
+  recommendations?: Record<string, AudioRecommendation[]>;  // characterId -> 推荐列表
 }
 
 // ========== Settings Types ==========

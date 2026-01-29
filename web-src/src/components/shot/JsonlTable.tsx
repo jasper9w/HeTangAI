@@ -164,7 +164,7 @@ function EditableCell({
             value={editValue}
             onChange={(e) => setEditValue(e.target.value)}
             onKeyDown={handleKeyDown}
-            className="w-full min-h-[80px] px-2 py-1 bg-slate-700 rounded text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-violet-500 resize-y"
+            className="w-full min-h-[80px] px-2 py-1 bg-slate-700 rounded text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-teal-500 resize-y"
             autoFocus
           />
         ) : (
@@ -173,7 +173,7 @@ function EditableCell({
             value={editValue}
             onChange={(e) => setEditValue(e.target.value)}
             onKeyDown={handleKeyDown}
-            className="w-full px-2 py-1 bg-slate-700 rounded text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-violet-500"
+            className="w-full px-2 py-1 bg-slate-700 rounded text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-teal-500"
             autoFocus
           />
         )}
@@ -242,7 +242,7 @@ export function JsonlTable({ value, onChange, className = '' }: JsonlTableProps)
         onClick={() => setViewMode('table')}
         className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs transition-colors ${
           viewMode === 'table'
-            ? 'bg-violet-600 text-white'
+            ? 'bg-teal-600 text-white'
             : 'text-slate-400 hover:text-slate-200'
         }`}
         title="Table view"
@@ -254,7 +254,7 @@ export function JsonlTable({ value, onChange, className = '' }: JsonlTableProps)
         onClick={() => setViewMode('text')}
         className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs transition-colors ${
           viewMode === 'text'
-            ? 'bg-violet-600 text-white'
+            ? 'bg-teal-600 text-white'
             : 'text-slate-400 hover:text-slate-200'
         }`}
         title="Text view"

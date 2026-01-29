@@ -103,7 +103,7 @@ export function StyleSelectorModal({
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-700">
           <div className="flex items-center gap-2">
-            <Palette className="w-5 h-5 text-violet-400" />
+            <Palette className="w-5 h-5 text-teal-400" />
             <h2 className="text-lg font-semibold text-white">选择画面风格</h2>
           </div>
           <button
@@ -124,7 +124,7 @@ export function StyleSelectorModal({
                 onClick={() => setSelectedType('preset')}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                   selectedType === 'preset'
-                    ? 'bg-violet-600 text-white'
+                    ? 'bg-teal-600 text-white'
                     : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
                 }`}
               >
@@ -134,7 +134,7 @@ export function StyleSelectorModal({
                 onClick={() => setSelectedType('custom')}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                   selectedType === 'custom'
-                    ? 'bg-violet-600 text-white'
+                    ? 'bg-teal-600 text-white'
                     : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
                 }`}
               >
@@ -153,7 +153,7 @@ export function StyleSelectorModal({
                     onMouseLeave={() => setHoveredStyle(null)}
                     className={`relative cursor-pointer rounded-lg overflow-hidden border-2 transition-all ${
                       selectedPresetId === style.id
-                        ? 'border-violet-500 ring-2 ring-violet-500/30'
+                        ? 'border-teal-500 ring-2 ring-teal-500/30'
                         : 'border-transparent hover:border-slate-600'
                     }`}
                   >
@@ -172,7 +172,7 @@ export function StyleSelectorModal({
                       </p>
                     </div>
                     {selectedPresetId === style.id && (
-                      <div className="absolute top-2 right-2 w-5 h-5 bg-violet-500 rounded-full flex items-center justify-center">
+                      <div className="absolute top-2 right-2 w-5 h-5 bg-teal-500 rounded-full flex items-center justify-center">
                         <Check className="w-3 h-3 text-white" />
                       </div>
                     )}
@@ -189,13 +189,13 @@ export function StyleSelectorModal({
                   value={customPrompt}
                   onChange={(e) => setCustomPrompt(e.target.value)}
                   placeholder="例如：水墨画风格，淡雅的色调，留白构图，古典意境..."
-                  className="w-full h-40 px-4 py-3 bg-slate-700 rounded-lg text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500 resize-none"
+                  className="w-full h-40 px-4 py-3 bg-slate-700 rounded-lg text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
                   autoFocus
                 />
                 <button
                   onClick={handleGeneratePreview}
                   disabled={!customPrompt.trim() || isGeneratingPreview || !api}
-                  className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm text-white transition-colors"
+                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-500 hover:to-teal-400 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm text-white transition-colors"
                 >
                   {isGeneratingPreview ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -267,7 +267,7 @@ export function StyleSelectorModal({
                   </>
                 ) : isGeneratingPreview ? (
                   <div className="flex flex-col items-center justify-center h-full gap-3">
-                    <Loader2 className="w-8 h-8 text-violet-400 animate-spin" />
+                    <Loader2 className="w-8 h-8 text-teal-400 animate-spin" />
                     <p className="text-sm text-slate-400">正在生成预览...</p>
                   </div>
                 ) : (
@@ -299,7 +299,7 @@ export function StyleSelectorModal({
           <button
             onClick={handleConfirm}
             disabled={!isValid}
-            className="px-4 py-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm text-white transition-colors"
+            className="px-4 py-2 bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-500 hover:to-teal-400 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm text-white transition-colors"
           >
             确认选择
           </button>

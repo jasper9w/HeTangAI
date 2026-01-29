@@ -35,7 +35,7 @@ export function ImportDropdown({
             onClick={onOneClickImport}
             className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-200 hover:bg-slate-700 transition-colors"
           >
-            <Sparkles className="w-4 h-4 text-violet-400" />
+            <Sparkles className="w-4 h-4 text-teal-400" />
             一键导入
           </button>
         </div>

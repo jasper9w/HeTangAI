@@ -356,7 +356,7 @@ export function ShotBuilderPage({ projectName, showToast }: ShotBuilderPageProps
   if (isLoading) {
     return (
       <div className="h-full flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-violet-500 animate-spin" />
+        <Loader2 className="w-8 h-8 text-teal-500 animate-spin" />
       </div>
     );
   }
@@ -376,7 +376,7 @@ export function ShotBuilderPage({ projectName, showToast }: ShotBuilderPageProps
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={`flex-1 px-3 py-2 rounded-md text-sm transition-colors ${
-                isActive ? 'bg-violet-600 text-white' : 'text-slate-300 hover:text-white hover:bg-slate-700'
+                isActive ? 'bg-teal-600 text-white' : 'text-slate-300 hover:text-white hover:bg-slate-700'
               }`}
             >
               {tab.label}
@@ -418,7 +418,7 @@ export function ShotBuilderPage({ projectName, showToast }: ShotBuilderPageProps
                   disabled={isRunning !== null || !projectName}
                   className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-white transition-colors ${
                     activeTab === 'role'
-                      ? 'bg-violet-600 hover:bg-violet-500'
+                      ? 'bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-500 hover:to-teal-400'
                       : activeTab === 'scene'
                         ? 'bg-blue-600 hover:bg-blue-500'
                         : 'bg-emerald-600 hover:bg-emerald-500'
@@ -485,7 +485,7 @@ export function ShotBuilderPage({ projectName, showToast }: ShotBuilderPageProps
               <textarea
                 value={promptDraft}
                 onChange={(e) => handlePromptChange(e.target.value)}
-                className="w-full h-[60vh] px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500 resize-none"
+                className="w-full h-[60vh] px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
               />
               <div className="flex justify-end gap-2 mt-4">
                 <button
@@ -497,7 +497,7 @@ export function ShotBuilderPage({ projectName, showToast }: ShotBuilderPageProps
                 <button
                   onClick={handlePromptSave}
                   disabled={isSavingPromptModal}
-                  className="px-4 py-2 rounded-lg text-xs text-white bg-violet-600 hover:bg-violet-500 disabled:opacity-50 transition-colors"
+                  className="px-4 py-2 rounded-lg text-xs text-white bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-500 hover:to-teal-400 disabled:opacity-50 transition-colors"
                 >
                   {isSavingPromptModal ? '保存中...' : '保存'}
                 </button>

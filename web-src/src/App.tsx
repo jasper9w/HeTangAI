@@ -375,6 +375,24 @@ function App() {
     }
   };
 
+  const handleSmartAssignAudios = async (mode: 'empty_only' | 'all') => {
+    if (!api || !project) {
+      return { success: false, assignedCount: 0, skippedCount: 0, error: 'No project loaded' };
+    }
+
+    // Use LLM-based smart assignment
+    const result = await api.smart_assign_audios_with_llm(mode);
+    if (result.success) {
+      // Reload project data to get updated characters
+      const projectResult = await api.get_project_data();
+      if (projectResult.success && projectResult.data) {
+        setProject(projectResult.data);
+        setIsDirty(true);
+      }
+    }
+    return result;
+  };
+
   const handleUploadCharacterImage = async (id: string) => {
     if (!api || !project) return;
 
@@ -1139,7 +1157,7 @@ function App() {
             <button
               onClick={handleBatchGenerateImages}
               disabled={isGenerating || !hasSelection}
-              className="flex items-center gap-2 px-3 py-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm text-white transition-colors"
+              className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-500 hover:to-teal-400 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm text-white transition-colors"
             >
               {isGenerating && generationProgress?.type === 'image' ? (
                 <>
@@ -1196,7 +1214,7 @@ function App() {
               <button
                 onClick={handleGenerateAllCharacterImages}
                 disabled={isGeneratingCharacters}
-                className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 rounded-lg text-sm text-white transition-colors"
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-500 hover:to-teal-400 disabled:opacity-50 rounded-lg text-sm text-white transition-colors"
               >
                 {isGeneratingCharacters ? (
                   <>
@@ -1263,7 +1281,7 @@ function App() {
               <button
                 onClick={handleGenerateAllSceneImages}
                 disabled={isGeneratingScenes}
-                className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 rounded-lg text-sm text-white transition-colors"
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-500 hover:to-teal-400 disabled:opacity-50 rounded-lg text-sm text-white transition-colors"
               >
                 {isGeneratingScenes ? (
                   <>
@@ -1371,6 +1389,7 @@ function App() {
             onGenerateImage={handleGenerateCharacterImage}
             onUploadImage={handleUploadCharacterImage}
             onSetReferenceAudio={handleSetCharacterReferenceAudio}
+            onSmartAssign={handleSmartAssignAudios}
             onImportFromText={handleImportCharactersFromText}
             onImportFromFile={handleImportCharactersFromFile}
             onConfirmImport={handleConfirmImportCharacters}
@@ -1414,7 +1433,7 @@ function App() {
   if (!ready) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-violet-500 animate-spin" />
+        <Loader2 className="w-8 h-8 text-teal-500 animate-spin" />
       </div>
     );
   }
@@ -1442,13 +1461,13 @@ function App() {
               )}
 
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-teal-500 to-cyan-600 flex items-center justify-center">
                   <Film className="w-4 h-4 text-white" />
                 </div>
                 <div>
                   <h1 className="text-sm font-semibold text-slate-100">
                     {currentPage === 'projects' ? '荷塘AI' : (project?.name || '未命名项目')}
-                    {isDirty && currentPage !== 'projects' && <span className="text-violet-400 ml-1">*</span>}
+                    {isDirty && currentPage !== 'projects' && <span className="text-teal-400 ml-1">*</span>}
                   </h1>
                   <p className="text-xs text-slate-500">
                     {currentPage === 'projects' ? '项目管理' : `${project?.shots.length || 0} 个镜头`}
@@ -1494,7 +1513,7 @@ function App() {
             <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
               <div
                 className={`h-full rounded-full transition-all duration-300 ${
-                  generationProgress.type === 'image' ? 'bg-violet-500' : generationProgress.type === 'video' ? 'bg-emerald-500' : 'bg-orange-500'
+                  generationProgress.type === 'image' ? 'bg-teal-500' : generationProgress.type === 'video' ? 'bg-emerald-500' : 'bg-orange-500'
                 }`}
                 style={{
                   width: `${(generationProgress.current / generationProgress.total) * 100}%`,
@@ -1533,7 +1552,7 @@ function App() {
                   value={shotImagePrefix}
                   onChange={(e) => setShotImagePrefix(e.target.value)}
                   placeholder="例如：高清电影画质，"
-                  className="w-full h-20 px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500 resize-none"
+                  className="w-full h-20 px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
                   autoFocus
                 />
               </div>
@@ -1560,7 +1579,7 @@ function App() {
               </button>
               <button
                 onClick={handleSaveShotPrefixes}
-                className="px-4 py-2 bg-violet-600 hover:bg-violet-500 rounded-lg text-sm text-white transition-colors"
+                className="px-4 py-2 bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-500 hover:to-teal-400 rounded-lg text-sm text-white transition-colors"
               >
                 保存
               </button>
@@ -1581,7 +1600,7 @@ function App() {
               value={characterPromptPrefix}
               onChange={(e) => setCharacterPromptPrefix(e.target.value)}
               placeholder="例如：电影级细节，"
-              className="w-full h-24 px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500 resize-none"
+              className="w-full h-24 px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
               autoFocus
             />
             <div className="flex justify-end gap-3 mt-4">
@@ -1596,7 +1615,7 @@ function App() {
               </button>
               <button
                 onClick={handleSaveCharacterPrefix}
-                className="px-4 py-2 bg-violet-600 hover:bg-violet-500 rounded-lg text-sm text-white transition-colors"
+                className="px-4 py-2 bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-500 hover:to-teal-400 rounded-lg text-sm text-white transition-colors"
               >
                 保存
               </button>
@@ -1638,7 +1657,7 @@ function App() {
                   setImportConflictOpen(false);
                   handleImportShotBuilder(importConflictTarget, 'overwrite');
                 }}
-                className="px-4 py-2 bg-violet-600 hover:bg-violet-500 rounded-lg text-sm text-white transition-colors"
+                className="px-4 py-2 bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-500 hover:to-teal-400 rounded-lg text-sm text-white transition-colors"
               >
                 覆盖重复
               </button>

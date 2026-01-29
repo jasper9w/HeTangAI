@@ -28,7 +28,7 @@ export function ConfirmModal({
 
   const confirmButtonClass = confirmVariant === 'danger'
     ? 'bg-red-600 hover:bg-red-700 disabled:bg-slate-600'
-    : 'bg-violet-600 hover:bg-violet-700 disabled:bg-slate-600';
+    : 'bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-500 hover:to-teal-400 disabled:bg-slate-600';
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">

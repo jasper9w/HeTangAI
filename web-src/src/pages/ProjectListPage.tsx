@@ -121,7 +121,7 @@ export function ProjectListPage({ onOpenProject, onNewProject }: ProjectListPage
           <h2 className="text-2xl font-semibold text-slate-100">我的项目</h2>
           <button
             onClick={() => setShowNewProjectModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-500 hover:to-teal-400 text-white rounded-lg transition-all shadow-md shadow-teal-900/30"
           >
             <Plus className="w-5 h-5" />
             新建项目
@@ -130,13 +130,13 @@ export function ProjectListPage({ onOpenProject, onNewProject }: ProjectListPage
 
         {/* Project Grid */}
         {projects.length === 0 ? (
-          <div className="bg-slate-800/50 rounded-lg p-12 text-center">
+          <div className="bg-slate-800/50 backdrop-blur-sm rounded-lg p-12 text-center border border-slate-700/30 shadow-lg shadow-black/20">
             <FolderOpen className="w-16 h-16 mx-auto mb-4 text-slate-600" />
             <h3 className="text-lg font-medium text-slate-300 mb-2">暂无项目</h3>
             <p className="text-slate-500 mb-6">创建您的第一个项目开始创作</p>
             <button
               onClick={() => setShowNewProjectModal(true)}
-              className="inline-flex items-center gap-2 px-6 py-3 bg-violet-600 hover:bg-violet-700 text-white rounded-lg transition-colors"
+              className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-500 hover:to-teal-400 text-white rounded-lg transition-all shadow-md shadow-teal-900/30"
             >
               <Plus className="w-5 h-5" />
               新建项目
@@ -210,7 +210,7 @@ function ProjectCard({ project, onOpen, onRename, onDelete, formatDate }: Projec
   const [showMenu, setShowMenu] = useState(false);
 
   return (
-    <div className="bg-slate-800 rounded-lg p-5 border border-slate-700 hover:border-violet-500/50 transition-colors relative">
+    <div className="bg-slate-800/80 backdrop-blur-sm rounded-lg p-5 border border-slate-700/50 hover:border-teal-500/50 shadow-lg shadow-black/20 hover:shadow-xl hover:shadow-black/30 transition-all hover:-translate-y-0.5 relative">
       {/* Menu Button */}
       <div className="absolute top-4 right-4">
         <button

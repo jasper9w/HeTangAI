@@ -142,7 +142,7 @@ export function ShotFilter({ shots, characters, onFilterChange }: ShotFilterProp
           placeholder="搜索镜头..."
           value={filters.search}
           onChange={(e) => handleFilterChange('search', e.target.value)}
-          className="pl-10 pr-4 py-2 w-48 bg-slate-700 border border-slate-600 rounded-lg text-slate-200 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+          className="pl-10 pr-4 py-2 w-48 bg-slate-700 border border-slate-600 rounded-lg text-slate-200 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
         />
         {filters.search && (
           <button
@@ -158,7 +158,7 @@ export function ShotFilter({ shots, characters, onFilterChange }: ShotFilterProp
       <select
         value={filters.voiceActor}
         onChange={(e) => handleFilterChange('voiceActor', e.target.value)}
-        className="px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+        className="px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
       >
         <option value="">全部配音演员</option>
         {voiceActors.map(actor => (
@@ -178,7 +178,7 @@ export function ShotFilter({ shots, characters, onFilterChange }: ShotFilterProp
               handleFilterChange('characters', newCharacters);
             }
           }}
-          className="px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 min-w-32"
+          className="px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 min-w-32"
         >
           <option value="">
             {filters.characters.length > 0
@@ -197,7 +197,7 @@ export function ShotFilter({ shots, characters, onFilterChange }: ShotFilterProp
             {filters.characters.map(char => (
               <span
                 key={char}
-                className="inline-flex items-center gap-1 px-2 py-1 bg-violet-600 text-white text-xs rounded"
+                className="inline-flex items-center gap-1 px-2 py-1 bg-teal-600 text-white text-xs rounded"
               >
                 {char}
                 <button
@@ -205,7 +205,7 @@ export function ShotFilter({ shots, characters, onFilterChange }: ShotFilterProp
                     const newCharacters = filters.characters.filter(c => c !== char);
                     handleFilterChange('characters', newCharacters);
                   }}
-                  className="hover:bg-violet-700 rounded"
+                  className="hover:bg-teal-700 rounded"
                 >
                   <X className="w-3 h-3" />
                 </button>
@@ -228,7 +228,7 @@ export function ShotFilter({ shots, characters, onFilterChange }: ShotFilterProp
               handleFilterChange('status', newStatus);
             }
           }}
-          className="px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 min-w-32"
+          className="px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 min-w-32"
         >
           <option value="">
             {filters.status.length > 0
@@ -276,7 +276,7 @@ export function ShotFilter({ shots, characters, onFilterChange }: ShotFilterProp
             const value = e.target.value === '' ? null : e.target.value === 'true';
             handleFilterChange('hasImages', value);
           }}
-          className="px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+          className="px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
         >
           <option value="">图片</option>
           <option value="true">有图片</option>
@@ -289,7 +289,7 @@ export function ShotFilter({ shots, characters, onFilterChange }: ShotFilterProp
             const value = e.target.value === '' ? null : e.target.value === 'true';
             handleFilterChange('hasVideo', value);
           }}
-          className="px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+          className="px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
         >
           <option value="">视频</option>
           <option value="true">有视频</option>
@@ -302,7 +302,7 @@ export function ShotFilter({ shots, characters, onFilterChange }: ShotFilterProp
             const value = e.target.value === '' ? null : e.target.value === 'true';
             handleFilterChange('hasAudio', value);
           }}
-          className="px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+          className="px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
         >
           <option value="">配音</option>
           <option value="true">有配音</option>

@@ -16,7 +16,7 @@ const CHARACTER_COLORS = [
   '#60a5fa', // blue-400
   '#34d399', // emerald-400
   '#f472b6', // pink-400
-  '#a78bfa', // violet-400
+  '#2dd4bf', // teal-400
   '#fbbf24', // amber-400
   '#2dd4bf', // teal-400
   '#fb923c', // orange-400
@@ -360,7 +360,7 @@ export function ShotTable({
                 }
               }}
               onChange={(e) => onSelectAll(e.target.checked)}
-              className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-violet-600 focus:ring-violet-500 cursor-pointer"
+              className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-teal-600 focus:ring-teal-500 cursor-pointer"
               title="全选/取消全选当前筛选结果"
             />
           </div>
@@ -553,7 +553,7 @@ export function ShotTable({
                 {hasActiveFilters && (
                   <button
                     onClick={clearAllFilters}
-                    className="mt-3 px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white rounded-lg text-sm transition-colors"
+                    className="mt-3 px-4 py-2 bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-500 hover:to-teal-400 text-white rounded-lg text-sm transition-colors"
                   >
                     清除所有筛选
                   </button>
@@ -596,7 +596,7 @@ export function ShotTable({
                       {hoveredShotId === 'before-first' && (
                         <button
                           onClick={() => onInsertShot(null)}
-                          className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-1 px-3 py-1 bg-violet-600 hover:bg-violet-500 text-white text-xs rounded-full shadow-lg transition-colors z-10"
+                          className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-1 px-3 py-1 bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-500 hover:to-teal-400 text-white text-xs rounded-full shadow-lg transition-colors z-10"
                         >
                           <Plus className="w-3 h-3" />
                           插入镜头
@@ -666,7 +666,7 @@ export function ShotTable({
                     {hoveredShotId === `after-${shot.id}` && (
                       <button
                         onClick={() => onInsertShot(shot.id)}
-                        className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-1 px-3 py-1 bg-violet-600 hover:bg-violet-500 text-white text-xs rounded-full shadow-lg transition-colors z-10"
+                        className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-1 px-3 py-1 bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-500 hover:to-teal-400 text-white text-xs rounded-full shadow-lg transition-colors z-10"
                       >
                         <Plus className="w-3 h-3" />
                         插入镜头
@@ -714,7 +714,7 @@ export function ShotTable({
                         onClick={() => handleSelectScene(scene)}
                         className={`text-left border rounded-lg overflow-hidden transition-colors ${
                           isSelected
-                            ? 'border-violet-500 bg-violet-500/10'
+                            ? 'border-teal-500 bg-teal-500/10'
                             : 'border-slate-700 hover:border-slate-600'
                         }`}
                       >
@@ -731,8 +731,8 @@ export function ShotTable({
                             </div>
                           )}
                           {isSelected && (
-                            <div className="absolute inset-0 bg-violet-500/20 flex items-center justify-center">
-                              <Check className="w-5 h-5 text-violet-300" />
+                            <div className="absolute inset-0 bg-teal-500/20 flex items-center justify-center">
+                              <Check className="w-5 h-5 text-teal-300" />
                             </div>
                           )}
                         </div>
@@ -956,7 +956,7 @@ function ShotRow({
             type="checkbox"
             checked={isSelected}
             onChange={(e) => onSelect(e.target.checked)}
-            className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-violet-500 focus:ring-violet-500 focus:ring-offset-0 cursor-pointer"
+            className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-teal-500 focus:ring-teal-500 focus:ring-offset-0 cursor-pointer"
             onClick={(e) => e.stopPropagation()} // 防止事件冒泡
           />
           <span className="text-xs text-slate-400 mt-1">#{shot.sequence}</span>
@@ -1126,8 +1126,8 @@ function ShotRow({
             disabled={isGeneratingVideo || !shot.imagePrompt.trim()}
             className={`absolute bottom-1 right-1 px-2 py-1 rounded text-[10px] transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
               hasImages
-                ? 'bg-slate-800/90 hover:bg-violet-600 text-violet-400 hover:text-white'
-                : 'bg-violet-600 hover:bg-violet-500 text-white'
+                ? 'bg-slate-800/90 hover:bg-teal-600 text-teal-400 hover:text-white'
+                : 'bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-500 hover:to-teal-400 text-white'
             }`}
           >
             {isGeneratingImages ? (
@@ -1179,15 +1179,15 @@ function ShotRow({
                     key={idx}
                     className={`relative rounded overflow-hidden transition-all bg-slate-800 flex items-center justify-center group cursor-pointer ${
                       idx === shot.selectedImageIndex
-                        ? 'ring-2 ring-violet-500'
+                        ? 'ring-2 ring-teal-500'
                         : 'ring-1 ring-slate-600 hover:ring-slate-500'
                     } ${isVerticalLayout ? '' : previewAspect}`}
                     onClick={() => onSelectImage(idx)}
                   >
                     <img src={img} alt={`选项 ${idx + 1}`} className="object-cover w-full h-full" />
                     {idx === shot.selectedImageIndex && (
-                      <div className="absolute inset-0 bg-violet-500/20 flex items-center justify-center">
-                        <Check className="w-3 h-3 text-violet-400" />
+                      <div className="absolute inset-0 bg-teal-500/20 flex items-center justify-center">
+                        <Check className="w-3 h-3 text-teal-400" />
                       </div>
                     )}
                     {/* Delete button - show on hover */}
@@ -1276,7 +1276,7 @@ function ShotRow({
                           e.stopPropagation();
                           onEditVideo();
                         }}
-                        className="p-1.5 bg-violet-600/80 hover:bg-violet-600 rounded-full transition-colors"
+                        className="p-1.5 bg-teal-600/80 hover:bg-teal-600 rounded-full transition-colors"
                         title="编辑视频"
                       >
                         <Pencil className="w-4 h-4 text-white" />
@@ -1367,7 +1367,7 @@ function ShotRow({
         {/* 备注列 */}
         <div className="w-32 flex-shrink-0 h-[180px]">
           <textarea
-            className="w-full h-full px-2 py-1.5 text-xs bg-slate-700/50 hover:bg-slate-700 rounded text-slate-300 placeholder-slate-500 resize-none outline-none focus:ring-1 focus:ring-violet-500"
+            className="w-full h-full px-2 py-1.5 text-xs bg-slate-700/50 hover:bg-slate-700 rounded text-slate-300 placeholder-slate-500 resize-none outline-none focus:ring-1 focus:ring-teal-500"
             value={shot.remark || ''}
             onChange={(e) => onUpdateField('remark', e.target.value)}
             placeholder="添加备注..."

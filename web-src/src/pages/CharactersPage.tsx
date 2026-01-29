@@ -1,7 +1,7 @@
 /**
  * CharactersPage - Character management page
  */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Mic,
   Image as ImageIcon,
@@ -11,12 +11,16 @@ import {
   Loader2,
   Sparkles,
   Upload,
-  FileUp
+  FileUp,
+  Wand2,
+  Play,
+  Pause,
+  Volume2,
 } from 'lucide-react';
 import { ReferenceAudioModal } from '../components/character/ReferenceAudioModal';
 import { CharacterImportModal } from '../components/character/CharacterImportModal';
 import { ImagePreviewModal } from '../components/ui/ImagePreviewModal';
-import type { Character } from '../types';
+import type { Character, SmartAssignResult } from '../types';
 
 // 根据 aspectRatio 返回对应的 CSS class
 function getAspectRatioClass(aspectRatio: string): string {
@@ -55,6 +59,7 @@ interface CharactersPageProps {
   onGenerateImage: (id: string) => void;
   onUploadImage: (id: string) => void;
   onSetReferenceAudio: (id: string, audioPath: string) => void;
+  onSmartAssign: (mode: 'empty_only' | 'all') => Promise<SmartAssignResult>;
   onImportFromText: (text: string) => Promise<{
     success: boolean;
     characters: Partial<Character>[];
@@ -89,6 +94,7 @@ export function CharactersPage({
   onGenerateImage,
   onUploadImage,
   onSetReferenceAudio,
+  onSmartAssign,
   onImportFromText,
   onImportFromFile,
   onConfirmImport,
@@ -112,6 +118,15 @@ export function CharactersPage({
     description: '',
   });
   const [newCharacter, setNewCharacter] = useState({ name: '', description: '' });
+  
+  // Smart assign state
+  const [smartAssignModalOpen, setSmartAssignModalOpen] = useState(false);
+  const [isSmartAssigning, setIsSmartAssigning] = useState(false);
+  const [smartAssignResult, setSmartAssignResult] = useState<SmartAssignResult | null>(null);
+
+  // Audio playback state
+  const [playingCharacterId, setPlayingCharacterId] = useState<string | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // ESC key to close modals
   useEffect(() => {
@@ -206,11 +221,119 @@ export function CharactersPage({
     setViewingImage(null);
   };
 
+  // Smart assign handlers
+  const handleOpenSmartAssign = () => {
+    setSmartAssignResult(null);
+    setSmartAssignModalOpen(true);
+  };
+
+  const handleSmartAssign = async (mode: 'empty_only' | 'all') => {
+    setIsSmartAssigning(true);
+    try {
+      const result = await onSmartAssign(mode);
+      setSmartAssignResult(result);
+    } catch (error) {
+      console.error('Smart assign failed:', error);
+      setSmartAssignResult({
+        success: false,
+        assignedCount: 0,
+        skippedCount: 0,
+        error: String(error),
+      });
+    } finally {
+      setIsSmartAssigning(false);
+    }
+  };
+
+  const handleCloseSmartAssign = () => {
+    setSmartAssignModalOpen(false);
+    setSmartAssignResult(null);
+  };
+
+  // Audio playback handler
+  const handlePlayCharacterAudio = async (char: Character) => {
+    if (!char.referenceAudioPath) return;
+
+    // If already playing this character, pause
+    if (playingCharacterId === char.id) {
+      audioRef.current?.pause();
+      setPlayingCharacterId(null);
+      return;
+    }
+
+    // Stop any currently playing audio
+    if (audioRef.current) {
+      audioRef.current.pause();
+    }
+
+    try {
+      if (!window.pywebview?.api) return;
+
+      const result = await window.pywebview.api.get_reference_audio_data(char.referenceAudioPath);
+      if (result.success && result.data) {
+        const byteCharacters = atob(result.data);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: result.mimeType || 'audio/wav' });
+        const url = URL.createObjectURL(blob);
+
+        audioRef.current = new Audio(url);
+        // Apply current speed setting
+        audioRef.current.playbackRate = char.speed || 1.0;
+        audioRef.current.play();
+        audioRef.current.onended = () => {
+          setPlayingCharacterId(null);
+          URL.revokeObjectURL(url);
+        };
+        setPlayingCharacterId(char.id);
+      }
+    } catch (error) {
+      console.error('Failed to play audio:', error);
+      setPlayingCharacterId(null);
+    }
+  };
+
+  // Cleanup audio on unmount
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+    };
+  }, []);
+
+  // Calculate stats for smart assign dialog
+  const narratorCount = characters.filter(c => c.isNarrator).length;
+  const voiceoverCount = characters.filter(c => !c.isNarrator).length;
+  const emptyAudioCount = characters.filter(c => !c.referenceAudioPath).length;
   
   const selectedCharacter = characters.find((c) => c.id === selectedCharacterId);
 
   return (
     <div className="h-full p-6 overflow-y-auto">
+      {/* Toolbar */}
+      {characters.length > 0 && (
+        <div className="flex items-center justify-between mb-4">
+          <div className="text-sm text-slate-400">
+            共 {characters.length} 个角色
+            {narratorCount > 0 && <span className="ml-2">({narratorCount} 旁白, {voiceoverCount} 配音)</span>}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleOpenSmartAssign}
+              disabled={characters.length === 0}
+              className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-500 hover:to-teal-400 disabled:opacity-50 rounded-lg text-sm text-white transition-colors"
+            >
+              <Wand2 className="w-4 h-4" />
+              智能分配参考音
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Characters Grid */}
       {characters.length > 0 ? (
         <div className={`grid ${gridColsClass} gap-4`}>
@@ -253,25 +376,6 @@ export function CharactersPage({
                         )}
                       </div>
                     </div>
-
-                    {/* Reference Audio Info - Bottom Left (show on hover) */}
-                    {char.referenceAudioPath && (
-                      <div className="absolute bottom-2 left-2 group/audio pointer-events-auto">
-                        <div className="flex items-center gap-1.5 px-2 py-1 bg-black/50 backdrop-blur-sm rounded-full text-white text-xs">
-                          <Mic className="w-3 h-3" />
-                          <span>{char.speed || 1}x</span>
-                        </div>
-
-                        {/* Audio File Tooltip - Show on hover */}
-                        <div className="absolute bottom-full left-0 mb-2 w-64 p-3 bg-slate-800/95 backdrop-blur-sm rounded-lg border border-slate-600 text-xs text-slate-200 opacity-0 group-hover/audio:opacity-100 transition-opacity pointer-events-none z-10">
-                          <div className="font-medium text-slate-100 mb-1">参考音文件:</div>
-                          <div className="text-slate-300 break-all">{char.referenceAudioPath.split('/').pop()}</div>
-                          <div className="text-slate-400 mt-1">倍速: {char.speed || 1}x</div>
-                          {/* Arrow */}
-                          <div className="absolute -bottom-1 left-3 w-2 h-2 bg-slate-800 border-r border-b border-slate-600 rotate-45"></div>
-                        </div>
-                      </div>
-                    )}
 
                     {/* Delete Button - Top Right (show on hover) - Only for non-narrator characters */}
                     {!char.isNarrator && (
@@ -323,7 +427,7 @@ export function CharactersPage({
                             onGenerateImage(char.id);
                           }}
                           disabled={char.status === 'generating' || !char.description?.trim()}
-                          className="p-1.5 bg-black/50 hover:bg-violet-600/70 disabled:opacity-50 rounded-full text-white transition-colors backdrop-blur-sm"
+                          className="p-1.5 bg-black/50 hover:bg-teal-600/70 disabled:opacity-50 rounded-full text-white transition-colors backdrop-blur-sm"
                           title={
                             !char.description?.trim()
                               ? '请先添加角色描述'
@@ -355,6 +459,28 @@ export function CharactersPage({
                         </button>
                       )}
 
+                      {/* Try Listen Button - Only show when has reference audio */}
+                      {char.referenceAudioPath && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handlePlayCharacterAudio(char);
+                          }}
+                          className={`p-1.5 rounded-full transition-colors backdrop-blur-sm ${
+                            playingCharacterId === char.id
+                              ? 'text-violet-400 bg-violet-500/30'
+                              : 'text-white/70 hover:text-white bg-black/30 hover:bg-black/50'
+                          }`}
+                          title={playingCharacterId === char.id ? '停止试听' : '试听参考音'}
+                        >
+                          {playingCharacterId === char.id ? (
+                            <Pause className="w-3.5 h-3.5" />
+                          ) : (
+                            <Volume2 className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                      )}
+
                       {/* Reference Audio Button */}
                       <button
                         onClick={(e) => {
@@ -363,7 +489,7 @@ export function CharactersPage({
                         }}
                         className={`p-1.5 rounded-full text-white transition-colors backdrop-blur-sm ${
                           char.referenceAudioPath
-                            ? 'bg-violet-600/70 hover:bg-violet-600/90'
+                            ? 'bg-teal-600/70 hover:bg-teal-600/90'
                             : 'bg-black/50 hover:bg-black/70'
                         }`}
                         title={char.referenceAudioPath ? '已设置参考音' : '设置参考音'}
@@ -395,25 +521,6 @@ export function CharactersPage({
                       </div>
                     </div>
 
-                    {/* Reference Audio Info - Bottom Left (show on hover) */}
-                    {char.referenceAudioPath && (
-                      <div className="absolute bottom-2 left-2 group/audio pointer-events-auto">
-                        <div className="flex items-center gap-1.5 px-2 py-1 bg-black/50 backdrop-blur-sm rounded-full text-white text-xs">
-                          <Mic className="w-3 h-3" />
-                          <span>{char.speed || 1}x</span>
-                        </div>
-
-                        {/* Audio File Tooltip - Show on hover */}
-                        <div className="absolute bottom-full left-0 mb-2 w-64 p-3 bg-slate-800/95 backdrop-blur-sm rounded-lg border border-slate-600 text-xs text-slate-200 opacity-0 group-hover/audio:opacity-100 transition-opacity pointer-events-none z-10">
-                          <div className="font-medium text-slate-100 mb-1">参考音文件:</div>
-                          <div className="text-slate-300 break-all">{char.referenceAudioPath.split('/').pop()}</div>
-                          <div className="text-slate-400 mt-1">倍速: {char.speed || 1}x</div>
-                          {/* Arrow */}
-                          <div className="absolute -bottom-1 left-3 w-2 h-2 bg-slate-800 border-r border-b border-slate-600 rotate-45"></div>
-                        </div>
-                      </div>
-                    )}
-
                     {/* Action Buttons - Bottom Right (show on hover) */}
                     <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 pointer-events-auto">
                       {/* Edit Button */}
@@ -440,6 +547,28 @@ export function CharactersPage({
                         )}
                       </div>
 
+                      {/* Try Listen Button - Only show when has reference audio */}
+                      {char.referenceAudioPath && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handlePlayCharacterAudio(char);
+                          }}
+                          className={`p-1.5 rounded-full transition-colors backdrop-blur-sm ${
+                            playingCharacterId === char.id
+                              ? 'text-violet-400 bg-violet-500/30'
+                              : 'text-white/70 hover:text-white bg-black/30 hover:bg-black/50'
+                          }`}
+                          title={playingCharacterId === char.id ? '停止试听' : '试听参考音'}
+                        >
+                          {playingCharacterId === char.id ? (
+                            <Pause className="w-3.5 h-3.5" />
+                          ) : (
+                            <Volume2 className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                      )}
+
                       {/* Reference Audio Button */}
                       <button
                         onClick={(e) => {
@@ -448,7 +577,7 @@ export function CharactersPage({
                         }}
                         className={`p-1.5 rounded-full text-white transition-colors backdrop-blur-sm ${
                           char.referenceAudioPath
-                            ? 'bg-violet-600/70 hover:bg-violet-600/90'
+                            ? 'bg-teal-600/70 hover:bg-teal-600/90'
                             : 'bg-black/50 hover:bg-black/70'
                         }`}
                         title={char.referenceAudioPath ? '已设置参考音' : '设置参考音'}
@@ -527,7 +656,7 @@ export function CharactersPage({
           <div className="flex items-center gap-3 justify-center">
             <button
               onClick={() => onAddModalOpenChange(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-500 rounded-lg text-sm text-white transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-500 hover:to-teal-400 rounded-lg text-sm text-white transition-colors"
             >
               <Plus className="w-4 h-4" />
               添加角色
@@ -550,6 +679,8 @@ export function CharactersPage({
         onSelect={handleSelectAudio}
         currentAudioPath={selectedCharacter?.referenceAudioPath}
         currentSpeed={selectedCharacter?.speed}
+        isNarrator={selectedCharacter?.isNarrator}
+        audioRecommendations={selectedCharacter?.audioRecommendations}
       />
 
       {/* Character Import Modal */}
@@ -577,7 +708,7 @@ export function CharactersPage({
                   value={newCharacter.name}
                   onChange={(e) => setNewCharacter({ ...newCharacter, name: e.target.value })}
                   placeholder="请输入角色名称"
-                  className="w-full px-4 py-3 bg-slate-700 rounded-lg text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500 transition-colors"
+                  className="w-full px-4 py-3 bg-slate-700 rounded-lg text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-colors"
                   autoFocus
                 />
               </div>
@@ -591,7 +722,7 @@ export function CharactersPage({
                   onChange={(e) => setNewCharacter({ ...newCharacter, description: e.target.value })}
                   placeholder="请详细描述角色的外观特征，例如：&#10;• 性别和年龄：年轻女性，约25岁&#10;• 发型发色：长直发，黑色&#10;• 面部特征：大眼睛，温和的笑容&#10;• 服装风格：白色连衣裙，简约优雅&#10;• 体型特征：身材修长，气质优雅&#10;• 其他特征：戴着银色项链"
                   rows={12}
-                  className="w-full px-4 py-3 bg-slate-700 rounded-lg text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500 resize-none transition-colors leading-relaxed"
+                  className="w-full px-4 py-3 bg-slate-700 rounded-lg text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none transition-colors leading-relaxed"
                 />
                 <div className="mt-2 text-xs text-slate-500">
                   提示：描述越详细，生成的三视图越准确。建议包含性别、年龄、发型、服装、体型等关键信息。
@@ -608,7 +739,7 @@ export function CharactersPage({
               <button
                 onClick={handleAddCharacter}
                 disabled={!newCharacter.name.trim()}
-                className="px-6 py-2.5 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 rounded-lg text-sm text-white transition-colors"
+                className="px-6 py-2.5 bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-500 hover:to-teal-400 disabled:opacity-50 rounded-lg text-sm text-white transition-colors"
               >
                 添加角色
               </button>
@@ -631,7 +762,7 @@ export function CharactersPage({
                   type="text"
                   value={editing.name}
                   onChange={(e) => setEditing({ ...editing, name: e.target.value })}
-                  className="w-full px-4 py-3 bg-slate-700 rounded-lg text-slate-300 focus:outline-none focus:ring-2 focus:ring-violet-500 transition-colors"
+                  className="w-full px-4 py-3 bg-slate-700 rounded-lg text-slate-300 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-colors"
                   autoFocus
                 />
               </div>
@@ -645,7 +776,7 @@ export function CharactersPage({
                   onChange={(e) => setEditing({ ...editing, description: e.target.value })}
                   placeholder="请详细描述角色的外观特征，例如：&#10;• 性别和年龄：年轻女性，约25岁&#10;• 发型发色：长直发，黑色&#10;• 面部特征：大眼睛，温和的笑容&#10;• 服装风格：白色连衣裙，简约优雅&#10;• 体型特征：身材修长，气质优雅&#10;• 其他特征：戴着银色项链"
                   rows={12}
-                  className="w-full px-4 py-3 bg-slate-700 rounded-lg text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500 resize-none transition-colors leading-relaxed"
+                  className="w-full px-4 py-3 bg-slate-700 rounded-lg text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none transition-colors leading-relaxed"
                 />
                 <div className="mt-2 text-xs text-slate-500">
                   提示：描述越详细，生成的三视图越准确。建议包含性别、年龄、发型、服装、体型等关键信息。
@@ -662,7 +793,7 @@ export function CharactersPage({
               <button
                 onClick={handleSaveEdit}
                 disabled={!editing.name.trim()}
-                className="px-6 py-2.5 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 rounded-lg text-sm text-white transition-colors"
+                className="px-6 py-2.5 bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-500 hover:to-teal-400 disabled:opacity-50 rounded-lg text-sm text-white transition-colors"
               >
                 保存
               </button>
@@ -711,6 +842,107 @@ export function CharactersPage({
           title={viewingImage.name}
           onClose={handleCloseImageViewer}
         />
+      )}
+
+      {/* Smart Assign Modal */}
+      {smartAssignModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-800 rounded-lg border border-slate-700 w-full max-w-md">
+            <div className="p-4 border-b border-slate-700">
+              <div className="flex items-center gap-2">
+                <Wand2 className="w-5 h-5 text-teal-400" />
+                <h3 className="text-lg font-medium text-slate-200">智能分配参考音</h3>
+              </div>
+            </div>
+            <div className="p-4">
+              {!smartAssignResult ? (
+                <>
+                  <p className="text-slate-300 mb-4">
+                    将根据角色类型自动分配合适的参考音:
+                  </p>
+                  <div className="space-y-2 mb-4 text-sm">
+                    <div className="flex items-center justify-between p-2 bg-slate-700/50 rounded">
+                      <span className="text-slate-400">旁白角色</span>
+                      <span className="text-slate-200">{narratorCount} 个</span>
+                    </div>
+                    <div className="flex items-center justify-between p-2 bg-slate-700/50 rounded">
+                      <span className="text-slate-400">配音角色</span>
+                      <span className="text-slate-200">{voiceoverCount} 个</span>
+                    </div>
+                    <div className="flex items-center justify-between p-2 bg-slate-700/50 rounded">
+                      <span className="text-slate-400">未设置参考音</span>
+                      <span className="text-amber-400">{emptyAudioCount} 个</span>
+                    </div>
+                  </div>
+                  <p className="text-xs text-slate-500">
+                    系统将根据角色名称智能推断性别，并从预置音库中选择合适的参考音。
+                  </p>
+                </>
+              ) : (
+                <div className="text-center py-4">
+                  {smartAssignResult.success ? (
+                    <>
+                      <div className="w-12 h-12 rounded-full bg-green-500/20 flex items-center justify-center mx-auto mb-3">
+                        <Sparkles className="w-6 h-6 text-green-400" />
+                      </div>
+                      <p className="text-slate-200 mb-2">分配完成</p>
+                      <p className="text-sm text-slate-400">
+                        已为 <span className="text-green-400">{smartAssignResult.assignedCount}</span> 个角色分配参考音
+                        {smartAssignResult.skippedCount > 0 && (
+                          <span>，跳过 <span className="text-slate-300">{smartAssignResult.skippedCount}</span> 个</span>
+                        )}
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <div className="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center mx-auto mb-3">
+                        <Wand2 className="w-6 h-6 text-red-400" />
+                      </div>
+                      <p className="text-slate-200 mb-2">分配失败</p>
+                      <p className="text-sm text-red-400">{smartAssignResult.error}</p>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="p-4 border-t border-slate-700 flex items-center justify-end gap-2">
+              {!smartAssignResult ? (
+                <>
+                  <button
+                    onClick={handleCloseSmartAssign}
+                    disabled={isSmartAssigning}
+                    className="px-4 py-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 rounded-lg text-sm text-slate-300 transition-colors"
+                  >
+                    取消
+                  </button>
+                  <button
+                    onClick={() => handleSmartAssign('empty_only')}
+                    disabled={isSmartAssigning || emptyAudioCount === 0}
+                    className="px-4 py-2 bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-500 hover:to-teal-400 disabled:opacity-50 rounded-lg text-sm text-white transition-colors flex items-center gap-2"
+                  >
+                    {isSmartAssigning && <Loader2 className="w-4 h-4 animate-spin" />}
+                    仅分配空白角色
+                  </button>
+                  <button
+                    onClick={() => handleSmartAssign('all')}
+                    disabled={isSmartAssigning}
+                    className="px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 rounded-lg text-sm text-white transition-colors flex items-center gap-2"
+                  >
+                    {isSmartAssigning && <Loader2 className="w-4 h-4 animate-spin" />}
+                    全部重新分配
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={handleCloseSmartAssign}
+                  className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-300 transition-colors"
+                >
+                  关闭
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

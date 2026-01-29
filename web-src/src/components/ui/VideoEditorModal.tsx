@@ -621,7 +621,7 @@ export function VideoEditorModal({
                 <div className="absolute inset-0 bg-slate-800/30 rounded overflow-hidden">
                   {/* Video bar with thumbnails */}
                   <div
-                    className={`absolute top-0 bottom-0 rounded overflow-hidden transition-all ${isDraggingVideoEnd ? 'ring-2 ring-violet-400' : ''}`}
+                    className={`absolute top-0 bottom-0 rounded overflow-hidden transition-all ${isDraggingVideoEnd ? 'ring-2 ring-teal-400' : ''}`}
                     style={{ left: `${Math.max(0, videoStartPercent)}%`, width: `${videoWidthPercent}%` }}
                   >
                     {/* Thumbnail strip */}
@@ -638,10 +638,10 @@ export function VideoEditorModal({
                     </div>
                     {/* Drag handle */}
                     <div
-                      className="absolute right-0 top-0 bottom-0 w-4 cursor-ew-resize bg-violet-500/20 hover:bg-violet-500/40 flex items-center justify-center"
+                      className="absolute right-0 top-0 bottom-0 w-4 cursor-ew-resize bg-teal-500/20 hover:bg-teal-500/40 flex items-center justify-center"
                       onMouseDown={(e) => handleMouseDown(e, 'video-end')}
                     >
-                      <div className="w-1 h-10 bg-violet-400 rounded-full" />
+                      <div className="w-1 h-10 bg-teal-400 rounded-full" />
                     </div>
                     {/* Label */}
                     <div className="absolute left-1 top-1 text-[10px] text-white/80 bg-black/40 px-1 rounded">
@@ -740,7 +740,7 @@ export function VideoEditorModal({
           {/* Status & Tips */}
           <div className="mt-3 flex items-center justify-between">
             <div className="flex items-center gap-4 text-xs">
-              <span className="text-slate-400">视频 <span className="text-violet-400 font-medium">{videoSpeed.toFixed(2)}x</span></span>
+              <span className="text-slate-400">视频 <span className="text-teal-400 font-medium">{videoSpeed.toFixed(2)}x</span></span>
               <span className="text-slate-400">音频 <span className="text-lime-400 font-medium">{audioSpeed.toFixed(2)}x</span></span>
               <span className="text-slate-400">裁剪 <span className="text-yellow-400 font-medium">{audioTrimStart.toFixed(1)}-{audioTrimEnd.toFixed(1)}s</span></span>
             </div>
@@ -755,7 +755,7 @@ export function VideoEditorModal({
         {/* Footer */}
         <div className="px-5 py-3 border-t border-slate-700/50 flex items-center justify-end gap-3">
           <button onClick={onClose} className="px-4 py-1.5 text-sm text-slate-400 hover:text-slate-200 hover:bg-slate-700 rounded">取消</button>
-          <button onClick={handleSave} className="px-4 py-1.5 text-sm bg-violet-600 hover:bg-violet-500 text-white rounded">保存</button>
+          <button onClick={handleSave} className="px-4 py-1.5 text-sm bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-500 hover:to-teal-400 text-white rounded">保存</button>
         </div>
       </div>
     </div>

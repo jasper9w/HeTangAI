@@ -30,7 +30,7 @@ export function BatchGenerateModal({
         return {
           icon: Image,
           title: '批量生成图片',
-          color: 'violet',
+          color: 'teal',
           checkExisting: (shot: Shot) => shot.images.length > 0,
           requirement: '需要图片提示词',
           checkRequirement: (shot: Shot) => shot.imagePrompt.trim().length > 0,
@@ -90,12 +90,12 @@ export function BatchGenerateModal({
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className={`p-2 rounded-lg ${
-                type === 'image' ? 'bg-violet-600/20' :
+                type === 'image' ? 'bg-teal-600/20' :
                 type === 'video' ? 'bg-emerald-600/20' :
                 'bg-orange-600/20'
               }`}>
                 <Icon className={`w-5 h-5 ${
-                  type === 'image' ? 'text-violet-400' :
+                  type === 'image' ? 'text-teal-400' :
                   type === 'video' ? 'text-emerald-400' :
                   'text-orange-400'
                 }`} />
@@ -120,7 +120,7 @@ export function BatchGenerateModal({
               <div className="text-sm text-slate-400">选中镜头</div>
             </div>
             <div className="bg-slate-700/50 rounded-lg p-4">
-              <div className="text-2xl font-bold text-violet-400">{targetShots.length}</div>
+              <div className="text-2xl font-bold text-teal-400">{targetShots.length}</div>
               <div className="text-sm text-slate-400">将要处理</div>
             </div>
           </div>
@@ -190,7 +190,7 @@ export function BatchGenerateModal({
                   type="checkbox"
                   checked={forceRegenerate}
                   onChange={(e) => setForceRegenerate(e.target.checked)}
-                  className="mt-1 rounded border-slate-600 bg-slate-700 text-violet-600 focus:ring-violet-500"
+                  className="mt-1 rounded border-slate-600 bg-slate-700 text-teal-600 focus:ring-teal-500"
                 />
                 <div>
                   <div className="text-sm font-medium text-slate-300">
@@ -232,7 +232,7 @@ export function BatchGenerateModal({
             onClick={handleConfirm}
             disabled={targetShots.length === 0}
             className={`px-6 py-2.5 rounded-lg text-sm text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-              type === 'image' ? 'bg-violet-600 hover:bg-violet-500' :
+              type === 'image' ? 'bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-500 hover:to-teal-400' :
               type === 'video' ? 'bg-emerald-600 hover:bg-emerald-500' :
               'bg-orange-600 hover:bg-orange-500'
             }`}

@@ -322,7 +322,7 @@ export function SearchInput({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full pl-7 pr-6 py-1 text-xs bg-slate-700 border border-slate-600 rounded text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-violet-500"
+        className="w-full pl-7 pr-6 py-1 text-xs bg-slate-700 border border-slate-600 rounded text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-teal-500"
       />
       {value && (
         <button
@@ -363,7 +363,7 @@ export function MultiSelect({
     <div className={`relative ${className}`}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full px-2 py-1 text-xs bg-slate-700 border border-slate-600 rounded text-slate-200 text-left flex items-center justify-between focus:outline-none focus:ring-1 focus:ring-violet-500"
+        className="w-full px-2 py-1 text-xs bg-slate-700 border border-slate-600 rounded text-slate-200 text-left flex items-center justify-between focus:outline-none focus:ring-1 focus:ring-teal-500"
       >
         <span className="truncate">
           {value.length > 0 ? `已选 ${value.length} 项` : placeholder}
@@ -387,11 +387,11 @@ export function MultiSelect({
                   type="checkbox"
                   checked={value.includes(option.value)}
                   onChange={() => toggleOption(option.value)}
-                  className="w-3 h-3 rounded border-slate-600 bg-slate-700 text-violet-600 focus:ring-violet-500"
+                  className="w-3 h-3 rounded border-slate-600 bg-slate-700 text-teal-600 focus:ring-teal-500"
                 />
                 <span className="text-slate-200 truncate">{option.label}</span>
                 {value.includes(option.value) && (
-                  <Check className="w-3 h-3 text-violet-400 ml-auto" />
+                  <Check className="w-3 h-3 text-teal-400 ml-auto" />
                 )}
               </label>
             ))}

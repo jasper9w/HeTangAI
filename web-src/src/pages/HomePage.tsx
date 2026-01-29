@@ -26,7 +26,7 @@ export function HomePage({ project }: HomePageProps) {
           icon={Film}
           label="镜头数"
           value={stats.shots}
-          color="violet"
+          color="teal"
         />
         <StatCard
           icon={Users}
@@ -51,7 +51,7 @@ export function HomePage({ project }: HomePageProps) {
       </div>
 
       {stats.shots === 0 && (
-        <div className="bg-slate-800/50 rounded-lg p-8 text-center">
+        <div className="bg-slate-800/50 backdrop-blur-sm rounded-lg p-8 text-center border border-slate-700/30 shadow-lg shadow-black/20">
           <Film className="w-16 h-16 mx-auto mb-4 text-slate-600" />
           <h3 className="text-lg font-medium text-slate-300 mb-2">开始创作</h3>
           <p className="text-slate-500">
@@ -68,11 +68,11 @@ interface StatCardProps {
   label: string;
   value: number;
   subValue?: string;
-  color: 'violet' | 'blue' | 'emerald' | 'orange';
+  color: 'teal' | 'blue' | 'emerald' | 'orange';
 }
 
 const colorMap = {
-  violet: 'bg-violet-500/20 text-violet-400',
+  teal: 'bg-teal-500/20 text-teal-400',
   blue: 'bg-blue-500/20 text-blue-400',
   emerald: 'bg-emerald-500/20 text-emerald-400',
   orange: 'bg-orange-500/20 text-orange-400',
@@ -80,7 +80,7 @@ const colorMap = {
 
 function StatCard({ icon: Icon, label, value, subValue, color }: StatCardProps) {
   return (
-    <div className="bg-slate-800 rounded-lg p-4">
+    <div className="bg-slate-800/80 backdrop-blur-sm rounded-lg p-4 border border-slate-700/50 shadow-lg shadow-black/20 hover:shadow-xl hover:shadow-black/30 transition-all hover:-translate-y-0.5">
       <div className={`w-10 h-10 rounded-lg ${colorMap[color]} flex items-center justify-center mb-3`}>
         <Icon className="w-5 h-5" />
       </div>

@@ -66,7 +66,7 @@ export function NewProjectModal({ isOpen, onClose, onConfirm }: NewProjectModalP
               value={projectName}
               onChange={(e) => setProjectName(e.target.value)}
               placeholder="请输入项目名称"
-              className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+              className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
               disabled={isSubmitting}
               autoFocus
             />
@@ -85,7 +85,7 @@ export function NewProjectModal({ isOpen, onClose, onConfirm }: NewProjectModalP
             <button
               type="submit"
               disabled={!projectName.trim() || isSubmitting}
-              className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-500 hover:to-teal-400 disabled:bg-slate-600 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
             >
               {isSubmitting ? (
                 <>

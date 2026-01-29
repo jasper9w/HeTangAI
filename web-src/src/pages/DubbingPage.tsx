@@ -234,12 +234,12 @@ export function DubbingPage({ shots, characters: _characters }: DubbingPageProps
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="搜索音频文件..."
-          className="w-full px-3 py-2 mb-4 bg-slate-800 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+          className="w-full px-3 py-2 mb-4 bg-slate-800 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
         />
 
         {isLoadingAudios ? (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="w-8 h-8 text-violet-500 animate-spin" />
+            <Loader2 className="w-8 h-8 text-teal-500 animate-spin" />
           </div>
         ) : filteredRefAudios.length === 0 ? (
           <div className="bg-slate-800/50 rounded-lg p-8 text-center">
@@ -263,7 +263,7 @@ export function DubbingPage({ shots, characters: _characters }: DubbingPageProps
               >
                 <button
                   onClick={() => handlePlayRefAudio(audio)}
-                  className="w-8 h-8 rounded-full bg-violet-600 hover:bg-violet-500 flex items-center justify-center flex-shrink-0 transition-colors"
+                  className="w-8 h-8 rounded-full bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-500 hover:to-teal-400 flex items-center justify-center flex-shrink-0 transition-colors"
                 >
                   {playingRefAudio === audio.path ? (
                     <Pause className="w-4 h-4 text-white" />
