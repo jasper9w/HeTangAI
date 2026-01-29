@@ -1,51 +1,56 @@
 /**
- * StatusBar - Bottom status bar showing save status and shortcuts
+ * StatusBar - Bottom status bar showing save status, version and shortcuts
  */
-import { Check, Clock } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { Check, Clock, Loader2 } from 'lucide-react';
+import { useEffect, useState, useRef } from 'react';
 
 interface StatusBarProps {
   isDirty: boolean;
   autoSaveInterval: number; // in seconds
-  lastSaveTime: number | null; // timestamp
   onSave: () => void;
+  version: string;
+  onCheckUpdate: () => void;
+  isCheckingUpdate: boolean;
 }
 
 // 检测操作系统
 const isMac = typeof navigator !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0;
 
-export function StatusBar({ isDirty, autoSaveInterval, lastSaveTime, onSave }: StatusBarProps) {
+export function StatusBar({ isDirty, autoSaveInterval, onSave, version, onCheckUpdate, isCheckingUpdate }: StatusBarProps) {
   const [countdown, setCountdown] = useState(autoSaveInterval);
+  const dirtyStartRef = useRef<number | null>(null);
 
-  // 计算倒计时
+  // 当 isDirty 变化时管理倒计时
   useEffect(() => {
     if (!isDirty) {
+      // 已保存，重置倒计时
       setCountdown(autoSaveInterval);
+      dirtyStartRef.current = null;
       return;
     }
 
-    // 如果有上次保存时间，计算从那时起经过的时间
-    if (lastSaveTime) {
-      const elapsed = Math.floor((Date.now() - lastSaveTime) / 1000);
-      const remaining = Math.max(0, autoSaveInterval - elapsed);
-      setCountdown(remaining);
-    } else {
-      setCountdown(autoSaveInterval);
+    // 开始脏状态，记录开始时间
+    if (!dirtyStartRef.current) {
+      dirtyStartRef.current = Date.now();
     }
 
+    // 设置定时器
     const timer = setInterval(() => {
-      setCountdown(prev => {
-        if (prev <= 1) {
+      if (dirtyStartRef.current) {
+        const elapsed = Math.floor((Date.now() - dirtyStartRef.current) / 1000);
+        const remaining = Math.max(0, autoSaveInterval - elapsed);
+        setCountdown(remaining);
+        
+        if (remaining <= 0) {
           // 触发保存
           onSave();
-          return autoSaveInterval;
+          dirtyStartRef.current = null;
         }
-        return prev - 1;
-      });
+      }
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [isDirty, autoSaveInterval, lastSaveTime, onSave]);
+  }, [isDirty, autoSaveInterval, onSave]);
 
   // 格式化倒计时显示
   const formatCountdown = (seconds: number): string => {
@@ -61,7 +66,22 @@ export function StatusBar({ isDirty, autoSaveInterval, lastSaveTime, onSave }: S
 
   return (
     <div className="h-6 bg-slate-800 border-t border-slate-700 px-4 flex items-center justify-between text-xs text-slate-500 flex-shrink-0">
-      {/* 左侧：保存状态 */}
+      {/* 左侧：版本号 */}
+      <div className="flex items-center gap-4">
+        <button
+          onClick={onCheckUpdate}
+          disabled={isCheckingUpdate}
+          className="flex items-center gap-1 text-slate-500 hover:text-slate-300 transition-colors disabled:cursor-wait"
+          title="点击检查更新"
+        >
+          {isCheckingUpdate ? (
+            <Loader2 className="w-3 h-3 animate-spin" />
+          ) : null}
+          <span>v{version}</span>
+        </button>
+      </div>
+
+      {/* 中间：保存状态 */}
       <div className="flex items-center gap-4">
         {isDirty ? (
           <div className="flex items-center gap-1.5">

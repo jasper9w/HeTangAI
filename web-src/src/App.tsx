@@ -28,6 +28,7 @@ import { ImportDropdown } from './components/ui/ImportDropdown';
 import { ExportDropdown } from './components/ui/ExportDropdown';
 import { GenerateDropdown } from './components/ui/GenerateDropdown';
 import { StatusBar } from './components/ui/StatusBar';
+import { UpdateModal } from './components/ui/UpdateModal';
 import type { ProjectData, Shot, PageType, ImportedCharacter } from './types';
 
 function App() {
@@ -70,6 +71,19 @@ function App() {
   // One-click import conflict state
   const [importConflictOpen, setImportConflictOpen] = useState(false);
   const [importConflictTarget, setImportConflictTarget] = useState<'characters' | 'scenes' | 'shots'>('characters');
+
+  // Version and update state
+  const [appVersion, setAppVersion] = useState<string>('0.0.0');
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
+  const [updateModalOpen, setUpdateModalOpen] = useState(false);
+  const [updateInfo, setUpdateInfo] = useState<{
+    hasUpdate: boolean;
+    currentVersion: string;
+    latestVersion: string;
+    releaseNotes: string;
+    downloadUrl: string;
+    releaseUrl: string;
+  } | null>(null);
   const [importConflictTotal, setImportConflictTotal] = useState(0);
   const [importConflictCount, setImportConflictCount] = useState(0);
 
@@ -138,24 +152,51 @@ function App() {
       setProjectPath(result.path || projectPath);
       setProjectName(result.name || projectName);
       setIsDirty(false);
-      showToast('success', '项目已保存');
     } else {
       showToast('error', `保存失败: ${result.error || '未知错误'}`);
     }
   }, [api, project, projectPath, projectName, showToast]);
 
-  // Auto-save every 60 seconds
+  // Fetch app version on mount
   useEffect(() => {
-    if (!api || !project || !isDirty) return;
+    if (!api) return;
+    api.get_app_version().then((version: string) => {
+      setAppVersion(version);
+    });
+  }, [api]);
 
-    const autoSaveInterval = setInterval(() => {
-      if (isDirty) {
-        handleSaveProject();
+  // Check for updates
+  const handleCheckUpdate = useCallback(async () => {
+    if (!api || isCheckingUpdate) return;
+    setIsCheckingUpdate(true);
+    try {
+      const result = await api.check_for_updates();
+      if (result.success) {
+        setUpdateInfo({
+          hasUpdate: result.hasUpdate,
+          currentVersion: result.currentVersion,
+          latestVersion: result.latestVersion,
+          releaseNotes: result.releaseNotes,
+          downloadUrl: result.downloadUrl,
+          releaseUrl: result.releaseUrl,
+        });
+        setUpdateModalOpen(true);
+      } else {
+        showToast('error', result.error || '检查更新失败');
       }
-    }, 60000); // 60 seconds
+    } catch {
+      showToast('error', '检查更新失败');
+    } finally {
+      setIsCheckingUpdate(false);
+    }
+  }, [api, isCheckingUpdate, showToast]);
 
-    return () => clearInterval(autoSaveInterval);
-  }, [api, project, isDirty, handleSaveProject]);
+  // Open download page
+  const handleOpenDownloadPage = useCallback(async (url: string) => {
+    if (!api) return;
+    await api.open_download_page(url);
+    setUpdateModalOpen(false);
+  }, [api]);
 
   // Register callbacks for backend to notify shot status changes and progress
   useEffect(() => {
@@ -1454,25 +1495,10 @@ function App() {
               </div>
             </div>
 
-            {/* Right: Page actions and project actions */}
+            {/* Right: Page actions */}
             <div className="flex items-center gap-2">
               {/* Page-specific actions */}
               {currentPage !== 'projects' && renderPageActions()}
-
-              {/* Project save button */}
-              {currentPage !== 'projects' && (
-                <>
-                  {renderPageActions() && <div className="w-px h-6 bg-slate-700 mx-2" />}
-                  <button
-                    onClick={handleSaveProject}
-                    disabled={!isDirty}
-                    className="p-2 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-slate-400 hover:text-slate-200 transition-colors"
-                    title="保存项目"
-                  >
-                    <Save className="w-5 h-5" />
-                  </button>
-                </>
-              )}
             </div>
           </div>
         </div>
@@ -1514,6 +1540,26 @@ function App() {
           {renderPageContent()}
         </div>
       </main>
+
+      {/* Status Bar - only show when in project */}
+      {currentPage !== 'projects' && (
+        <StatusBar
+          isDirty={isDirty}
+          autoSaveInterval={60}
+          onSave={handleSaveProject}
+          version={appVersion}
+          onCheckUpdate={handleCheckUpdate}
+          isCheckingUpdate={isCheckingUpdate}
+        />
+      )}
+
+      {/* Update Modal */}
+      <UpdateModal
+        isOpen={updateModalOpen}
+        onClose={() => setUpdateModalOpen(false)}
+        updateInfo={updateInfo}
+        onDownload={handleOpenDownloadPage}
+      />
 
       {/* Shot Prefix Modal */}
       {shotPrefixModalOpen && (

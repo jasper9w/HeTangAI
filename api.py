@@ -3025,7 +3025,30 @@ class Api:
 
     def get_app_version(self) -> str:
         """Get application version"""
-        return "0.1.0"
+        from version import get_version
+        return get_version()
+
+    def check_for_updates(self) -> dict:
+        """Check for application updates"""
+        from updater import check_for_updates
+        result = check_for_updates()
+        if result is None:
+            return {"success": False, "error": "Failed to check for updates"}
+        return {
+            "success": True,
+            "hasUpdate": result.has_update,
+            "currentVersion": result.current_version,
+            "latestVersion": result.latest_version,
+            "releaseNotes": result.release_notes,
+            "downloadUrl": result.download_url,
+            "releaseUrl": result.release_url
+        }
+
+    def open_download_page(self, url: str) -> dict:
+        """Open download page in browser"""
+        from updater import open_download_page
+        success = open_download_page(url)
+        return {"success": success}
 
     # ========== Reference Audio Management ==========
 
