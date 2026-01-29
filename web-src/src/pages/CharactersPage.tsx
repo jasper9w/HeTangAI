@@ -467,7 +467,7 @@ export function CharactersPage({
                           }}
                           className={`p-1.5 rounded-full transition-colors backdrop-blur-sm ${
                             playingCharacterId === char.id
-                              ? 'text-violet-400 bg-violet-500/30'
+                              ? 'text-teal-400 bg-teal-500/30'
                               : 'text-white/70 hover:text-white bg-black/30 hover:bg-black/50'
                           }`}
                           title={playingCharacterId === char.id ? '停止试听' : '试听参考音'}
@@ -555,7 +555,7 @@ export function CharactersPage({
                           }}
                           className={`p-1.5 rounded-full transition-colors backdrop-blur-sm ${
                             playingCharacterId === char.id
-                              ? 'text-violet-400 bg-violet-500/30'
+                              ? 'text-teal-400 bg-teal-500/30'
                               : 'text-white/70 hover:text-white bg-black/30 hover:bg-black/50'
                           }`}
                           title={playingCharacterId === char.id ? '停止试听' : '试听参考音'}

@@ -745,7 +745,7 @@ export function ReferenceAudioModal({
                                       key={tag}
                                       onClick={() => handleToggleTag(tag)}
                                       className={`px-2.5 py-1.5 rounded text-xs transition-colors ${
-                                        selectedTags.includes(tag) ? 'bg-violet-600 text-white' : 'bg-slate-700 text-slate-400 hover:bg-slate-600'
+                                        selectedTags.includes(tag) ? 'bg-teal-600 text-white' : 'bg-slate-700 text-slate-400 hover:bg-slate-600'
                                       }`}
                                     >
                                       {tag}
@@ -852,7 +852,7 @@ export function ReferenceAudioModal({
                               onDoubleClick={() => handleItemDoubleClick(rec.audioPath, true)}
                               className={`relative p-4 rounded-lg cursor-pointer transition-all ${
                                 isSelected
-                                  ? 'bg-violet-600/20 ring-2 ring-violet-500'
+                                  ? 'bg-teal-600/20 ring-2 ring-teal-500'
                                   : 'bg-slate-700/50 hover:bg-slate-700'
                               }`}
                             >
@@ -878,7 +878,7 @@ export function ReferenceAudioModal({
                                   }}
                                   className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-colors ${
                                     isPlaying
-                                      ? 'bg-violet-600 text-white'
+                                      ? 'bg-teal-600 text-white'
                                       : 'bg-slate-600 text-slate-300 hover:bg-slate-500'
                                   }`}
                                 >
@@ -907,7 +907,7 @@ export function ReferenceAudioModal({
                                   </div>
 
                                   {/* Reason */}
-                                  <p className="text-sm text-violet-400 mb-2">
+                                  <p className="text-sm text-teal-400 mb-2">
                                     {rec.reason}
                                   </p>
 
