@@ -24,6 +24,7 @@ a = Analysis(
     binaries=[],
     datas=[
         ('web', 'web'),
+        ('assets/audios', 'assets/audios'),
     ],
     hiddenimports=[
         'PIL._tkinter_finder',
