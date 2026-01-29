@@ -214,7 +214,7 @@ class JsonlParser:
                     "speed": "normal"
                 },
                 "dialogue": [
-                    {"r": "沈婉儿", "t": "女儿想得明明白白。"}
+                    {"r": "沈婉儿", "t": "女儿想得明明白白。", "emotion": "平静", "intensity": "0.3"}
                 ]
             },
             {
@@ -235,8 +235,8 @@ class JsonlParser:
                     "speed": "slow"
                 },
                 "dialogue": [
-                    {"r": "沈父", "t": "你可想清楚了？"},
-                    {"r": "沈婉儿", "t": "父亲，女儿心意已决。"}
+                    {"r": "沈父", "t": "你可想清楚了？", "emotion": "愤怒", "intensity": "0.3"},
+                    {"r": "沈婉儿", "t": "父亲，女儿心意已决。", "emotion": "平静", "intensity": "0.4"}
                 ]
             },
             {
@@ -257,7 +257,7 @@ class JsonlParser:
                     "speed": "slow"
                 },
                 "dialogue": [
-                    {"r": "旁白", "t": "这是一个普通的下午。"}
+                    {"r": "旁白", "t": "这是一个普通的下午。", "emotion": "平静", "intensity": "0.2"}
                 ]
             }
         ]

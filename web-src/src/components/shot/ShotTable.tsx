@@ -100,6 +100,28 @@ interface ShotTableProps {
   onInsertShot: (afterShotId: string | null) => void;
 }
 
+// 情感选项
+const EMOTION_OPTIONS = [
+  { value: '', label: '-' },
+  { value: '开心', label: '开心' },
+  { value: '悲伤', label: '悲伤' },
+  { value: '愤怒', label: '愤怒' },
+  { value: '惊讶', label: '惊讶' },
+  { value: '恐惧', label: '恐惧' },
+  { value: '厌恶', label: '厌恶' },
+  { value: '平静', label: '平静' },
+];
+
+// 强度选项
+const INTENSITY_OPTIONS = [
+  { value: '0.0', label: '0.0' },
+  { value: '0.1', label: '0.1' },
+  { value: '0.2', label: '0.2' },
+  { value: '0.3', label: '0.3' },
+  { value: '0.4', label: '0.4' },
+  { value: '0.5', label: '0.5' },
+];
+
 export function ShotTable({
   shots,
   characters,
@@ -380,6 +402,11 @@ export function ShotTable({
                 shots={shots}
               />
             </ColumnHeaderFilter>
+          </div>
+
+          {/* 情感列 */}
+          <div className="w-36 flex-shrink-0">
+            <div className="text-xs font-medium text-slate-400">情感</div>
           </div>
 
           {/* 场景列 - 按场景名多选 */}
@@ -1068,6 +1095,55 @@ function ShotRow({
               </button>
             </div>
           </div>
+        </div>
+
+        {/* 情感列 - 每行对话一个设置 */}
+        <div className="w-36 flex-shrink-0 h-[180px] overflow-y-auto">
+          {shot.dialogues && shot.dialogues.length > 0 ? (
+            <div className="space-y-1">
+              {shot.dialogues.map((dialogue, idx) => (
+                <div key={idx} className="flex flex-col gap-0.5 py-1 border-b border-slate-700/30 last:border-b-0">
+                  <div className="text-[10px] text-slate-400 truncate" title={dialogue.role}>
+                    {dialogue.role || '未知'}
+                  </div>
+                  <div className="flex gap-1">
+                    <select
+                      value={dialogue.emotion || ''}
+                      onChange={(e) => {
+                        const newDialogues = [...shot.dialogues!];
+                        newDialogues[idx] = { ...newDialogues[idx], emotion: e.target.value };
+                        onUpdateField('dialogues', newDialogues);
+                      }}
+                      className="flex-1 min-w-0 px-1 py-0.5 text-[10px] bg-slate-700 border border-slate-600 rounded text-slate-200 focus:outline-none focus:border-teal-500"
+                      title="情感类型"
+                    >
+                      {EMOTION_OPTIONS.map(opt => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                    <select
+                      value={dialogue.intensity || '0.3'}
+                      onChange={(e) => {
+                        const newDialogues = [...shot.dialogues!];
+                        newDialogues[idx] = { ...newDialogues[idx], intensity: e.target.value };
+                        onUpdateField('dialogues', newDialogues);
+                      }}
+                      className="w-12 px-1 py-0.5 text-[10px] bg-slate-700 border border-slate-600 rounded text-slate-200 focus:outline-none focus:border-teal-500"
+                      title="情感强度"
+                    >
+                      {INTENSITY_OPTIONS.map(opt => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="h-full flex items-center justify-center text-slate-500 text-[10px]">
+              暂无对话
+            </div>
+          )}
         </div>
 
         {/* 场景列 - 固定尺寸，图片自适应 */}

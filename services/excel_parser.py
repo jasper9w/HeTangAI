@@ -13,7 +13,7 @@ from openpyxl import Workbook
 
 
 # Expected columns for the new format
-EXPECTED_COLUMNS = ["shotId", "voiceRole", "voiceText", "scene", "characters", "imagePrompt", "videoPrompt"]
+EXPECTED_COLUMNS = ["shotId", "voiceRole", "voiceText", "scene", "characters", "imagePrompt", "videoPrompt", "emotion", "intensity"]
 
 
 class ExcelParser:
@@ -66,6 +66,8 @@ class ExcelParser:
                     characters_str = str(row.get("characters", "")) if pd.notna(row.get("characters")) else ""
                     image_prompt = str(row.get("imagePrompt", "")) if pd.notna(row.get("imagePrompt")) else ""
                     video_prompt = str(row.get("videoPrompt", "")) if pd.notna(row.get("videoPrompt")) else ""
+                    emotion = str(row.get("emotion", "")) if pd.notna(row.get("emotion")) else ""
+                    intensity = str(row.get("intensity", "")) if pd.notna(row.get("intensity")) else ""
 
                     # Use row index as shotId if not provided
                     if not shot_id.strip():
@@ -92,10 +94,16 @@ class ExcelParser:
 
                     # Append dialogue if voice role and text exist
                     if voice_role.strip() or voice_text.strip():
-                        shot_groups[shot_id]["dialogues"].append({
+                        dialogue_entry = {
                             "role": voice_role.strip(),
                             "text": voice_text.strip(),
-                        })
+                        }
+                        # Add emotion and intensity if provided
+                        if emotion.strip():
+                            dialogue_entry["emotion"] = emotion.strip()
+                        if intensity.strip():
+                            dialogue_entry["intensity"] = intensity.strip()
+                        shot_groups[shot_id]["dialogues"].append(dialogue_entry)
 
                 except Exception as e:
                     error_msg = f"Row {idx + 2}: {str(e)}"
@@ -123,6 +131,7 @@ class ExcelParser:
                     "emotion": "",
                     "intensity": "",
                     "script": script,
+                    "dialogues": data["dialogues"],  # Include dialogues with emotion/intensity
                     "imagePrompt": data["imagePrompt"],
                     "videoPrompt": data["videoPrompt"],
                     "images": [],
@@ -157,6 +166,8 @@ class ExcelParser:
                 "characters": ["出场角色", "characters", "chuchang_juese", "chuchangjuese", "出场"],
                 "imagePrompt": ["图片提示词", "imageprompt", "tupian_tishici", "image", "tupiantishici", "image_prompt", "图片"],
                 "videoPrompt": ["视频提示词", "videoprompt", "shipin_tishici", "video", "shipintishici", "video_prompt", "视频"],
+                "emotion": ["情感", "emotion", "qinggan"],
+                "intensity": ["强度", "intensity", "qiangdu"],
             }
 
             found = False
@@ -193,16 +204,16 @@ class ExcelParser:
         ws.title = "镜头列表"
 
         # Headers (Chinese)
-        headers = ["镜头ID", "配音角色", "配音内容", "场景", "出场角色", "图片提示词", "视频提示词"]
+        headers = ["镜头ID", "配音角色", "配音内容", "场景", "出场角色", "图片提示词", "视频提示词", "情感", "强度"]
         for col, header in enumerate(headers, 1):
             ws.cell(row=1, column=col, value=header)
 
         # Example rows - demonstrating merge behavior
         examples = [
-            ["1", "旁白", "在一个宁静的小镇上，住着一位年轻的画家。", "小镇街道", "画家", "宁静的小镇街道，阳光洒落", "镜头缓慢推进"],
-            ["2", "画家", "今天的天气真好啊。", "画室内", "画家", "画家站在窗前，望向窗外", "特写画家的表情"],
-            ["2", "旁白", "他望向窗外，若有所思。", "", "", "", ""],  # Same shotId=2, will be merged
-            ["3", "画家", "我要出门走走。", "画室门口", "画家", "画家推开门，准备出门", "跟随镜头"],
+            ["1", "旁白", "在一个宁静的小镇上，住着一位年轻的画家。", "小镇街道", "画家", "宁静的小镇街道，阳光洒落", "镜头缓慢推进", "平静", "0.2"],
+            ["2", "画家", "今天的天气真好啊。", "画室内", "画家", "画家站在窗前，望向窗外", "特写画家的表情", "开心", "0.3"],
+            ["2", "旁白", "他望向窗外，若有所思。", "", "", "", "", "平静", "0.2"],  # Same shotId=2, will be merged
+            ["3", "画家", "我要出门走走。", "画室门口", "画家", "画家推开门，准备出门", "跟随镜头", "开心", "0.3"],
         ]
         for row_idx, example in enumerate(examples, 2):
             for col, value in enumerate(example, 1):
@@ -216,6 +227,8 @@ class ExcelParser:
         ws.column_dimensions["E"].width = 12
         ws.column_dimensions["F"].width = 30
         ws.column_dimensions["G"].width = 25
+        ws.column_dimensions["H"].width = 10
+        ws.column_dimensions["I"].width = 8
 
         wb.save(file_path)
         logger.info(f"Template exported to: {file_path}")

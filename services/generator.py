@@ -490,8 +490,11 @@ class GenerationClient:
         # Get emotion index
         emotion_idx = emotion_map.get(emotion, 7)  # Default to "other"
 
-        # Get intensity value
-        intensity_value = intensity_map.get(intensity, 0.3)  # Default to medium
+        # Get intensity value - support numeric string (0.0-0.5) or text mapping
+        try:
+            intensity_value = float(intensity)
+        except (ValueError, TypeError):
+            intensity_value = intensity_map.get(intensity, 0.3)  # Default to medium
 
         # Set emotion value
         emo_vec[emotion_idx] = intensity_value

@@ -21,6 +21,8 @@ export interface Dialogue {
   role: string;      // 角色名称
   text: string;      // 对话文本
   audioUrl?: string; // 该对话的配音URL（可选）
+  emotion?: string;  // 情感类型（开心/悲伤/愤怒/惊讶/恐惧/厌恶/平静）
+  intensity?: string; // 情感强度（0.0-0.5）
 }
 
 export interface Shot {
