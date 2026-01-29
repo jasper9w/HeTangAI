@@ -3987,6 +3987,55 @@ class Api:
 
         return {"success": True, "path": str(dir_path)}
 
+    def select_ffmpeg_path(self) -> dict:
+        """Select ffmpeg executable path"""
+        if not self._window:
+            return {"success": False, "error": "Window not initialized"}
+
+        result = self._window.create_file_dialog(
+            webview.FileDialog.OPEN,
+            allow_multiple=False,
+        )
+
+        if not result or len(result) == 0:
+            return {"success": False, "error": "No file selected"}
+
+        file_path = Path(result[0] if isinstance(result, tuple) else result)
+        
+        # Verify it's an executable
+        import subprocess
+        try:
+            subprocess.run([str(file_path), "-version"], capture_output=True, check=True)
+        except (subprocess.CalledProcessError, FileNotFoundError, PermissionError):
+            return {"success": False, "error": "Selected file is not a valid ffmpeg executable"}
+
+        logger.info(f"Selected ffmpeg path: {file_path}")
+        return {"success": True, "path": str(file_path)}
+
+    def _get_ffmpeg_path(self) -> str:
+        """Get ffmpeg executable path from settings or use system default"""
+        settings = self._load_settings()
+        ffmpeg_path = settings.get("ffmpegPath", "")
+        if ffmpeg_path and Path(ffmpeg_path).exists():
+            return ffmpeg_path
+        return "ffmpeg"
+
+    def _get_ffprobe_path(self) -> str:
+        """Get ffprobe executable path (derive from ffmpeg path)"""
+        settings = self._load_settings()
+        ffmpeg_path = settings.get("ffmpegPath", "")
+        if ffmpeg_path:
+            ffmpeg_dir = Path(ffmpeg_path).parent
+            # Try ffprobe in the same directory
+            ffprobe_path = ffmpeg_dir / "ffprobe"
+            if ffprobe_path.exists():
+                return str(ffprobe_path)
+            # Try with .exe extension on Windows
+            ffprobe_path = ffmpeg_dir / "ffprobe.exe"
+            if ffprobe_path.exists():
+                return str(ffprobe_path)
+        return "ffprobe"
+
     def export_jianying_draft(self) -> dict:
         """Export current project to JianYing draft"""
         try:
@@ -4437,6 +4486,554 @@ class Api:
         except Exception as e:
             logger.error(f"Failed to export audio text: {e}")
             return {"success": False, "error": str(e)}
+
+    # Export state
+    _export_cancel_flag: bool = False
+    _export_thread: Optional[Any] = None
+
+    def export_final_video(self, with_subtitles: bool = True) -> dict:
+        """Start exporting final video (async with progress)
+        
+        Args:
+            with_subtitles: Whether to burn subtitles into the video
+        """
+        import subprocess
+        
+        try:
+            if not self.project_data or not self.project_name:
+                return {"success": False, "error": "No project loaded"}
+
+            shots = self.project_data.get("shots", [])
+            if not shots:
+                return {"success": False, "error": "No shots in project"}
+
+            # Check if already exporting
+            if self._export_thread and self._export_thread.is_alive():
+                return {"success": False, "error": "Export already in progress"}
+
+            # Check if ffmpeg is available
+            ffmpeg_path = self._get_ffmpeg_path()
+            try:
+                subprocess.run([ffmpeg_path, "-version"], capture_output=True, check=True)
+            except (subprocess.CalledProcessError, FileNotFoundError):
+                return {"success": False, "error": "ffmpeg not found. Please configure ffmpeg path in Settings."}
+
+            # Show save dialog first
+            save_result = self._window.create_file_dialog(
+                webview.FileDialog.SAVE,
+                save_filename=f"{self.project_name}.mp4",
+                file_types=("MP4 Files (*.mp4)", "All files (*.*)")
+            )
+
+            if not save_result:
+                return {"success": False, "error": "User cancelled"}
+
+            output_path = Path(save_result) if isinstance(save_result, str) else Path(save_result[0])
+            if not output_path.suffix:
+                output_path = output_path.with_suffix(".mp4")
+
+            # Reset cancel flag and start export thread
+            self._export_cancel_flag = False
+            ffprobe_path = self._get_ffprobe_path()
+            
+            import threading
+            self._export_thread = threading.Thread(
+                target=self._export_final_video_worker,
+                args=(shots, str(output_path), with_subtitles, ffmpeg_path, ffprobe_path),
+                daemon=True
+            )
+            self._export_thread.start()
+
+            return {"success": True, "message": "Export started"}
+
+        except Exception as e:
+            logger.error(f"Failed to start export: {e}")
+            return {"success": False, "error": str(e)}
+
+    def cancel_export_final_video(self) -> dict:
+        """Cancel the ongoing export"""
+        self._export_cancel_flag = True
+        logger.info("Export cancellation requested")
+        return {"success": True}
+
+    def _notify_export_progress(self, stage: str, current: int, total: int, message: str) -> None:
+        """Notify frontend about export progress"""
+        try:
+            if self._window:
+                progress_json = json.dumps({
+                    "stage": stage,
+                    "current": current,
+                    "total": total,
+                    "message": message
+                })
+                self._window.evaluate_js(f'window.onExportProgress && window.onExportProgress({progress_json})')
+        except Exception as e:
+            logger.warning(f"Failed to notify export progress: {e}")
+
+    def _export_final_video_worker(self, shots: list, output_path: str, with_subtitles: bool = True, ffmpeg_path: str = "ffmpeg", ffprobe_path: str = "ffprobe") -> None:
+        """Worker thread for exporting final video
+        
+        Args:
+            shots: List of shot data
+            output_path: Output video file path
+            with_subtitles: Whether to burn subtitles into the video
+            ffmpeg_path: Path to ffmpeg executable
+            ffprobe_path: Path to ffprobe executable
+        """
+        import tempfile
+        import shutil
+        import subprocess
+        
+        temp_dir = None
+        try:
+            # Count valid shots first
+            valid_shots = []
+            for shot in shots:
+                if self._export_cancel_flag:
+                    self._notify_export_progress("cancelled", 0, 0, "Export cancelled by user")
+                    return
+                    
+                shot_id = shot.get("id")
+                if not shot_id:
+                    continue
+                selected_video_index = shot.get("selectedVideoIndex", 0)
+                videos = shot.get("videos", [])
+                if not videos or selected_video_index >= len(videos):
+                    continue
+                video_url = videos[selected_video_index]
+                video_path = self._url_to_path(video_url)
+                if video_path and Path(video_path).exists():
+                    valid_shots.append(shot)
+
+            total_shots = len(valid_shots)
+            if total_shots == 0:
+                self._notify_export_progress("error", 0, 0, "No valid shots to export")
+                return
+
+            self._notify_export_progress("preparing", 0, total_shots, "Preparing export...")
+
+            # Create temp directory for intermediate files
+            temp_dir = Path(tempfile.mkdtemp(prefix="hetangai_export_"))
+            logger.info(f"Created temp directory: {temp_dir}")
+
+            # Process each shot and collect segments
+            segment_files = []
+            srt_entries = []
+            current_time = 0.0
+            entry_index = 1
+
+            for shot_idx, shot in enumerate(valid_shots):
+                if self._export_cancel_flag:
+                    self._notify_export_progress("cancelled", shot_idx, total_shots, "Export cancelled by user")
+                    return
+
+                shot_id = shot.get("id")
+                self._notify_export_progress("processing", shot_idx, total_shots, f"Processing shot {shot_idx + 1}/{total_shots}")
+
+                # Get selected video path
+                selected_video_index = shot.get("selectedVideoIndex", 0)
+                videos = shot.get("videos", [])
+                video_url = videos[selected_video_index]
+                video_path = self._url_to_path(video_url)
+
+                # Get audio path
+                audio_url = shot.get("audioUrl", "")
+                audio_path = None
+                if audio_url:
+                    audio_path = self._url_to_path(audio_url)
+                    if not audio_path or not Path(audio_path).exists():
+                        audio_path = None
+
+                # Get video duration using ffprobe
+                video_duration = self._get_media_duration(video_path, ffprobe_path)
+                if video_duration is None:
+                    logger.warning(f"Failed to get video duration for shot {shot_id}")
+                    continue
+
+                # Get audio duration if available
+                audio_duration = None
+                if audio_path:
+                    audio_duration = self._get_media_duration(audio_path, ffprobe_path)
+                    if audio_duration is None:
+                        audio_path = None
+
+                # Get custom video settings
+                custom_speed = shot.get("videoSpeed")
+                custom_audio_offset = shot.get("audioOffset", 0.0)
+                custom_audio_speed = shot.get("audioSpeed", 1.0)
+                custom_audio_trim_start = shot.get("audioTrimStart", 0.0)
+                custom_audio_trim_end = shot.get("audioTrimEnd")
+
+                # Convert from string if necessary
+                if isinstance(custom_speed, str):
+                    try:
+                        custom_speed = float(custom_speed)
+                    except (ValueError, TypeError):
+                        custom_speed = None
+                if isinstance(custom_audio_offset, str):
+                    try:
+                        custom_audio_offset = float(custom_audio_offset)
+                    except (ValueError, TypeError):
+                        custom_audio_offset = 0.0
+                if isinstance(custom_audio_speed, str):
+                    try:
+                        custom_audio_speed = float(custom_audio_speed)
+                    except (ValueError, TypeError):
+                        custom_audio_speed = 1.0
+                if isinstance(custom_audio_trim_start, str):
+                    try:
+                        custom_audio_trim_start = float(custom_audio_trim_start)
+                    except (ValueError, TypeError):
+                        custom_audio_trim_start = 0.0
+                if isinstance(custom_audio_trim_end, str):
+                    try:
+                        custom_audio_trim_end = float(custom_audio_trim_end)
+                    except (ValueError, TypeError):
+                        custom_audio_trim_end = None
+
+                # Clamp audio speed to valid range
+                custom_audio_speed = max(0.5, min(2.0, custom_audio_speed))
+
+                # Calculate segment duration and video settings
+                if audio_duration is not None:
+                    trim_start = max(0.0, min(custom_audio_trim_start, audio_duration))
+                    trim_end = custom_audio_trim_end if custom_audio_trim_end and custom_audio_trim_end > 0 else audio_duration
+                    trim_end = max(trim_start + 0.1, min(trim_end, audio_duration))
+                    trimmed_audio_duration = trim_end - trim_start
+                    effective_audio_duration = trimmed_audio_duration / custom_audio_speed
+
+                    segment_duration = round(effective_audio_duration, 2)
+
+                    if custom_speed is not None and 0.5 <= custom_speed <= 3.0:
+                        video_speed = custom_speed
+                    else:
+                        video_speed = video_duration / segment_duration
+                        video_speed = max(0.5, min(3.0, video_speed))
+
+                    video_source_start = math.floor(custom_audio_offset * video_speed * 100) / 100
+                    video_source_start = max(0, min(video_source_start, video_duration - 0.1))
+                else:
+                    segment_duration = round(video_duration, 2)
+                    video_speed = 1.0
+                    video_source_start = 0.0
+                    trim_start = 0.0
+                    trimmed_audio_duration = 0.0
+                    custom_audio_speed = 1.0
+
+                logger.info(f"Processing shot {shot_id}: duration={segment_duration:.2f}s, video_speed={video_speed:.2f}x")
+
+                # Create segment file
+                segment_file = temp_dir / f"segment_{shot_idx:04d}.mp4"
+                
+                if audio_path and audio_duration is not None:
+                    success = self._create_segment_with_audio(
+                        video_path=video_path,
+                        audio_path=audio_path,
+                        output_path=str(segment_file),
+                        video_speed=video_speed,
+                        video_start=video_source_start,
+                        segment_duration=segment_duration,
+                        audio_speed=custom_audio_speed,
+                        audio_trim_start=trim_start,
+                        audio_trim_duration=trimmed_audio_duration,
+                        ffmpeg_path=ffmpeg_path
+                    )
+                else:
+                    success = self._create_segment_without_audio(
+                        video_path=video_path,
+                        output_path=str(segment_file),
+                        video_speed=video_speed,
+                        video_start=video_source_start,
+                        segment_duration=segment_duration,
+                        ffmpeg_path=ffmpeg_path
+                    )
+
+                if not success:
+                    logger.error(f"Failed to create segment for shot {shot_id}")
+                    continue
+
+                segment_files.append(str(segment_file))
+
+                # Build subtitle entry
+                dialogues = shot.get("dialogues", [])
+                if not dialogues and shot.get("script"):
+                    script_text = shot["script"]
+                    if ":" in script_text:
+                        script_text = script_text.split(":", 1)[-1]
+                    text_lines = [script_text.strip()] if script_text.strip() else []
+                else:
+                    text_lines = [d.get("text", "").strip() for d in dialogues if d.get("text", "").strip()]
+                
+                script_text = " ".join(text_lines)
+
+                if script_text:
+                    srt_entries.append({
+                        "index": entry_index,
+                        "start": current_time,
+                        "end": current_time + segment_duration,
+                        "text": script_text
+                    })
+                    entry_index += 1
+
+                current_time += segment_duration
+
+            if self._export_cancel_flag:
+                self._notify_export_progress("cancelled", total_shots, total_shots, "Export cancelled by user")
+                return
+
+            if not segment_files:
+                self._notify_export_progress("error", 0, 0, "No valid segments to export")
+                return
+
+            # Merge segments
+            self._notify_export_progress("merging", total_shots, total_shots, "Merging video segments...")
+
+            concat_list_file = temp_dir / "concat_list.txt"
+            with open(concat_list_file, "w", encoding="utf-8") as f:
+                for seg_file in segment_files:
+                    escaped_path = seg_file.replace("'", "'\\''")
+                    f.write(f"file '{escaped_path}'\n")
+
+            concat_output = temp_dir / "concat_output.mp4"
+            concat_cmd = [
+                ffmpeg_path, "-y",
+                "-f", "concat",
+                "-safe", "0",
+                "-i", str(concat_list_file),
+                "-c", "copy",
+                str(concat_output)
+            ]
+            logger.info(f"Concatenating segments: {' '.join(concat_cmd)}")
+            result = subprocess.run(concat_cmd, capture_output=True, text=True)
+            if result.returncode != 0:
+                logger.error(f"Concat failed: {result.stderr}")
+                self._notify_export_progress("error", 0, 0, f"Failed to merge: {result.stderr[:100]}")
+                return
+
+            if self._export_cancel_flag:
+                self._notify_export_progress("cancelled", total_shots, total_shots, "Export cancelled by user")
+                return
+
+            if with_subtitles:
+                # Burn subtitles
+                self._notify_export_progress("subtitles", total_shots, total_shots, "Burning subtitles...")
+
+                ass_file = temp_dir / "subtitles.ass"
+                self._generate_ass_file(srt_entries, str(ass_file))
+
+                ass_path_escaped = str(ass_file).replace("\\", "/").replace(":", "\\:")
+                subtitle_cmd = [
+                    ffmpeg_path, "-y",
+                    "-i", str(concat_output),
+                    "-vf", f"ass={ass_path_escaped}",
+                    "-c:v", "libx264",
+                    "-preset", "medium",
+                    "-crf", "18",
+                    "-c:a", "aac",
+                    "-b:a", "192k",
+                    output_path
+                ]
+                logger.info(f"Burning subtitles: {' '.join(subtitle_cmd)}")
+                result = subprocess.run(subtitle_cmd, capture_output=True, text=True)
+                if result.returncode != 0:
+                    logger.error(f"Subtitle burn failed: {result.stderr}")
+                    self._notify_export_progress("error", 0, 0, f"Failed to burn subtitles: {result.stderr[:100]}")
+                    return
+            else:
+                # No subtitles - just copy the concat output to final location
+                self._notify_export_progress("subtitles", total_shots, total_shots, "Finalizing video...")
+                import shutil as shutil_copy
+                shutil_copy.copy2(str(concat_output), output_path)
+
+            if self._export_cancel_flag:
+                # If cancelled during final step, try to remove partial output
+                try:
+                    Path(output_path).unlink(missing_ok=True)
+                except:
+                    pass
+                self._notify_export_progress("cancelled", total_shots, total_shots, "Export cancelled by user")
+                return
+
+            logger.info(f"Exported final video to: {output_path}")
+            self._notify_export_progress("done", total_shots, total_shots, output_path)
+
+        except Exception as e:
+            logger.error(f"Failed to export final video: {e}")
+            import traceback
+            traceback.print_exc()
+            self._notify_export_progress("error", 0, 0, str(e))
+
+        finally:
+            # Cleanup temp directory
+            if temp_dir:
+                try:
+                    shutil.rmtree(temp_dir)
+                    logger.info(f"Cleaned up temp directory: {temp_dir}")
+                except Exception as e:
+                    logger.warning(f"Failed to cleanup temp directory: {e}")
+
+    def _get_media_duration(self, file_path: str, ffprobe_path: str = "ffprobe") -> Optional[float]:
+        """Get media duration using ffprobe"""
+        import subprocess
+        try:
+            cmd = [
+                ffprobe_path,
+                "-v", "error",
+                "-show_entries", "format=duration",
+                "-of", "default=noprint_wrappers=1:nokey=1",
+                file_path
+            ]
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            if result.returncode == 0:
+                return float(result.stdout.strip())
+        except Exception as e:
+            logger.warning(f"Failed to get duration for {file_path}: {e}")
+        return None
+
+    def _create_segment_with_audio(
+        self,
+        video_path: str,
+        audio_path: str,
+        output_path: str,
+        video_speed: float,
+        video_start: float,
+        segment_duration: float,
+        audio_speed: float,
+        audio_trim_start: float,
+        audio_trim_duration: float,
+        ffmpeg_path: str = "ffmpeg"
+    ) -> bool:
+        """Create a video segment with audio using ffmpeg"""
+        import subprocess
+        try:
+            # Calculate PTS factor for video speed (inverse relationship)
+            pts_factor = 1.0 / video_speed
+            
+            # Build complex filter
+            # Video: trim, speed adjustment
+            video_filter = f"[0:v]trim=start={video_start},setpts={pts_factor}*PTS,setpts=PTS-STARTPTS[v]"
+            
+            # Audio: trim, speed adjustment using atempo
+            # atempo only supports 0.5 to 2.0, chain multiple for larger ranges
+            atempo_filters = []
+            remaining_speed = audio_speed
+            while remaining_speed > 2.0:
+                atempo_filters.append("atempo=2.0")
+                remaining_speed /= 2.0
+            while remaining_speed < 0.5:
+                atempo_filters.append("atempo=0.5")
+                remaining_speed /= 0.5
+            atempo_filters.append(f"atempo={remaining_speed:.6f}")
+            atempo_chain = ",".join(atempo_filters)
+            
+            audio_filter = f"[1:a]atrim=start={audio_trim_start}:duration={audio_trim_duration},asetpts=PTS-STARTPTS,{atempo_chain}[a]"
+            
+            filter_complex = f"{video_filter};{audio_filter}"
+            
+            cmd = [
+                ffmpeg_path, "-y",
+                "-i", video_path,
+                "-i", audio_path,
+                "-filter_complex", filter_complex,
+                "-map", "[v]",
+                "-map", "[a]",
+                "-t", str(segment_duration),
+                "-c:v", "libx264",
+                "-preset", "fast",
+                "-crf", "18",
+                "-c:a", "aac",
+                "-b:a", "192k",
+                output_path
+            ]
+            
+            logger.debug(f"Creating segment: {' '.join(cmd)}")
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            if result.returncode != 0:
+                logger.error(f"FFmpeg error: {result.stderr}")
+                return False
+            return True
+        except Exception as e:
+            logger.error(f"Failed to create segment: {e}")
+            return False
+
+    def _create_segment_without_audio(
+        self,
+        video_path: str,
+        output_path: str,
+        video_speed: float,
+        video_start: float,
+        segment_duration: float,
+        ffmpeg_path: str = "ffmpeg"
+    ) -> bool:
+        """Create a video segment without audio using ffmpeg"""
+        import subprocess
+        try:
+            pts_factor = 1.0 / video_speed
+            
+            video_filter = f"trim=start={video_start},setpts={pts_factor}*PTS,setpts=PTS-STARTPTS"
+            
+            cmd = [
+                ffmpeg_path, "-y",
+                "-i", video_path,
+                "-vf", video_filter,
+                "-t", str(segment_duration),
+                "-c:v", "libx264",
+                "-preset", "fast",
+                "-crf", "18",
+                "-an",
+                output_path
+            ]
+            
+            logger.debug(f"Creating segment: {' '.join(cmd)}")
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            if result.returncode != 0:
+                logger.error(f"FFmpeg error: {result.stderr}")
+                return False
+            return True
+        except Exception as e:
+            logger.error(f"Failed to create segment: {e}")
+            return False
+
+    def _generate_ass_file(self, srt_entries: list, output_path: str) -> None:
+        """Generate ASS subtitle file with custom styling"""
+        # ASS header with style definition
+        # WrapStyle: 2 = smart wrapping, end-of-line word wrapping
+        # MarginL/MarginR: 200 pixels to prevent text from touching screen edges
+        # Alignment: 2 = bottom center
+        ass_header = """[Script Info]
+Title: HeTangAI Export
+ScriptType: v4.00+
+WrapStyle: 2
+ScaledBorderAndShadow: yes
+YCbCr Matrix: TV.709
+PlayResX: 1920
+PlayResY: 1080
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Arial,56,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,0,0,0,0,100,100,0,0,1,3,1,2,200,200,50,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+"""
+        
+        def format_ass_time(seconds: float) -> str:
+            """Format time as H:MM:SS.CC (centiseconds)"""
+            hours = int(seconds // 3600)
+            minutes = int((seconds % 3600) // 60)
+            secs = int(seconds % 60)
+            centisecs = int((seconds % 1) * 100)
+            return f"{hours}:{minutes:02d}:{secs:02d}.{centisecs:02d}"
+        
+        with open(output_path, "w", encoding="utf-8") as f:
+            f.write(ass_header)
+            for entry in srt_entries:
+                start = format_ass_time(entry["start"])
+                end = format_ass_time(entry["end"])
+                # Escape special characters and replace newlines
+                text = entry["text"].replace("\\", "\\\\").replace("{", "\\{").replace("}", "\\}")
+                text = text.replace("\n", "\\N")
+                f.write(f"Dialogue: 0,{start},{end},Default,,0,0,0,,{text}\n")
 
     # ========== Project Settings APIs (作品信息与创作参数) ==========
 

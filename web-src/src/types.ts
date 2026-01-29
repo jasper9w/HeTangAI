@@ -282,9 +282,12 @@ export interface PyWebViewApi {
   save_settings: (settings: AppSettings) => Promise<ApiResponse>;
   select_work_dir: () => Promise<ApiResponse & { path?: string }>;
   select_jianying_draft_dir: () => Promise<ApiResponse & { path?: string }>;
+  select_ffmpeg_path: () => Promise<ApiResponse & { path?: string }>;
   export_jianying_draft: () => Promise<ApiResponse & { path?: string }>;
   export_audio_srt: () => Promise<ApiResponse & { srtPath?: string; wavPath?: string }>;
   export_audio_text: () => Promise<ApiResponse & { path?: string }>;
+  export_final_video: (withSubtitles?: boolean) => Promise<ApiResponse & { message?: string }>;
+  cancel_export_final_video: () => Promise<ApiResponse>;
 
   // Reference Audio
   scan_reference_audios: (directory: string) => Promise<ApiResponse & { audios?: Array<{ path: string; name: string; relativePath: string }> }>;
@@ -449,6 +452,7 @@ export interface AppSettings {
   workDir: string;
   jianyingDraftDir: string;
   referenceAudioDir: string;  // 参考音频目录
+  ffmpegPath: string;  // ffmpeg 可执行文件路径
   tts: {
     apiUrl: string;
     model: string;

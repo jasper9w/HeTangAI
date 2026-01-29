@@ -2,7 +2,7 @@
  * SettingsPage - Application settings page
  */
 import { useState, useEffect, useCallback } from 'react';
-import { FolderOpen, Loader2, Mic, Image, Video, MessageSquare } from 'lucide-react';
+import { FolderOpen, Loader2, Mic, Image, Video, MessageSquare, Terminal } from 'lucide-react';
 import type { AppSettings } from '../types';
 
 interface SettingsPageProps {
@@ -15,6 +15,7 @@ const defaultSettings: AppSettings = {
   workDir: '',
   jianyingDraftDir: '',
   referenceAudioDir: '',
+  ffmpegPath: '',
   tts: { apiUrl: 'https://9u7acouw9j7q8f5o-6006.container.x-gpu.com/tts_url', model: 'indextts2', apiKey: '', concurrency: 1 },
   tti: { provider: 'openai', apiUrl: '', apiKey: '', characterModel: '', sceneModel: '', shotModel: '', whiskToken: '', whiskWorkflowId: '', whiskCookie: '', concurrency: 1 },
   ttv: { provider: 'openai', apiUrl: '', apiKey: '', model: '', whiskToken: '', whiskWorkflowId: '', concurrency: 1 },
@@ -142,19 +143,19 @@ export function SettingsPage({}: SettingsPageProps) {
     }
   };
 
-  const handleSelectReferenceAudioDir = async () => {
+  const handleSelectFfmpegPath = async () => {
     if (!window.pywebview?.api) return;
 
     try {
-      const result = await (window.pywebview.api as any).select_reference_audio_dir();
+      const result = await (window.pywebview.api as any).select_ffmpeg_path();
       if (result.success && result.path) {
         setSettings({
           ...settings,
-          referenceAudioDir: result.path,
+          ffmpegPath: result.path,
         });
       }
     } catch (error) {
-      console.error('Failed to select reference audio directory:', error);
+      console.error('Failed to select ffmpeg path:', error);
     }
   };
 
@@ -570,28 +571,6 @@ export function SettingsPage({}: SettingsPageProps) {
       )}
 
       <div className="space-y-6 max-w-4xl">
-        {/* Reference Audio Directory */}
-        <div className="bg-slate-800/80 backdrop-blur-sm rounded-lg p-4 border border-slate-700/50 shadow-lg shadow-black/20">
-          <h3 className="text-base font-medium text-slate-100 mb-3">参考音频目录</h3>
-          <p className="text-xs text-slate-500 mb-2">设置角色选择参考音频时使用的目录</p>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={settings.referenceAudioDir}
-              readOnly
-              placeholder="请选择参考音频目录..."
-              className="flex-1 px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500"
-            />
-            <button
-              onClick={handleSelectReferenceAudioDir}
-              className="flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-200 transition-colors"
-            >
-              <FolderOpen className="w-4 h-4" />
-              选择
-            </button>
-          </div>
-        </div>
-
         {/* JianYing Draft Directory */}
         <div className="bg-slate-800/80 backdrop-blur-sm rounded-lg p-4 border border-slate-700/50 shadow-lg shadow-black/20">
           <h3 className="text-base font-medium text-slate-100 mb-3">剪映草稿目录</h3>
@@ -608,6 +587,28 @@ export function SettingsPage({}: SettingsPageProps) {
               className="flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-200 transition-colors"
             >
               <FolderOpen className="w-4 h-4" />
+              选择
+            </button>
+          </div>
+        </div>
+
+        {/* FFmpeg Path */}
+        <div className="bg-slate-800/80 backdrop-blur-sm rounded-lg p-4 border border-slate-700/50 shadow-lg shadow-black/20">
+          <h3 className="text-base font-medium text-slate-100 mb-1">FFmpeg 路径</h3>
+          <p className="text-xs text-slate-400 mb-3">用于导出成片功能，留空则使用系统默认路径</p>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={settings.ffmpegPath}
+              readOnly
+              placeholder="留空使用系统默认 (ffmpeg)"
+              className="flex-1 px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500"
+            />
+            <button
+              onClick={handleSelectFfmpegPath}
+              className="flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-200 transition-colors"
+            >
+              <Terminal className="w-4 h-4" />
               选择
             </button>
           </div>

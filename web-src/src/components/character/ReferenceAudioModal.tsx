@@ -73,6 +73,7 @@ export function ReferenceAudioModal({
   const [customAudios, setCustomAudios] = useState<ReferenceAudio[]>([]);
   const [isLoadingCustom, setIsLoadingCustom] = useState(false);
   const [isLoadingSettings, setIsLoadingSettings] = useState(false);
+  const [isSelectingDir, setIsSelectingDir] = useState(false);
 
   // Selection state
   const [selectedAudio, setSelectedAudio] = useState<string | undefined>(currentAudioPath);
@@ -229,6 +230,24 @@ export function ReferenceAudioModal({
       console.error('Failed to load settings:', error);
     } finally {
       setIsLoadingSettings(false);
+    }
+  }, [loadCustomAudios]);
+
+  // Select reference audio directory
+  const handleSelectReferenceDir = useCallback(async () => {
+    if (!window.pywebview?.api) return;
+
+    setIsSelectingDir(true);
+    try {
+      const result = await window.pywebview.api.select_reference_audio_dir();
+      if (result.success && result.path) {
+        setReferenceDir(result.path);
+        await loadCustomAudios(result.path);
+      }
+    } catch (error) {
+      console.error('Failed to select reference audio directory:', error);
+    } finally {
+      setIsSelectingDir(false);
     }
   }, [loadCustomAudios]);
 

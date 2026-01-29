@@ -1,9 +1,10 @@
 /**
  * Export Dropdown - A dropdown menu for export operations
  */
-import { Film, FileAudio, FileText, ChevronDown } from 'lucide-react';
+import { Film, FileAudio, FileText, ChevronDown, Video, Subtitles } from 'lucide-react';
 
 interface ExportDropdownProps {
+  onExportFinalVideo: (withSubtitles: boolean) => void;
   onExportJianyingDraft: () => void;
   onExportAudioSrt: () => void;
   onExportAudioText: () => void;
@@ -11,6 +12,7 @@ interface ExportDropdownProps {
 }
 
 export function ExportDropdown({
+  onExportFinalVideo,
   onExportJianyingDraft,
   onExportAudioSrt,
   onExportAudioText,
@@ -30,7 +32,28 @@ export function ExportDropdown({
 
       {/* Dropdown menu */}
       {!disabled && (
-        <div className="absolute left-0 top-full mt-1 w-44 bg-slate-800 border border-slate-700 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-150 z-50">
+        <div className="absolute right-0 top-full mt-1 w-44 bg-slate-800 border border-slate-700 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-150 z-50">
+          {/* Export final video options */}
+          <div className="py-1">
+            <button
+              onClick={() => onExportFinalVideo(true)}
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-200 hover:bg-slate-700 transition-colors"
+            >
+              <Subtitles className="w-4 h-4 text-green-400" />
+              导出成片(含字幕)
+            </button>
+            <button
+              onClick={() => onExportFinalVideo(false)}
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-200 hover:bg-slate-700 transition-colors"
+            >
+              <Video className="w-4 h-4 text-green-400" />
+              导出成片(无字幕)
+            </button>
+          </div>
+
+          {/* Divider */}
+          <div className="border-t border-slate-700" />
+
           {/* Export JianYing draft */}
           <div className="py-1">
             <button

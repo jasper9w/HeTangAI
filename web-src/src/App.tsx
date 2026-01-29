@@ -29,6 +29,7 @@ import { ExportDropdown } from './components/ui/ExportDropdown';
 import { GenerateDropdown } from './components/ui/GenerateDropdown';
 import { StatusBar } from './components/ui/StatusBar';
 import { UpdateModal } from './components/ui/UpdateModal';
+import { ExportProgressModal, type ExportProgress } from './components/ui/ExportProgressModal';
 import type { ProjectData, Shot, PageType, ImportedCharacter } from './types';
 
 function App() {
@@ -60,6 +61,11 @@ function App() {
     total: number;
     type: 'image' | 'video' | 'audio';
   } | null>(null);
+
+  // Export state
+  const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [exportProgress, setExportProgress] = useState<ExportProgress | null>(null);
+  const [exportOutputPath, setExportOutputPath] = useState<string | undefined>(undefined);
 
   // Character modal state
   const [addCharacterModalOpen, setAddCharacterModalOpen] = useState(false);
@@ -254,11 +260,21 @@ function App() {
       });
     };
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).onExportProgress = (progress: ExportProgress) => {
+      setExportProgress(progress);
+      if (progress.stage === 'done') {
+        setExportOutputPath(progress.message);
+      }
+    };
+
     return () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       delete (window as any).onShotStatusChange;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       delete (window as any).onProgressIncrement;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      delete (window as any).onExportProgress;
     };
   }, []);
 
@@ -1031,6 +1047,52 @@ function App() {
     setBatchModalOpen(true);
   };
 
+  const handleExportFinalVideo = async (withSubtitles: boolean) => {
+    if (!api) return;
+
+    try {
+      // Reset state and open modal
+      setExportProgress(null);
+      setExportOutputPath(undefined);
+      setExportModalOpen(true);
+
+      const result = await api.export_final_video(withSubtitles);
+      if (!result.success) {
+        // If failed to start, show error in modal
+        setExportProgress({
+          stage: 'error',
+          current: 0,
+          total: 0,
+          message: result.error || 'Unknown error',
+        });
+      }
+      // Success just means export started - progress will come via onExportProgress callback
+    } catch (error) {
+      console.error('Failed to export final video:', error);
+      setExportProgress({
+        stage: 'error',
+        current: 0,
+        total: 0,
+        message: 'Failed to start export',
+      });
+    }
+  };
+
+  const handleCancelExport = async () => {
+    if (!api) return;
+    try {
+      await api.cancel_export_final_video();
+    } catch (error) {
+      console.error('Failed to cancel export:', error);
+    }
+  };
+
+  const handleCloseExportModal = () => {
+    setExportModalOpen(false);
+    setExportProgress(null);
+    setExportOutputPath(undefined);
+  };
+
   const handleExportJianyingDraft = async () => {
     if (!api) return;
 
@@ -1237,6 +1299,7 @@ function App() {
               generationProgress={generationProgress}
             />
             <ExportDropdown
+              onExportFinalVideo={handleExportFinalVideo}
               onExportJianyingDraft={handleExportJianyingDraft}
               onExportAudioSrt={handleExportAudioSrt}
               onExportAudioText={handleExportAudioText}
@@ -1586,6 +1649,15 @@ function App() {
         onClose={() => setUpdateModalOpen(false)}
         updateInfo={updateInfo}
         onDownload={handleOpenDownloadPage}
+      />
+
+      {/* Export Progress Modal */}
+      <ExportProgressModal
+        isOpen={exportModalOpen}
+        progress={exportProgress}
+        onCancel={handleCancelExport}
+        onClose={handleCloseExportModal}
+        outputPath={exportOutputPath}
       />
 
       {/* Shot Prefix Modal */}
