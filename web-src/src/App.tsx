@@ -173,12 +173,12 @@ function App() {
       const result = await api.check_for_updates();
       if (result.success) {
         setUpdateInfo({
-          hasUpdate: result.hasUpdate,
-          currentVersion: result.currentVersion,
-          latestVersion: result.latestVersion,
-          releaseNotes: result.releaseNotes,
-          downloadUrl: result.downloadUrl,
-          releaseUrl: result.releaseUrl,
+          hasUpdate: result.hasUpdate ?? false,
+          currentVersion: result.currentVersion ?? '',
+          latestVersion: result.latestVersion ?? '',
+          releaseNotes: result.releaseNotes ?? '',
+          downloadUrl: result.downloadUrl ?? '',
+          releaseUrl: result.releaseUrl ?? '',
         });
         setUpdateModalOpen(true);
       } else {

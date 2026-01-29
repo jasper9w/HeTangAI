@@ -325,6 +325,17 @@ export interface PyWebViewApi {
   generate_cover_image: () => Promise<ApiResponse & { imageUrl?: string }>;
   export_cover_image: () => Promise<ApiResponse & { path?: string }>;
   generate_style_preview: (prompt: string) => Promise<ApiResponse & { imageUrl?: string }>;
+
+  // Update
+  check_for_updates: () => Promise<ApiResponse & {
+    hasUpdate?: boolean;
+    currentVersion?: string;
+    latestVersion?: string;
+    releaseNotes?: string;
+    downloadUrl?: string;
+    releaseUrl?: string;
+  }>;
+  open_download_page: (url: string) => Promise<ApiResponse>;
 }
 
 // ========== Style Types ==========
