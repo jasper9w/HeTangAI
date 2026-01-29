@@ -11,12 +11,13 @@ interface StatusBarProps {
   version: string;
   onCheckUpdate: () => void;
   isCheckingUpdate: boolean;
+  hasUpdate: boolean; // 是否有新版本可用
 }
 
 // 检测操作系统
 const isMac = typeof navigator !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0;
 
-export function StatusBar({ isDirty, autoSaveInterval, onSave, version, onCheckUpdate, isCheckingUpdate }: StatusBarProps) {
+export function StatusBar({ isDirty, autoSaveInterval, onSave, version, onCheckUpdate, isCheckingUpdate, hasUpdate }: StatusBarProps) {
   const [countdown, setCountdown] = useState(autoSaveInterval);
   const dirtyStartRef = useRef<number | null>(null);
 
@@ -71,13 +72,17 @@ export function StatusBar({ isDirty, autoSaveInterval, onSave, version, onCheckU
         <button
           onClick={onCheckUpdate}
           disabled={isCheckingUpdate}
-          className="flex items-center gap-1 text-slate-500 hover:text-slate-300 transition-colors disabled:cursor-wait"
-          title="点击检查更新"
+          className={`flex items-center gap-1 transition-colors disabled:cursor-wait ${
+            hasUpdate 
+              ? 'text-amber-400 hover:text-amber-300 animate-pulse' 
+              : 'text-slate-500 hover:text-slate-300'
+          }`}
+          title={hasUpdate ? '有新版本可用，点击查看' : '点击检查更新'}
         >
           {isCheckingUpdate ? (
             <Loader2 className="w-3 h-3 animate-spin" />
           ) : null}
-          <span>v{version}</span>
+          <span>v{version}{hasUpdate ? ' (有更新)' : ''}</span>
         </button>
       </div>
 

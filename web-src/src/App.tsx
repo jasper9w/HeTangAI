@@ -1,7 +1,7 @@
 /**
  * AI Lens Creation Workshop - Main Application
  */
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Film,
   Plus,
@@ -76,6 +76,7 @@ function App() {
   const [appVersion, setAppVersion] = useState<string>('0.0.0');
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
   const [updateModalOpen, setUpdateModalOpen] = useState(false);
+  const [hasUpdate, setHasUpdate] = useState(false); // 是否有新版本
   const [updateInfo, setUpdateInfo] = useState<{
     hasUpdate: boolean;
     currentVersion: string;
@@ -165,31 +166,56 @@ function App() {
     });
   }, [api]);
 
-  // Check for updates
-  const handleCheckUpdate = useCallback(async () => {
-    if (!api || isCheckingUpdate) return;
+  // Check for updates (silent mode for auto-check, show modal for manual check)
+  const checkUpdate = useCallback(async (silent: boolean) => {
+    if (!api) return;
     setIsCheckingUpdate(true);
     try {
       const result = await api.check_for_updates();
       if (result.success) {
-        setUpdateInfo({
+        const updateData = {
           hasUpdate: result.hasUpdate ?? false,
           currentVersion: result.currentVersion ?? '',
           latestVersion: result.latestVersion ?? '',
           releaseNotes: result.releaseNotes ?? '',
           downloadUrl: result.downloadUrl ?? '',
           releaseUrl: result.releaseUrl ?? '',
-        });
-        setUpdateModalOpen(true);
-      } else {
+        };
+        setUpdateInfo(updateData);
+        setHasUpdate(updateData.hasUpdate);
+        // 只有手动检查时才显示弹窗
+        if (!silent) {
+          setUpdateModalOpen(true);
+        }
+      } else if (!silent) {
         showToast('error', result.error || '检查更新失败');
       }
     } catch {
-      showToast('error', '检查更新失败');
+      if (!silent) {
+        showToast('error', '检查更新失败');
+      }
     } finally {
       setIsCheckingUpdate(false);
     }
-  }, [api, isCheckingUpdate, showToast]);
+  }, [api, showToast]);
+
+  // Manual check for updates (shows modal)
+  const handleCheckUpdate = useCallback(() => {
+    if (isCheckingUpdate) return;
+    checkUpdate(false);
+  }, [checkUpdate, isCheckingUpdate]);
+
+  // Auto check for updates on startup (silent, only once)
+  const hasCheckedUpdate = useRef(false);
+  useEffect(() => {
+    if (!api || hasCheckedUpdate.current) return;
+    hasCheckedUpdate.current = true;
+    // 延迟2秒检查，避免影响启动速度
+    const timer = setTimeout(() => {
+      checkUpdate(true);
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [api, checkUpdate]);
 
   // Open download page
   const handleOpenDownloadPage = useCallback(async (url: string) => {
@@ -1550,6 +1576,7 @@ function App() {
           version={appVersion}
           onCheckUpdate={handleCheckUpdate}
           isCheckingUpdate={isCheckingUpdate}
+          hasUpdate={hasUpdate}
         />
       )}
 
