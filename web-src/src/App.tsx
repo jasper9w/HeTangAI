@@ -3,15 +3,12 @@
  */
 import { useState, useEffect, useCallback } from 'react';
 import {
-  Save,
   Film,
   Plus,
   Loader2,
   ArrowLeft,
   FileUp,
   Image,
-  Video,
-  Mic,
   Sparkles,
   Type,
 } from 'lucide-react';
@@ -29,6 +26,8 @@ import { SettingsPage } from './pages/SettingsPage';
 import { Toast, type ToastMessage } from './components/ui/Toast';
 import { ImportDropdown } from './components/ui/ImportDropdown';
 import { ExportDropdown } from './components/ui/ExportDropdown';
+import { GenerateDropdown } from './components/ui/GenerateDropdown';
+import { StatusBar } from './components/ui/StatusBar';
 import type { ProjectData, Shot, PageType, ImportedCharacter } from './types';
 
 function App() {
@@ -1147,7 +1146,6 @@ function App() {
     switch (currentPage) {
       case 'shots': {
         const selectedShots = (project?.shots || []).filter(s => selectedShotIds.includes(s.id));
-        const hasSelection = selectedShots.length > 0;
 
         return (
           <div className="flex items-center gap-2">
@@ -1158,70 +1156,19 @@ function App() {
               onImportJsonl={handleImportJsonl}
               onExportJsonlTemplate={handleExportJsonlTemplate}
             />
-            <button
-              onClick={() => {
+            <GenerateDropdown
+              onAddPrefix={() => {
                 setShotImagePrefix(project?.promptPrefixes?.shotImagePrefix || '');
                 setShotVideoPrefix(project?.promptPrefixes?.shotVideoPrefix || '');
                 setShotPrefixModalOpen(true);
               }}
-              className="flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-200 transition-colors"
-            >
-              <Type className="w-4 h-4" />
-              添加前缀
-            </button>
-            <div className="w-px h-6 bg-slate-700 mx-2" />
-            <button
-              onClick={handleBatchGenerateAudios}
-              disabled={isGenerating || !hasSelection}
-              className="flex items-center gap-2 px-3 py-2 bg-orange-600 hover:bg-orange-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm text-white transition-colors"
-            >
-              {isGenerating && generationProgress?.type === 'audio' ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  {generationProgress.current}/{generationProgress.total}
-                </>
-              ) : (
-                <>
-                  <Mic className="w-4 h-4" />
-                  批量配音 ({selectedShots.length})
-                </>
-              )}
-            </button>
-            <button
-              onClick={handleBatchGenerateImages}
-              disabled={isGenerating || !hasSelection}
-              className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-500 hover:to-teal-400 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm text-white transition-colors"
-            >
-              {isGenerating && generationProgress?.type === 'image' ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  {generationProgress.current}/{generationProgress.total}
-                </>
-              ) : (
-                <>
-                  <Image className="w-4 h-4" />
-                  批量生图 ({selectedShots.length})
-                </>
-              )}
-            </button>
-            <button
-              onClick={handleBatchGenerateVideos}
-              disabled={isGenerating || !hasSelection}
-              className="flex items-center gap-2 px-3 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm text-white transition-colors"
-            >
-              {isGenerating && generationProgress?.type === 'video' ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  {generationProgress.current}/{generationProgress.total}
-                </>
-              ) : (
-                <>
-                  <Video className="w-4 h-4" />
-                  批量生视频 ({selectedShots.length})
-                </>
-              )}
-            </button>
-            <div className="w-px h-6 bg-slate-700 mx-2" />
+              onBatchAudio={handleBatchGenerateAudios}
+              onBatchImage={handleBatchGenerateImages}
+              onBatchVideo={handleBatchGenerateVideos}
+              selectedCount={selectedShots.length}
+              isGenerating={isGenerating}
+              generationProgress={generationProgress}
+            />
             <ExportDropdown
               onExportJianyingDraft={handleExportJianyingDraft}
               onExportAudioSrt={handleExportAudioSrt}
