@@ -19,23 +19,43 @@ from loguru import logger
 
 from services.project_manager import ProjectManager
 
+import numpy as np
+from audiotsm import wsola
+from audiotsm.io.array import ArrayReader, ArrayWriter
+
 
 def change_audio_speed(audio, speed: float):
     """
-    调整音频速度
+    使用 WSOLA 算法调整音频速度（变速不变调）
     Args:
         audio: pydub AudioSegment 对象
         speed: 速度倍率，> 1 加快，< 1 减慢
     Returns:
         调整后的 AudioSegment 对象
-    注意: 此方法通过改变帧率实现变速，会导致轻微音调变化
     """
     if speed == 1.0:
         return audio
-    new_frame_rate = int(audio.frame_rate * speed)
-    return audio._spawn(audio.raw_data, overrides={
-        "frame_rate": new_frame_rate
-    }).set_frame_rate(audio.frame_rate)
+
+    # 转换为 numpy 数组
+    samples = np.array(audio.get_array_of_samples())
+    if audio.channels == 2:
+        samples = samples.reshape((-1, 2)).T
+    else:
+        samples = samples.reshape((1, -1))
+
+    # WSOLA 时域拉伸
+    reader = ArrayReader(samples.astype(np.float32) / 32768.0)
+    writer = ArrayWriter(channels=audio.channels)
+    wsola(channels=audio.channels, speed=speed).run(reader, writer)
+
+    # 转回 AudioSegment
+    output = (writer.data * 32768).astype(np.int16)
+    if audio.channels == 2:
+        output = output.T.flatten()
+    else:
+        output = output.flatten()
+
+    return audio._spawn(output.tobytes())
 
 
 class Api:
@@ -2862,9 +2882,15 @@ class Api:
                         if not reference_audio:
                             raise ValueError(f"No reference audio found for character: {role}")
 
-                        # Get emotion and intensity
-                        emotion = shot.get("emotion", "")
-                        intensity = shot.get("intensity", "")
+                        # Handle preset audio path (format: preset:relative_path)
+                        if reference_audio.startswith("preset:"):
+                            relative_path = reference_audio[7:]  # Remove "preset:" prefix
+                            reference_audio = str(Path(__file__).parent / "assets" / "audios" / relative_path)
+                            logger.info(f"Resolved preset audio path: {reference_audio}")
+
+                        # Get emotion and intensity from dialogue level, fallback to shot level
+                        emotion = dialogue.get("emotion", shot.get("emotion", ""))
+                        intensity = dialogue.get("intensity", shot.get("intensity", ""))
 
                         # Generate audio for this dialogue
                         logger.info(f"Generating audio for dialogue {idx + 1}/{len(dialogues)}: {role}")

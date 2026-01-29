@@ -17,4 +17,6 @@ dependencies = [
     "openai>=2.15.0",
     "dotenv>=0.9.9",
     "pyinstaller>=6.18.0",
+    "audiotsm>=0.1.2",
+    "numpy>=2.4.1",
 ]
