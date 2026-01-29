@@ -102,17 +102,17 @@ interface ShotTableProps {
 
 // 情感选项
 const EMOTION_OPTIONS = [
-  { value: '', label: '-' },
-  { value: '开心', label: '开心' },
-  { value: '悲伤', label: '悲伤' },
-  { value: '愤怒', label: '愤怒' },
-  { value: '惊讶', label: '惊讶' },
-  { value: '恐惧', label: '恐惧' },
-  { value: '厌恶', label: '厌恶' },
-  { value: '平静', label: '平静' },
+  { value: '', label: '-', full: '无' },
+  { value: '开心', label: '喜', full: '开心' },
+  { value: '悲伤', label: '悲', full: '悲伤' },
+  { value: '愤怒', label: '怒', full: '愤怒' },
+  { value: '惊讶', label: '惊', full: '惊讶' },
+  { value: '恐惧', label: '惧', full: '恐惧' },
+  { value: '厌恶', label: '厌', full: '厌恶' },
+  { value: '平静', label: '静', full: '平静' },
 ];
 
-// 强度选项
+// 强度选项 (0.1-1.0, 10档)
 const INTENSITY_OPTIONS = [
   { value: '0.0', label: '0.0' },
   { value: '0.1', label: '0.1' },
@@ -120,7 +120,50 @@ const INTENSITY_OPTIONS = [
   { value: '0.3', label: '0.3' },
   { value: '0.4', label: '0.4' },
   { value: '0.5', label: '0.5' },
+  { value: '0.6', label: '0.6' },
+  { value: '0.7', label: '0.7' },
+  { value: '0.8', label: '0.8' },
+  { value: '0.9', label: '0.9' },
 ];
+
+// Hover 选择器组件
+interface HoverSelectProps {
+  value: string;
+  onChange: (value: string) => void;
+  options: { value: string; label: string; full?: string }[];
+  title?: string;
+  className?: string;
+}
+
+function HoverSelect({ value, onChange, options, title, className = '' }: HoverSelectProps) {
+  const currentOption = options.find(opt => opt.value === value) || options[0];
+
+  return (
+    <div className={`relative group ${className}`} title={title}>
+      <div className="px-1.5 py-0.5 text-[11px] bg-slate-700/80 group-hover:bg-slate-600 border border-slate-600 rounded text-slate-200 transition-colors text-center cursor-default">
+        {currentOption?.full || currentOption?.label || '-'}
+      </div>
+      <div className="absolute z-50 top-full left-0 mt-0.5 bg-slate-800 border border-slate-600 rounded shadow-lg min-w-max opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-150">
+        <div className="grid grid-cols-2 gap-0.5 p-1">
+          {options.map(opt => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => onChange(opt.value)}
+              className={`px-1.5 py-0.5 text-[11px] rounded transition-colors ${
+                opt.value === value
+                  ? 'bg-teal-600 text-white'
+                  : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+              }`}
+            >
+              {opt.full || opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function ShotTable({
   shots,
@@ -405,7 +448,7 @@ export function ShotTable({
           </div>
 
           {/* 情感列 */}
-          <div className="w-36 flex-shrink-0">
+          <div className="w-32 flex-shrink-0">
             <div className="text-xs font-medium text-slate-400">情感</div>
           </div>
 
@@ -1097,51 +1140,43 @@ function ShotRow({
           </div>
         </div>
 
-        {/* 情感列 - 每行对话一个设置 */}
-        <div className="w-36 flex-shrink-0 h-[180px] overflow-y-auto">
+        {/* 情感列 - 自定义选择器 */}
+        <div className="w-32 flex-shrink-0 h-[180px] overflow-y-auto overflow-x-visible">
           {shot.dialogues && shot.dialogues.length > 0 ? (
-            <div className="space-y-1">
+            <div className="space-y-1 pr-1">
               {shot.dialogues.map((dialogue, idx) => (
                 <div key={idx} className="flex flex-col gap-0.5 py-1 border-b border-slate-700/30 last:border-b-0">
-                  <div className="text-[10px] text-slate-400 truncate" title={dialogue.role}>
-                    {dialogue.role || '未知'}
-                  </div>
-                  <div className="flex gap-1">
-                    <select
+                  <div className="text-[10px] text-slate-500 truncate">{dialogue.role || '-'}</div>
+                  <div className="flex items-center gap-1">
+                    <HoverSelect
                       value={dialogue.emotion || ''}
-                      onChange={(e) => {
+                      onChange={(value) => {
                         const newDialogues = [...shot.dialogues!];
-                        newDialogues[idx] = { ...newDialogues[idx], emotion: e.target.value };
+                        newDialogues[idx] = { ...newDialogues[idx], emotion: value };
                         onUpdateField('dialogues', newDialogues);
                       }}
-                      className="flex-1 min-w-0 px-1 py-0.5 text-[10px] bg-slate-700 border border-slate-600 rounded text-slate-200 focus:outline-none focus:border-teal-500"
-                      title="情感类型"
-                    >
-                      {EMOTION_OPTIONS.map(opt => (
-                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                      ))}
-                    </select>
-                    <select
+                      options={EMOTION_OPTIONS}
+                      title={`${dialogue.role || '未知'} - 情感`}
+                      className="w-10"
+                    />
+                    <HoverSelect
                       value={dialogue.intensity || '0.3'}
-                      onChange={(e) => {
+                      onChange={(value) => {
                         const newDialogues = [...shot.dialogues!];
-                        newDialogues[idx] = { ...newDialogues[idx], intensity: e.target.value };
+                        newDialogues[idx] = { ...newDialogues[idx], intensity: value };
                         onUpdateField('dialogues', newDialogues);
                       }}
-                      className="w-12 px-1 py-0.5 text-[10px] bg-slate-700 border border-slate-600 rounded text-slate-200 focus:outline-none focus:border-teal-500"
-                      title="情感强度"
-                    >
-                      {INTENSITY_OPTIONS.map(opt => (
-                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                      ))}
-                    </select>
+                      options={INTENSITY_OPTIONS}
+                      title={`${dialogue.role || '未知'} - 强度`}
+                      className="w-8"
+                    />
                   </div>
                 </div>
               ))}
             </div>
           ) : (
             <div className="h-full flex items-center justify-center text-slate-500 text-[10px]">
-              暂无对话
+              -
             </div>
           )}
         </div>
