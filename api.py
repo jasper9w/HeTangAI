@@ -8,16 +8,19 @@ import random
 import string
 import sys
 import uuid
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from threading import Semaphore
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, List, Dict
 
 import webview
 from loguru import logger
 
 from services.project_manager import ProjectManager
+from tasks import TaskManager
+from tasks.executor import ImageExecutor, VideoExecutor, AudioExecutor
 
 import numpy as np
 from audiotsm import wsola
@@ -106,12 +109,429 @@ class Api:
         # Shot builder task state
         self._shot_builder_task: Optional[dict] = None  # {"step": str, "running": bool, "error": str|None}
 
+        # Task system (initialized when project is opened)
+        self._task_manager: Optional[TaskManager] = None
+        self._task_executors: List[Any] = []
+        self._task_executor_threads: List[threading.Thread] = []
+        
+        # Task monitor thread
+        self._task_monitor_running = False
+        self._task_monitor_thread: Optional[threading.Thread] = None
+
         logger.info("API initialized")
 
     def _generate_shot_id(self) -> str:
         """Generate a 6-character random ID for shot"""
         chars = string.ascii_lowercase + string.digits
         return ''.join(random.choices(chars, k=6))
+
+    # ========== Task System Methods ==========
+
+    def _start_task_executors(self, project_name: str):
+        """Start task executors for the current project"""
+        # Stop existing executors first
+        self._stop_task_executors()
+
+        # Get project directory and create tasks.db path
+        project_dir = self._project_manager.get_project_dir(project_name)
+        db_path = str(project_dir / "tasks.db")
+
+        # Initialize TaskManager
+        self._task_manager = TaskManager(db_path)
+
+        # Get API configurations
+        settings = self._load_settings()
+        tti_config = settings.get("tti", {})
+        ttv_config = settings.get("ttv", {})
+        tts_config = settings.get("tts", {})
+
+        # Get concurrency settings
+        tti_concurrency = tti_config.get("concurrency", 1)
+        ttv_concurrency = ttv_config.get("concurrency", 1)
+        tts_concurrency = tts_config.get("concurrency", 1)
+
+        # Start image executors
+        if tti_config.get("apiUrl") and tti_config.get("apiKey"):
+            for i in range(tti_concurrency):
+                executor = ImageExecutor(
+                    db_path=db_path,
+                    api_url=tti_config["apiUrl"],
+                    api_key=tti_config["apiKey"],
+                    model=tti_config.get("model", ""),
+                    worker_id=f"image-{i}"
+                )
+                thread = threading.Thread(
+                    target=executor.run_loop,
+                    daemon=True,
+                    name=f"ImageExecutor-{i}"
+                )
+                thread.start()
+                self._task_executors.append(executor)
+                self._task_executor_threads.append(thread)
+            logger.info(f"Started {tti_concurrency} image executor(s)")
+
+        # Start video executors
+        if ttv_config.get("apiUrl") and ttv_config.get("apiKey"):
+            for i in range(ttv_concurrency):
+                executor = VideoExecutor(
+                    db_path=db_path,
+                    api_url=ttv_config["apiUrl"],
+                    api_key=ttv_config["apiKey"],
+                    model=ttv_config.get("model", ""),
+                    worker_id=f"video-{i}"
+                )
+                thread = threading.Thread(
+                    target=executor.run_loop,
+                    daemon=True,
+                    name=f"VideoExecutor-{i}"
+                )
+                thread.start()
+                self._task_executors.append(executor)
+                self._task_executor_threads.append(thread)
+            logger.info(f"Started {ttv_concurrency} video executor(s)")
+
+        # Start audio executors
+        if tts_config.get("apiUrl"):
+            for i in range(tts_concurrency):
+                executor = AudioExecutor(
+                    db_path=db_path,
+                    api_url=tts_config["apiUrl"],
+                    api_key=tts_config.get("apiKey", ""),
+                    model=tts_config.get("model", ""),
+                    worker_id=f"audio-{i}"
+                )
+                thread = threading.Thread(
+                    target=executor.run_loop,
+                    daemon=True,
+                    name=f"AudioExecutor-{i}"
+                )
+                thread.start()
+                self._task_executors.append(executor)
+                self._task_executor_threads.append(thread)
+            logger.info(f"Started {tts_concurrency} audio executor(s)")
+
+        # Start task monitor thread
+        self._task_monitor_running = True
+        self._task_monitor_thread = threading.Thread(
+            target=self._task_monitor_loop,
+            daemon=True,
+            name="TaskMonitor"
+        )
+        self._task_monitor_thread.start()
+        logger.info("Task monitor started")
+
+        logger.info(f"Task executors started for project: {project_name}")
+
+    def _stop_task_executors(self):
+        """Stop all task executors"""
+        # Stop task monitor
+        self._task_monitor_running = False
+        if self._task_monitor_thread:
+            self._task_monitor_thread.join(timeout=2.0)
+            self._task_monitor_thread = None
+        
+        # Signal all executors to stop
+        for executor in self._task_executors:
+            executor.stop()
+
+        # Wait for threads to finish (with timeout)
+        for thread in self._task_executor_threads:
+            thread.join(timeout=2.0)
+
+        # Clear lists
+        self._task_executors.clear()
+        self._task_executor_threads.clear()
+
+        # Close TaskManager
+        if self._task_manager:
+            self._task_manager.close()
+            self._task_manager = None
+
+        logger.info("Task executors stopped")
+
+    def _task_monitor_loop(self):
+        """后台监控线程：检查已完成/失败任务并回写业务数据"""
+        import time
+        
+        while self._task_monitor_running:
+            try:
+                if not self._task_manager or not self.project_data:
+                    time.sleep(2)
+                    continue
+                
+                # 获取未处理的已完成任务
+                completed_tasks = self._task_manager.get_unprocessed_completed_tasks()
+                
+                for task_data in completed_tasks:
+                    try:
+                        task_type = task_data.get('task_type')
+                        task_id = task_data.get('id')
+                        shot_id = task_data.get('shot_id')
+                        
+                        if not shot_id:
+                            # 标记为已处理（没有关联 shot）
+                            self._task_manager.mark_task_processed(task_type, task_id)
+                            continue
+                        
+                        # 找到对应的 shot
+                        shot = None
+                        for s in self.project_data.get("shots", []):
+                            if s["id"] == shot_id:
+                                shot = s
+                                break
+                        
+                        if not shot:
+                            logger.warning(f"Shot not found for task {task_id}: {shot_id}")
+                            self._task_manager.mark_task_processed(task_type, task_id)
+                            continue
+                        
+                        # 根据任务类型处理回写
+                        if task_type == 'image':
+                            self._handle_completed_image_task(task_data, shot)
+                        elif task_type == 'video':
+                            self._handle_completed_video_task(task_data, shot)
+                        elif task_type == 'audio':
+                            self._handle_completed_audio_task(task_data, shot)
+                        
+                        # 标记任务为已处理
+                        self._task_manager.mark_task_processed(task_type, task_id)
+                        
+                    except Exception as e:
+                        logger.error(f"Failed to process completed task: {e}")
+                
+                # 获取未处理的失败任务
+                failed_tasks = self._task_manager.get_unprocessed_failed_tasks()
+                if failed_tasks:
+                    logger.info(f"Found {len(failed_tasks)} unprocessed failed tasks")
+                
+                for task_data in failed_tasks:
+                    try:
+                        task_type = task_data.get('task_type')
+                        task_id = task_data.get('id')
+                        shot_id = task_data.get('shot_id')
+                        error_msg = task_data.get('error', 'Unknown error')
+                        
+                        logger.info(f"Processing failed task: {task_type}:{task_id}, shot_id={shot_id}")
+                        
+                        if not shot_id:
+                            logger.info(f"No shot_id for task {task_id}, marking as processed")
+                            self._task_manager.mark_task_processed(task_type, task_id)
+                            continue
+                        
+                        # 找到对应的 shot
+                        shot = None
+                        for s in self.project_data.get("shots", []):
+                            if s["id"] == shot_id:
+                                shot = s
+                                break
+                        
+                        if not shot:
+                            logger.warning(f"Shot not found for failed task {task_id}: {shot_id}")
+                            self._task_manager.mark_task_processed(task_type, task_id)
+                            continue
+                        
+                        # 更新镜头状态为错误
+                        shot["status"] = "error"
+                        shot["errorMessage"] = error_msg
+                        
+                        # 通知前端
+                        self._notify_shot_status(shot_id, "error", shot)
+                        logger.info(f"Updated shot {shot_id} status to error: {error_msg}")
+                        
+                        # 标记任务为已处理
+                        self._task_manager.mark_task_processed(task_type, task_id)
+                        
+                    except Exception as e:
+                        logger.error(f"Failed to process failed task: {e}")
+                
+            except Exception as e:
+                logger.error(f"Task monitor error: {e}")
+            
+            time.sleep(2)
+    
+    def _handle_completed_image_task(self, task_data: dict, shot: dict):
+        """处理已完成的图片任务，更新 shot 数据"""
+        result_local_path = task_data.get('result_local_path')
+        result_url = task_data.get('result_url')
+        slot = task_data.get('slot', 1)
+        shot_id = shot["id"]
+        
+        if not result_local_path or not Path(result_local_path).exists():
+            logger.warning(f"Image result not found: {result_local_path}")
+            return
+        
+        # 复制到正确的槽位路径
+        target_path = self._project_manager.get_shot_image_path(self.project_name, shot_id, slot)
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # 如果结果文件和目标路径不同，复制文件
+        if str(result_local_path) != str(target_path):
+            import shutil
+            shutil.copy2(result_local_path, target_path)
+        
+        # 更新 shot 数据
+        existing_images = shot.get("images", [])
+        existing_local_paths = shot.get("_localImagePaths", [])
+        existing_source_urls = shot.get("imageSourceUrls", [])
+        
+        # 确保列表长度足够
+        while len(existing_images) < 4:
+            existing_images.append("")
+        while len(existing_local_paths) < 4:
+            existing_local_paths.append("")
+        while len(existing_source_urls) < 4:
+            existing_source_urls.append("")
+        
+        # 更新槽位数据
+        idx = slot - 1
+        existing_images[idx] = self._path_to_url(str(target_path))
+        existing_local_paths[idx] = str(target_path)
+        existing_source_urls[idx] = result_url or ""
+        
+        # 过滤空值
+        shot["images"] = [img for img in existing_images if img]
+        shot["_localImagePaths"] = [p for p in existing_local_paths if p]
+        shot["imageSourceUrls"] = [url for url in existing_source_urls if url or url == ""][:len(shot["images"])]
+        
+        # 选中新生成的图片
+        shot["selectedImageIndex"] = min(idx, len(shot["images"]) - 1)
+        shot["status"] = "images_ready"
+        
+        # 通知前端
+        self._notify_shot_status(shot_id, "images_ready", shot)
+        logger.info(f"Updated shot {shot_id} with new image at slot {slot}")
+    
+    def _handle_completed_video_task(self, task_data: dict, shot: dict):
+        """处理已完成的视频任务，更新 shot 数据"""
+        result_local_path = task_data.get('result_local_path')
+        result_url = task_data.get('result_url')
+        shot_id = shot["id"]
+        
+        if not result_local_path or not Path(result_local_path).exists():
+            logger.warning(f"Video result not found: {result_local_path}")
+            return
+        
+        # 确定目标槽位
+        existing_slots = []
+        for slot in range(1, 5):
+            slot_path = self._project_manager.get_shot_video_path(self.project_name, shot_id, slot)
+            if slot_path.exists():
+                existing_slots.append((slot, slot_path.stat().st_mtime))
+        existing_slots.sort(key=lambda x: x[1])
+        
+        if len(existing_slots) < 4:
+            occupied = {slot for slot, _ in existing_slots}
+            for slot in range(1, 5):
+                if slot not in occupied:
+                    target_slot = slot
+                    break
+        else:
+            target_slot = existing_slots[0][0]
+        
+        # 复制到目标路径
+        target_path = self._project_manager.get_shot_video_path(self.project_name, shot_id, target_slot)
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        if str(result_local_path) != str(target_path):
+            import shutil
+            shutil.copy2(result_local_path, target_path)
+        
+        # 重新扫描所有视频槽位
+        all_videos = []
+        for slot in range(1, 5):
+            slot_path = self._project_manager.get_shot_video_path(self.project_name, shot_id, slot)
+            if slot_path.exists():
+                all_videos.append(self._path_to_url(str(slot_path)))
+        
+        shot["videos"] = all_videos
+        shot["videoUrl"] = all_videos[0] if all_videos else ""
+        shot["selectedVideoIndex"] = len(all_videos) - 1
+        shot["status"] = "video_ready"
+        
+        # 通知前端
+        self._notify_shot_status(shot_id, "video_ready", shot)
+        logger.info(f"Updated shot {shot_id} with new video")
+    
+    def _handle_completed_audio_task(self, task_data: dict, shot: dict):
+        """处理已完成的音频任务，检查是否所有对话都完成，然后合并"""
+        shot_id = shot["id"]
+        dialogue_index = task_data.get('dialogue_index', 0)
+        result_local_path = task_data.get('result_local_path')
+        
+        if not result_local_path or not Path(result_local_path).exists():
+            logger.warning(f"Audio result not found: {result_local_path}")
+            return
+        
+        # 获取镜头的对话数量
+        dialogues = shot.get("dialogues", [])
+        if not dialogues and shot.get("script"):
+            dialogues = [{"role": shot.get("voiceActor", ""), "text": shot["script"]}]
+        
+        total_dialogues = len(dialogues)
+        
+        # 检查是否所有对话任务都已完成
+        from tasks.models import AudioTask, TaskStatus
+        
+        completed_dialogue_tasks = (
+            AudioTask.select()
+            .where(
+                (AudioTask.shot_id == shot_id) &
+                (AudioTask.status == TaskStatus.SUCCESS.value)
+            )
+        )
+        
+        completed_indices = set()
+        dialogue_results = {}
+        for task in completed_dialogue_tasks:
+            if task.dialogue_index is not None:
+                completed_indices.add(task.dialogue_index)
+                dialogue_results[task.dialogue_index] = task.result_local_path
+        
+        # 如果不是所有对话都完成，等待
+        if len(completed_indices) < total_dialogues:
+            logger.debug(f"Shot {shot_id}: {len(completed_indices)}/{total_dialogues} dialogues completed")
+            return
+        
+        # 所有对话都完成，合并音频
+        try:
+            from pydub import AudioSegment
+            
+            audio_segments = []
+            for idx in range(total_dialogues):
+                path = dialogue_results.get(idx)
+                if path and Path(path).exists():
+                    segment = AudioSegment.from_file(path)
+                    audio_segments.append(segment)
+                    
+                    # 添加 300ms 间隔
+                    if idx < total_dialogues - 1:
+                        silence = AudioSegment.silent(duration=300)
+                        audio_segments.append(silence)
+            
+            if not audio_segments:
+                logger.warning(f"No audio segments to combine for shot {shot_id}")
+                return
+            
+            # 合并
+            combined = audio_segments[0]
+            for segment in audio_segments[1:]:
+                combined += segment
+            
+            # 保存
+            final_path = self._project_manager.get_shot_audio_path(self.project_name, shot_id)
+            final_path.parent.mkdir(parents=True, exist_ok=True)
+            combined.export(str(final_path), format="wav")
+            
+            # 更新 shot
+            shot["audioUrl"] = self._path_to_url(str(final_path))
+            shot["status"] = "audio_ready"
+            
+            # 通知前端
+            self._notify_shot_status(shot_id, "audio_ready", shot)
+            logger.info(f"Combined audio for shot {shot_id} with {total_dialogues} dialogues")
+            
+        except Exception as e:
+            logger.error(f"Failed to combine audio for shot {shot_id}: {e}")
 
     def _generate_scene_id(self) -> str:
         """Generate a short random ID for scene"""
@@ -491,6 +911,12 @@ class Api:
                         shot["audioUrl"] = self._path_to_url(str(audio_path))
                     else:
                         shot["audioUrl"] = ""
+
+                # Start task executors for this project
+                try:
+                    self._start_task_executors(project_name)
+                except Exception as e:
+                    logger.warning(f"Failed to start task executors: {e}")
 
                 logger.info(f"Opened project from workdir: {project_name}")
                 return {"success": True, "data": self.project_data, "name": project_name}
@@ -2586,29 +3012,230 @@ class Api:
             self._notify_progress()
             return result
 
+    def _prepare_image_task_params(self, shot: dict) -> dict:
+        """
+        准备图片生成任务的参数
+        
+        Args:
+            shot: 镜头数据
+        
+        Returns:
+            任务参数字典，包含 subtype, prompt, reference_images, output_dir, aspect_ratio, provider, slot
+        """
+        from services.generator import compress_image_if_needed
+        
+        # 获取设置
+        settings = self._load_settings()
+        tti_config = settings.get("tti", {})
+        provider = tti_config.get("provider", "openai")
+        
+        # 宽高比
+        settings_data = self.project_data.get("settings", self._get_default_project_settings())
+        creation_params = settings_data.get("creationParams", {})
+        aspect_ratio = creation_params.get("aspectRatio", "16:9")
+        
+        # 获取角色引用（从 imagePrompt 提取角色名）
+        image_prompt = shot.get("imagePrompt", "")
+        all_character_names = [c["name"] for c in self.project_data.get("characters", []) if c.get("name")]
+        shot_characters = [name for name in all_character_names if name and name in image_prompt]
+        
+        # 构建提示词
+        base_prompt = shot.get("imagePrompt", "")
+        prefix_config = (self.project_data or {}).get("promptPrefixes", {})
+        shot_image_prefix = str(prefix_config.get("shotImagePrefix", "")).strip()
+        
+        # 获取风格信息
+        style_info = self._get_style_info()
+        style_text = style_info.get("text", "")
+        style_image_path = style_info.get("imagePath")
+        
+        # 构建完整提示词
+        prompt_parts = []
+        if shot_image_prefix:
+            prompt_parts.append(shot_image_prefix)
+        prompt_parts.append(base_prompt)
+        if style_text:
+            prompt_parts.append(f"\n\n画面风格：{style_text}")
+        prompt_with_prefix = " ".join(prompt_parts[:2]) + (prompt_parts[2] if len(prompt_parts) > 2 else "")
+        
+        # 解析场景引用
+        scene_name = str(shot.get("scene", "")).strip()
+        matched_scene = None
+        if scene_name:
+            for scene in self.project_data.get("scenes", []):
+                if scene.get("name") == scene_name:
+                    matched_scene = scene
+                    break
+        
+        # 确定槽位
+        current_shot_id = shot["id"]
+        existing_slots = []
+        for slot in range(1, 5):
+            slot_path = self._project_manager.get_shot_image_path(self.project_name, current_shot_id, slot)
+            if slot_path.exists():
+                existing_slots.append((slot, slot_path.stat().st_mtime))
+        existing_slots.sort(key=lambda x: x[1])
+        
+        # 确定要使用的槽位（找一个空槽位或最老的槽位）
+        if len(existing_slots) < 4:
+            occupied = {slot for slot, _ in existing_slots}
+            for slot in range(1, 5):
+                if slot not in occupied:
+                    target_slot = slot
+                    break
+        else:
+            target_slot = existing_slots[0][0]  # 使用最老的槽位
+        
+        # 收集参考图路径（OpenAI 兼容模式）
+        reference_paths = []
+        character_references = []
+        
+        if provider != "whisk":  # OpenAI 兼容模式
+            # 角色参考图
+            for char_name in shot_characters:
+                for char in self.project_data.get("characters", []):
+                    if char["name"] == char_name and char.get("imageUrl"):
+                        image_url = char["imageUrl"]
+                        if "?t=" in image_url:
+                            image_url = image_url.split("?t=")[0]
+                        
+                        if image_url.startswith(f"http://127.0.0.1:{self._file_server_port}/"):
+                            local_path = image_url.replace(f"http://127.0.0.1:{self._file_server_port}/", "")
+                            if not local_path.startswith("/"):
+                                local_path = str(Path.cwd() / local_path)
+                            if Path(local_path).exists():
+                                reference_paths.append(local_path)
+                                character_references.append(char_name)
+                        break
+            
+            # 场景参考图
+            if matched_scene:
+                scene_image_url = matched_scene.get("imageUrl", "")
+                if scene_image_url.startswith(f"http://127.0.0.1:{self._file_server_port}/"):
+                    local_path = scene_image_url.replace(f"http://127.0.0.1:{self._file_server_port}/", "")
+                    if not local_path.startswith("/"):
+                        local_path = str(Path.cwd() / local_path)
+                    if Path(local_path).exists():
+                        reference_paths.append(local_path)
+            
+            # 风格参考图
+            if style_image_path and Path(style_image_path).exists():
+                reference_paths.append(style_image_path)
+        
+        # 增强提示词（如果有角色参考）
+        if character_references:
+            character_descriptions = [f"第{i}张图：{name}" for i, name in enumerate(character_references, 1)]
+            character_info = "、".join(character_descriptions)
+            prompt_with_prefix = f"""基于提供的角色参考图，生成以下场景：
+
+{prompt_with_prefix}
+
+参考图说明：
+{character_info}
+
+要求：
+- 严格按照参考图中对应角色的外观、服装、特征进行绘制
+- 保持每个角色的一致性和辨识度
+- 场景构图要符合镜头描述的要求
+- 画质要求：电影级别的超高清画质，细节丰富精细
+- 如果场景中涉及多个角色，请确保每个角色都按照对应的参考图进行绘制"""
+        
+        # 确定子类型
+        subtype = "image2image" if reference_paths else "text2image"
+        
+        # 输出目录
+        output_dir = str(self._project_manager.get_project_dir(self.project_name) / "output" / "shots")
+        
+        # 确定模型
+        has_references = len(reference_paths) > 0
+        model_name = (
+            tti_config.get("sceneModel") if has_references else tti_config.get("shotModel")
+        ) or tti_config.get("model", "gemini-2.5-flash-image-landscape")
+        
+        return {
+            "subtype": subtype,
+            "prompt": prompt_with_prefix,
+            "reference_images": ",".join(reference_paths) if reference_paths else None,
+            "output_dir": output_dir,
+            "aspect_ratio": aspect_ratio,
+            "provider": provider,
+            "model": model_name,
+            "slot": target_slot,
+            "api_url": tti_config.get("apiUrl"),
+            "api_key": tti_config.get("apiKey"),
+        }
+
     def generate_images_batch(self, shot_ids: list) -> dict:
-        """Generate images for multiple shots using thread pool with semaphore control"""
-        from concurrent.futures import as_completed
-
-        results = []
-        futures = {}
-
-        # Submit all tasks to thread pool (semaphore controls actual concurrency)
+        """
+        批量创建图片生成任务
+        
+        使用任务系统，立即返回，后台异步执行
+        """
+        if not self.project_data:
+            return {"success": False, "error": "No project data"}
+        
+        if not self._task_manager:
+            return {"success": False, "error": "Task system not initialized"}
+        
+        # 获取设置
+        settings = self._load_settings()
+        tti_config = settings.get("tti", {})
+        
+        if not tti_config.get("apiUrl") or not tti_config.get("apiKey"):
+            return {"success": False, "error": "TTI API not configured in settings"}
+        
+        task_ids = []
+        errors = []
+        
         for shot_id in shot_ids:
-            future = self._thread_pool.submit(self._generate_images_with_semaphore, shot_id)
-            futures[future] = shot_id
-
-        # Collect results as they complete
-        for future in as_completed(futures):
-            shot_id = futures[future]
+            # 找到镜头
+            shot = None
+            for s in self.project_data["shots"]:
+                if s["id"] == shot_id:
+                    shot = s
+                    break
+            
+            if not shot:
+                errors.append(f"Shot not found: {shot_id}")
+                continue
+            
             try:
-                result = future.result()
-                results.append({"shot_id": shot_id, **result})
+                # 准备任务参数
+                params = self._prepare_image_task_params(shot)
+                
+                # 创建任务
+                task_id = self._task_manager.create_image_task(
+                    subtype=params["subtype"],
+                    prompt=params["prompt"],
+                    aspect_ratio=params["aspect_ratio"],
+                    provider=params["provider"],
+                    reference_images=params["reference_images"],
+                    output_dir=params["output_dir"],
+                    shot_id=shot_id,
+                    shot_sequence=shot.get("sequence"),
+                    slot=params["slot"],
+                    max_retries=2,
+                    timeout=300,
+                    ttl=3600,
+                )
+                
+                task_ids.append(task_id)
+                
+                # 更新镜头状态
+                shot["status"] = "generating_images"
+                
+                logger.info(f"Created image task {task_id} for shot {shot_id}, slot={params['slot']}")
+                
             except Exception as e:
-                logger.error(f"Failed to generate images for shot {shot_id}: {e}")
-                results.append({"shot_id": shot_id, "success": False, "error": str(e)})
-
-        return {"success": True, "results": results}
+                logger.error(f"Failed to create image task for shot {shot_id}: {e}")
+                errors.append(f"{shot_id}: {str(e)}")
+        
+        return {
+            "success": True,
+            "task_ids": task_ids,
+            "errors": errors,
+            "message": f"Created {len(task_ids)} image tasks"
+        }
 
     # ========== Video Generation ==========
 
@@ -2785,29 +3412,139 @@ class Api:
             self._notify_progress()
             return result
 
+    def _prepare_video_task_params(self, shot: dict) -> dict:
+        """
+        准备视频生成任务的参数
+        
+        Args:
+            shot: 镜头数据
+        
+        Returns:
+            任务参数字典
+        """
+        # 获取设置
+        settings = self._load_settings()
+        ttv_config = settings.get("ttv", {})
+        provider = ttv_config.get("provider", "openai")
+        
+        # 宽高比
+        settings_data = self.project_data.get("settings", self._get_default_project_settings())
+        creation_params = settings_data.get("creationParams", {})
+        aspect_ratio = creation_params.get("aspectRatio", "16:9")
+        
+        # 获取选中的图片路径
+        selected_idx = shot.get("selectedImageIndex", 0)
+        local_images = shot.get("_localImagePaths", [])
+        
+        image_local_path = None
+        if local_images:
+            image_local_path = local_images[selected_idx] if selected_idx < len(local_images) else local_images[0]
+        
+        # 获取提示词
+        prompt = shot.get("videoPrompt", "")
+        prefix_config = (self.project_data or {}).get("promptPrefixes", {})
+        shot_video_prefix = str(prefix_config.get("shotVideoPrefix", "")).strip()
+        prompt_with_prefix = f"{shot_video_prefix} {prompt}".strip() if shot_video_prefix else prompt
+        
+        # 输出目录
+        output_dir = str(self._project_manager.get_project_dir(self.project_name) / "output" / "shots")
+        
+        # 确定子类型
+        model = ttv_config.get("model", "")
+        if "i2v" in model or "r2v" in model:
+            subtype = "frames2video" if image_local_path else "text2video"
+        else:
+            subtype = "text2video"
+        
+        return {
+            "subtype": subtype,
+            "prompt": prompt_with_prefix,
+            "reference_images": image_local_path,  # 首帧图片
+            "output_dir": output_dir,
+            "aspect_ratio": aspect_ratio,
+            "provider": provider,
+            "duration": 5,
+            "api_url": ttv_config.get("apiUrl"),
+            "api_key": ttv_config.get("apiKey"),
+            "model": ttv_config.get("model", "veo_3_1_i2v_s_fast_fl_landscape"),
+        }
+
     def generate_videos_batch(self, shot_ids: list) -> dict:
-        """Generate videos for multiple shots using thread pool with semaphore control"""
-        from concurrent.futures import as_completed
-
-        results = []
-        futures = {}
-
-        # Submit all tasks to thread pool (semaphore controls actual concurrency)
+        """
+        批量创建视频生成任务
+        
+        使用任务系统，立即返回，后台异步执行
+        """
+        if not self.project_data:
+            return {"success": False, "error": "No project data"}
+        
+        if not self._task_manager:
+            return {"success": False, "error": "Task system not initialized"}
+        
+        # 获取设置
+        settings = self._load_settings()
+        ttv_config = settings.get("ttv", {})
+        
+        if not ttv_config.get("apiUrl") or not ttv_config.get("apiKey"):
+            return {"success": False, "error": "TTV API not configured in settings"}
+        
+        task_ids = []
+        errors = []
+        
         for shot_id in shot_ids:
-            future = self._thread_pool.submit(self._generate_video_with_semaphore, shot_id)
-            futures[future] = shot_id
-
-        # Collect results as they complete
-        for future in as_completed(futures):
-            shot_id = futures[future]
+            # 找到镜头
+            shot = None
+            for s in self.project_data["shots"]:
+                if s["id"] == shot_id:
+                    shot = s
+                    break
+            
+            if not shot:
+                errors.append(f"Shot not found: {shot_id}")
+                continue
+            
             try:
-                result = future.result()
-                results.append({"shot_id": shot_id, **result})
+                # 准备任务参数
+                params = self._prepare_video_task_params(shot)
+                
+                # 检查是否有图片可用
+                if params["subtype"] != "text2video" and not params["reference_images"]:
+                    errors.append(f"{shot_id}: No images available for video generation")
+                    continue
+                
+                # 创建任务
+                task_id = self._task_manager.create_video_task(
+                    subtype=params["subtype"],
+                    prompt=params["prompt"],
+                    aspect_ratio=params["aspect_ratio"],
+                    provider=params["provider"],
+                    reference_images=params["reference_images"],
+                    duration=params["duration"],
+                    output_dir=params["output_dir"],
+                    shot_id=shot_id,
+                    shot_sequence=shot.get("sequence"),
+                    max_retries=2,
+                    timeout=600,
+                    ttl=7200,
+                )
+                
+                task_ids.append(task_id)
+                
+                # 更新镜头状态
+                shot["status"] = "generating_video"
+                
+                logger.info(f"Created video task {task_id} for shot {shot_id}")
+                
             except Exception as e:
-                logger.error(f"Failed to generate video for shot {shot_id}: {e}")
-                results.append({"shot_id": shot_id, "success": False, "error": str(e)})
-
-        return {"success": True, "results": results}
+                logger.error(f"Failed to create video task for shot {shot_id}: {e}")
+                errors.append(f"{shot_id}: {str(e)}")
+        
+        return {
+            "success": True,
+            "task_ids": task_ids,
+            "errors": errors,
+            "message": f"Created {len(task_ids)} video tasks"
+        }
 
     # ========== Audio Generation ==========
 
@@ -2980,29 +3717,166 @@ class Api:
             self._notify_progress()
             return result
 
+    def _prepare_audio_task_params(self, shot: dict, dialogue_index: int) -> dict:
+        """
+        准备音频生成任务的参数
+        
+        Args:
+            shot: 镜头数据
+            dialogue_index: 对话索引
+        
+        Returns:
+            任务参数字典
+        """
+        # 获取设置
+        settings = self._load_settings()
+        tts_config = settings.get("tts", {})
+        
+        # 获取对话
+        dialogues = shot.get("dialogues", [])
+        
+        # 兼容旧格式
+        if not dialogues and shot.get("script"):
+            voice_actor = shot.get("voiceActor", "")
+            if voice_actor:
+                dialogues = [{"role": voice_actor, "text": shot["script"]}]
+        
+        if dialogue_index >= len(dialogues):
+            raise ValueError(f"Dialogue index {dialogue_index} out of range")
+        
+        dialogue = dialogues[dialogue_index]
+        role = dialogue.get("role", "")
+        text = dialogue.get("text", "")
+        
+        if not role or not text:
+            raise ValueError(f"Empty dialogue at index {dialogue_index}")
+        
+        # 找到角色的参考音频
+        reference_audio = None
+        character_speed = 1.0
+        for char in self.project_data.get("characters", []):
+            if char["name"] == role:
+                reference_audio = char.get("referenceAudioPath")
+                character_speed = char.get("speed", 1.0)
+                break
+        
+        if not reference_audio:
+            raise ValueError(f"No reference audio found for character: {role}")
+        
+        # 处理预设音频路径
+        if reference_audio.startswith("preset:"):
+            relative_path = reference_audio[7:]
+            reference_audio = str(Path(__file__).parent / "assets" / "audios" / relative_path)
+        
+        # 获取情感参数
+        emotion = dialogue.get("emotion", shot.get("emotion", ""))
+        intensity = dialogue.get("intensity", shot.get("intensity", ""))
+        
+        # 输出目录
+        output_dir = str(self._project_manager.get_project_dir(self.project_name) / "output" / "shots")
+        
+        return {
+            "text": text,
+            "voice_ref": reference_audio,
+            "speed": character_speed,
+            "emotion": emotion,
+            "emotion_intensity": intensity,
+            "output_dir": output_dir,
+            "provider": "tts",
+            "api_url": tts_config.get("apiUrl"),
+            "api_key": tts_config.get("apiKey", ""),
+            "model": tts_config.get("model", "tts-1"),
+        }
+
     def generate_audios_batch(self, shot_ids: list) -> dict:
-        """Generate audio for multiple shots using thread pool with semaphore control"""
-        from concurrent.futures import as_completed
-
-        results = []
-        futures = {}
-
-        # Submit all tasks to thread pool (semaphore controls actual concurrency)
+        """
+        批量创建音频生成任务
+        
+        使用任务系统，立即返回，后台异步执行
+        为每段对话创建独立任务
+        """
+        if not self.project_data:
+            return {"success": False, "error": "No project data"}
+        
+        if not self._task_manager:
+            return {"success": False, "error": "Task system not initialized"}
+        
+        # 获取设置
+        settings = self._load_settings()
+        tts_config = settings.get("tts", {})
+        
+        if not tts_config.get("apiUrl"):
+            return {"success": False, "error": "TTS API not configured in settings"}
+        
+        task_ids = []
+        errors = []
+        
         for shot_id in shot_ids:
-            future = self._thread_pool.submit(self._generate_audio_with_semaphore, shot_id)
-            futures[future] = shot_id
-
-        # Collect results as they complete
-        for future in as_completed(futures):
-            shot_id = futures[future]
-            try:
-                result = future.result()
-                results.append({"shot_id": shot_id, **result})
-            except Exception as e:
-                logger.error(f"Failed to generate audio for shot {shot_id}: {e}")
-                results.append({"shot_id": shot_id, "success": False, "error": str(e)})
-
-        return {"success": True, "results": results}
+            # 找到镜头
+            shot = None
+            for s in self.project_data["shots"]:
+                if s["id"] == shot_id:
+                    shot = s
+                    break
+            
+            if not shot:
+                errors.append(f"Shot not found: {shot_id}")
+                continue
+            
+            # 获取对话列表
+            dialogues = shot.get("dialogues", [])
+            
+            # 兼容旧格式
+            if not dialogues and shot.get("script"):
+                voice_actor = shot.get("voiceActor", "")
+                if voice_actor:
+                    dialogues = [{"role": voice_actor, "text": shot["script"]}]
+            
+            if not dialogues:
+                errors.append(f"{shot_id}: No dialogues found")
+                continue
+            
+            # 为每段对话创建任务
+            shot_task_ids = []
+            for idx, dialogue in enumerate(dialogues):
+                try:
+                    params = self._prepare_audio_task_params(shot, idx)
+                    
+                    task_id = self._task_manager.create_audio_task(
+                        text=params["text"],
+                        provider=params["provider"],
+                        voice_ref=params["voice_ref"],
+                        emotion=params["emotion"] or None,
+                        emotion_intensity=params["emotion_intensity"] or None,
+                        speed=params["speed"],
+                        output_dir=params["output_dir"],
+                        shot_id=shot_id,
+                        shot_sequence=shot.get("sequence"),
+                        dialogue_index=idx,
+                        max_retries=2,
+                        timeout=120,
+                        ttl=3600,
+                    )
+                    
+                    task_ids.append(task_id)
+                    shot_task_ids.append(task_id)
+                    
+                    logger.info(f"Created audio task {task_id} for shot {shot_id}, dialogue {idx}")
+                    
+                except Exception as e:
+                    logger.error(f"Failed to create audio task for shot {shot_id} dialogue {idx}: {e}")
+                    errors.append(f"{shot_id}[{idx}]: {str(e)}")
+            
+            # 更新镜头状态
+            if shot_task_ids:
+                shot["status"] = "generating_audio"
+        
+        return {
+            "success": True,
+            "task_ids": task_ids,
+            "errors": errors,
+            "message": f"Created {len(task_ids)} audio tasks"
+        }
 
     # ========== File Operations ==========
 
@@ -3049,6 +3923,42 @@ class Api:
         from updater import open_download_page
         success = open_download_page(url)
         return {"success": success}
+
+    def reveal_in_file_manager(self, filepath: str) -> dict:
+        """
+        Reveal file in system file manager (Finder on macOS, Explorer on Windows)
+        
+        Args:
+            filepath: Path to the file to reveal
+        
+        Returns:
+            Success status
+        """
+        import subprocess
+        import platform
+        from pathlib import Path
+        
+        try:
+            path = Path(filepath)
+            if not path.exists():
+                return {"success": False, "error": f"File not found: {filepath}"}
+            
+            system = platform.system()
+            
+            if system == "Darwin":  # macOS
+                # -R flag reveals and selects the file in Finder
+                subprocess.run(["open", "-R", str(path)], check=True)
+            elif system == "Windows":
+                # /select flag selects the file in Explorer
+                subprocess.run(["explorer", "/select,", str(path)], check=True)
+            else:  # Linux
+                # Just open the parent directory
+                subprocess.run(["xdg-open", str(path.parent)], check=True)
+            
+            return {"success": True}
+        except Exception as e:
+            logger.error(f"Failed to reveal file in file manager: {e}")
+            return {"success": False, "error": str(e)}
 
     # ========== Reference Audio Management ==========
 
@@ -5603,4 +6513,265 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 
         except Exception as e:
             logger.error(f"Failed to generate style preview: {e}")
+            return {"success": False, "error": str(e)}
+
+    # ========== Task Management API ==========
+
+    def get_task_summary(self) -> dict:
+        """Get task summary (counts by type and status)"""
+        # Return empty summary if no task manager (no project loaded)
+        if not self._task_manager:
+            empty_counts = {"pending": 0, "paused": 0, "running": 0, "success": 0, "failed": 0, "cancelled": 0}
+            return {
+                "success": True,
+                "data": {
+                    "image": empty_counts.copy(),
+                    "video": empty_counts.copy(),
+                    "audio": empty_counts.copy(),
+                    "total": empty_counts.copy(),
+                }
+            }
+
+        try:
+            summary = self._task_manager.get_summary()
+            return {"success": True, "data": summary}
+        except Exception as e:
+            logger.error(f"Failed to get task summary: {e}")
+            return {"success": False, "error": str(e)}
+
+    def list_tasks(self, task_type: str = None, status: str = None,
+                   offset: int = 0, limit: int = 50) -> dict:
+        """List tasks with optional filtering"""
+        if not self._task_manager:
+            return {"success": False, "error": "No project loaded"}
+
+        try:
+            tasks = self._task_manager.list_tasks(task_type, status, offset, limit)
+            return {"success": True, "data": tasks}
+        except Exception as e:
+            logger.error(f"Failed to list tasks: {e}")
+            return {"success": False, "error": str(e)}
+
+    def get_task(self, task_type: str, task_id: str) -> dict:
+        """Get a single task by type and ID"""
+        if not self._task_manager:
+            return {"success": False, "error": "No project loaded"}
+
+        try:
+            task = self._task_manager.get_task(task_type, task_id)
+            if task:
+                return {"success": True, "data": task}
+            else:
+                return {"success": False, "error": "Task not found"}
+        except Exception as e:
+            logger.error(f"Failed to get task: {e}")
+            return {"success": False, "error": str(e)}
+
+    def poll_tasks(self, task_refs: List[str]) -> dict:
+        """Poll multiple tasks by reference (e.g., ['image:xxx', 'video:yyy'])"""
+        if not self._task_manager:
+            return {"success": False, "error": "No project loaded"}
+
+        try:
+            results = self._task_manager.poll_tasks(task_refs)
+            return {"success": True, "data": results}
+        except Exception as e:
+            logger.error(f"Failed to poll tasks: {e}")
+            return {"success": False, "error": str(e)}
+
+    def pause_task(self, task_type: str, task_id: str) -> dict:
+        """Pause a pending task"""
+        if not self._task_manager:
+            return {"success": False, "error": "No project loaded"}
+
+        try:
+            success = self._task_manager.pause_task(task_type, task_id)
+            return {"success": success}
+        except Exception as e:
+            logger.error(f"Failed to pause task: {e}")
+            return {"success": False, "error": str(e)}
+
+    def resume_task(self, task_type: str, task_id: str) -> dict:
+        """Resume a paused task"""
+        if not self._task_manager:
+            return {"success": False, "error": "No project loaded"}
+
+        try:
+            success = self._task_manager.resume_task(task_type, task_id)
+            return {"success": success}
+        except Exception as e:
+            logger.error(f"Failed to resume task: {e}")
+            return {"success": False, "error": str(e)}
+
+    def cancel_task(self, task_type: str, task_id: str) -> dict:
+        """Cancel a pending/paused task"""
+        if not self._task_manager:
+            return {"success": False, "error": "No project loaded"}
+
+        try:
+            success = self._task_manager.cancel_task(task_type, task_id)
+            return {"success": success}
+        except Exception as e:
+            logger.error(f"Failed to cancel task: {e}")
+            return {"success": False, "error": str(e)}
+
+    def retry_task(self, task_type: str, task_id: str) -> dict:
+        """Retry a failed/cancelled task"""
+        if not self._task_manager:
+            return {"success": False, "error": "No project loaded"}
+
+        try:
+            success = self._task_manager.retry_task(task_type, task_id)
+            return {"success": success}
+        except Exception as e:
+            logger.error(f"Failed to retry task: {e}")
+            return {"success": False, "error": str(e)}
+
+    def pause_all_tasks(self, task_type: str = None) -> dict:
+        """Pause all pending tasks"""
+        if not self._task_manager:
+            return {"success": False, "error": "No project loaded"}
+
+        try:
+            count = self._task_manager.pause_all(task_type)
+            return {"success": True, "count": count}
+        except Exception as e:
+            logger.error(f"Failed to pause all tasks: {e}")
+            return {"success": False, "error": str(e)}
+
+    def resume_all_tasks(self, task_type: str = None) -> dict:
+        """Resume all paused tasks"""
+        if not self._task_manager:
+            return {"success": False, "error": "No project loaded"}
+
+        try:
+            count = self._task_manager.resume_all(task_type)
+            return {"success": True, "count": count}
+        except Exception as e:
+            logger.error(f"Failed to resume all tasks: {e}")
+            return {"success": False, "error": str(e)}
+
+    def cancel_all_pending_tasks(self, task_type: str = None) -> dict:
+        """Cancel all pending/paused tasks"""
+        if not self._task_manager:
+            return {"success": False, "error": "No project loaded"}
+
+        try:
+            count = self._task_manager.cancel_all_pending(task_type)
+            return {"success": True, "count": count}
+        except Exception as e:
+            logger.error(f"Failed to cancel all tasks: {e}")
+            return {"success": False, "error": str(e)}
+
+    def create_image_task(
+        self,
+        subtype: str,
+        prompt: str,
+        aspect_ratio: str,
+        provider: str,
+        resolution: str = None,
+        reference_images: str = None,
+        output_dir: str = None,
+        priority: int = 100,
+        depends_on: str = None
+    ) -> dict:
+        """Create an image generation task"""
+        if not self._task_manager:
+            return {"success": False, "error": "No project loaded"}
+
+        try:
+            # Use project shots directory if output_dir not specified
+            if not output_dir and self.project_name:
+                output_dir = str(self._project_manager.get_project_dir(self.project_name) / "images")
+
+            task_id = self._task_manager.create_image_task(
+                subtype=subtype,
+                prompt=prompt,
+                aspect_ratio=aspect_ratio,
+                provider=provider,
+                resolution=resolution,
+                reference_images=reference_images,
+                output_dir=output_dir,
+                priority=priority,
+                depends_on=depends_on
+            )
+            return {"success": True, "taskId": task_id}
+        except Exception as e:
+            logger.error(f"Failed to create image task: {e}")
+            return {"success": False, "error": str(e)}
+
+    def create_video_task(
+        self,
+        subtype: str,
+        prompt: str,
+        aspect_ratio: str,
+        provider: str,
+        resolution: str = None,
+        reference_images: str = None,
+        duration: int = 5,
+        output_dir: str = None,
+        priority: int = 100,
+        depends_on: str = None
+    ) -> dict:
+        """Create a video generation task"""
+        if not self._task_manager:
+            return {"success": False, "error": "No project loaded"}
+
+        try:
+            # Use project shots directory if output_dir not specified
+            if not output_dir and self.project_name:
+                output_dir = str(self._project_manager.get_project_dir(self.project_name) / "videos")
+
+            task_id = self._task_manager.create_video_task(
+                subtype=subtype,
+                prompt=prompt,
+                aspect_ratio=aspect_ratio,
+                provider=provider,
+                resolution=resolution,
+                reference_images=reference_images,
+                duration=duration,
+                output_dir=output_dir,
+                priority=priority,
+                depends_on=depends_on
+            )
+            return {"success": True, "taskId": task_id}
+        except Exception as e:
+            logger.error(f"Failed to create video task: {e}")
+            return {"success": False, "error": str(e)}
+
+    def create_audio_task(
+        self,
+        text: str,
+        provider: str,
+        voice_ref: str = None,
+        emotion: str = None,
+        emotion_intensity: str = None,
+        speed: float = 1.0,
+        output_dir: str = None,
+        priority: int = 100,
+        depends_on: str = None
+    ) -> dict:
+        """Create an audio generation task"""
+        if not self._task_manager:
+            return {"success": False, "error": "No project loaded"}
+
+        try:
+            # Use project shots directory if output_dir not specified
+            if not output_dir and self.project_name:
+                output_dir = str(self._project_manager.get_project_dir(self.project_name) / "audio")
+
+            task_id = self._task_manager.create_audio_task(
+                text=text,
+                provider=provider,
+                voice_ref=voice_ref,
+                emotion=emotion,
+                emotion_intensity=emotion_intensity,
+                speed=speed,
+                output_dir=output_dir,
+                priority=priority,
+                depends_on=depends_on
+            )
+            return {"success": True, "taskId": task_id}
+        except Exception as e:
+            logger.error(f"Failed to create audio task: {e}")
             return {"success": False, "error": str(e)}

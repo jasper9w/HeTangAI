@@ -35,7 +35,7 @@ export function VideoModal({ isOpen, onClose, videoUrl, title }: VideoModalProps
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[70] bg-black/90 flex items-center justify-center p-4">
       {/* Backdrop */}
       <div
         className="absolute inset-0"

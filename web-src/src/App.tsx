@@ -11,6 +11,8 @@ import {
   Image,
   Sparkles,
   Type,
+  Clock,
+  Check,
 } from 'lucide-react';
 import { useApi } from './hooks/useApi';
 import { Sidebar } from './components/layout/Sidebar';
@@ -27,9 +29,10 @@ import { Toast, type ToastMessage } from './components/ui/Toast';
 import { ImportDropdown } from './components/ui/ImportDropdown';
 import { ExportDropdown } from './components/ui/ExportDropdown';
 import { GenerateDropdown } from './components/ui/GenerateDropdown';
-import { StatusBar } from './components/ui/StatusBar';
 import { UpdateModal } from './components/ui/UpdateModal';
 import { ExportProgressModal, type ExportProgress } from './components/ui/ExportProgressModal';
+import { TaskStatusBar, TaskPanel } from './components/tasks';
+import { useTaskPolling } from './hooks/useTaskPolling';
 import type { ProjectData, Shot, PageType, ImportedCharacter } from './types';
 
 function App() {
@@ -52,8 +55,8 @@ function App() {
   const [batchModalOpen, setBatchModalOpen] = useState(false);
   const [batchModalType, setBatchModalType] = useState<'image' | 'video' | 'audio'>('image');
 
-  // Generation state
-  const [isGenerating, setIsGenerating] = useState(false);
+  // Generation state (isGenerating kept for ShotsPageActions prop compatibility)
+  const [isGenerating, _setIsGenerating] = useState(false);
   const [isGeneratingCharacters, setIsGeneratingCharacters] = useState(false);
   const [isGeneratingScenes, setIsGeneratingScenes] = useState(false);
   const [generationProgress, setGenerationProgress] = useState<{
@@ -100,6 +103,19 @@ function App() {
   const [shotImagePrefix, setShotImagePrefix] = useState('');
   const [shotVideoPrefix, setShotVideoPrefix] = useState('');
   const [characterPromptPrefix, setCharacterPromptPrefix] = useState('');
+
+  // Task panel state
+  const [taskPanelOpen, setTaskPanelOpen] = useState(false);
+
+  // Task polling - only enabled when a project is loaded
+  const {
+    summary: taskSummary,
+    refreshSummary: refreshTaskSummary,
+  } = useTaskPolling({
+    enabled: !!project,
+    summaryInterval: 5000,
+    runningInterval: 2000,
+  });
 
   // Toast notifications
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -917,20 +933,10 @@ function App() {
 
   // ========== Generation Operations ==========
 
-  const updateShotInProject = useCallback((updatedShot: Shot) => {
-    setProject((prev) => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        shots: prev.shots.map((s) => (s.id === updatedShot.id ? updatedShot : s)),
-      };
-    });
-  }, []);
-
   const handleGenerateImages = async (shotId: string) => {
     if (!api || !project) return;
 
-    // Update status locally first
+    // Use task system - submit as batch with single shot
     setProject((prev) => {
       if (!prev) return prev;
       return {
@@ -941,31 +947,33 @@ function App() {
       };
     });
 
-    const result = await api.generate_images_for_shot(shotId);
-
-    if (result.success && result.shot) {
-      updateShotInProject(result.shot);
-      setIsDirty(true);
-      showToast('success', '图片生成成功');
-    } else {
-      // Revert status on error
-      setProject((prev) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          shots: prev.shots.map((s) =>
-            s.id === shotId ? { ...s, status: 'error' as const, errorMessage: result.error } : s
-          ),
-        };
-      });
-      showToast('error', `图片生成失败: ${result.error || '未知错误'}`);
+    try {
+      const result = await api.generate_images_batch([shotId]);
+      if (result.success) {
+        refreshTaskSummary();
+        showToast('success', '已提交图片生成任务');
+      } else {
+        setProject((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            shots: prev.shots.map((s) =>
+              s.id === shotId ? { ...s, status: 'error' as const, errorMessage: result.error } : s
+            ),
+          };
+        });
+        showToast('error', `提交失败: ${result.error || '未知错误'}`);
+      }
+    } catch (error) {
+      console.error('Failed to submit image task:', error);
+      showToast('error', '提交图片生成任务失败');
     }
   };
 
   const handleGenerateVideo = async (shotId: string) => {
     if (!api || !project) return;
 
-    // Update status locally first
+    // Use task system - submit as batch with single shot
     setProject((prev) => {
       if (!prev) return prev;
       return {
@@ -976,31 +984,33 @@ function App() {
       };
     });
 
-    const result = await api.generate_video_for_shot(shotId);
-
-    if (result.success && result.shot) {
-      updateShotInProject(result.shot);
-      setIsDirty(true);
-      showToast('success', '视频生成成功');
-    } else {
-      // Revert status on error
-      setProject((prev) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          shots: prev.shots.map((s) =>
-            s.id === shotId ? { ...s, status: 'error' as const, errorMessage: result.error } : s
-          ),
-        };
-      });
-      showToast('error', `视频生成失败: ${result.error || '未知错误'}`);
+    try {
+      const result = await api.generate_videos_batch([shotId]);
+      if (result.success) {
+        refreshTaskSummary();
+        showToast('success', '已提交视频生成任务');
+      } else {
+        setProject((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            shots: prev.shots.map((s) =>
+              s.id === shotId ? { ...s, status: 'error' as const, errorMessage: result.error } : s
+            ),
+          };
+        });
+        showToast('error', `提交失败: ${result.error || '未知错误'}`);
+      }
+    } catch (error) {
+      console.error('Failed to submit video task:', error);
+      showToast('error', '提交视频生成任务失败');
     }
   };
 
   const handleGenerateAudio = async (shotId: string) => {
     if (!api || !project) return;
 
-    // Update status locally first
+    // Use task system - submit as batch with single shot
     setProject((prev) => {
       if (!prev) return prev;
       return {
@@ -1011,24 +1021,26 @@ function App() {
       };
     });
 
-    const result = await api.generate_audio_for_shot(shotId);
-
-    if (result.success && result.shot) {
-      updateShotInProject(result.shot);
-      setIsDirty(true);
-      showToast('success', '配音生成成功');
-    } else {
-      // Revert status on error
-      setProject((prev) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          shots: prev.shots.map((s) =>
-            s.id === shotId ? { ...s, status: 'error' as const, errorMessage: result.error } : s
-          ),
-        };
-      });
-      showToast('error', `配音生成失败: ${result.error || '未知错误'}`);
+    try {
+      const result = await api.generate_audios_batch([shotId]);
+      if (result.success) {
+        refreshTaskSummary();
+        showToast('success', '已提交配音生成任务');
+      } else {
+        setProject((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            shots: prev.shots.map((s) =>
+              s.id === shotId ? { ...s, status: 'error' as const, errorMessage: result.error } : s
+            ),
+          };
+        });
+        showToast('error', `提交失败: ${result.error || '未知错误'}`);
+      }
+    } catch (error) {
+      console.error('Failed to submit audio task:', error);
+      showToast('error', '提交配音生成任务失败');
     }
   };
 
@@ -1144,23 +1156,29 @@ function App() {
   const handleBatchGenerate = async (shotIds: string[], _forceRegenerate: boolean) => {
     if (!api || shotIds.length === 0) return;
 
-    setIsGenerating(true);
-    setGenerationProgress({ current: 0, total: shotIds.length, type: batchModalType });
-
-    // Mark shots as pending (waiting to be processed)
-    // Actual "generating" status will be set by backend when each shot starts processing
+    // Mark shots with appropriate generating status based on type
+    const statusMap = {
+      image: 'generating_images' as const,
+      video: 'generating_video' as const,
+      audio: 'generating_audio' as const,
+    };
+    const generatingStatus = statusMap[batchModalType];
+    
     setProject((prev) => {
       if (!prev) return prev;
       return {
         ...prev,
         shots: prev.shots.map((s) =>
-          shotIds.includes(s.id) ? { ...s, status: 'pending' as const } : s
+          shotIds.includes(s.id) ? { ...s, status: generatingStatus } : s
         ),
       };
     });
 
     try {
-      let result;
+      let result: { success: boolean; task_ids?: string[]; errors?: string[]; message?: string; error?: string } | undefined;
+      const typeNames = { image: '图片', video: '视频', audio: '音频' };
+      const typeName = typeNames[batchModalType];
+
       switch (batchModalType) {
         case 'image':
           result = await api.generate_images_batch(shotIds);
@@ -1173,46 +1191,35 @@ function App() {
           break;
       }
 
-      // Update project with results from batch generation
-      if (result && result.results) {
-        // Update each shot with its result
+      if (result?.success) {
+        const taskCount = result.task_ids?.length || 0;
+        const errorCount = result.errors?.length || 0;
+        
+        // Refresh task summary to show new tasks
+        refreshTaskSummary();
+        
+        if (errorCount === 0) {
+          showToast('success', `已提交 ${taskCount} 个${typeName}生成任务`);
+        } else {
+          showToast('info', `已提交 ${taskCount} 个任务，${errorCount} 个失败`);
+          console.warn('Batch generation errors:', result.errors);
+        }
+      } else {
+        showToast('error', `批量生成失败: ${result?.error || '未知错误'}`);
+        // Reset status on error
         setProject((prev) => {
           if (!prev) return prev;
-          const updatedShots = [...prev.shots];
-          
-          for (const r of result.results as Array<{ shot_id: string; success: boolean; shot?: Shot; error?: string }>) {
-            const idx = updatedShots.findIndex(s => s.id === r.shot_id);
-            if (idx !== -1) {
-              if (r.success && r.shot) {
-                // Use the returned shot data
-                updatedShots[idx] = r.shot;
-              } else {
-                // Mark as error
-                updatedShots[idx] = {
-                  ...updatedShots[idx],
-                  status: 'error' as const,
-                  errorMessage: r.error || 'Unknown error',
-                };
-              }
-            }
-          }
-          
-          return { ...prev, shots: updatedShots };
+          return {
+            ...prev,
+            shots: prev.shots.map((s) =>
+              shotIds.includes(s.id) ? { ...s, status: 'error' as const, errorMessage: result?.error || 'Failed' } : s
+            ),
+          };
         });
-        setIsDirty(true);
-
-        // Count successes and failures
-        const successCount = result.results.filter((r: { success: boolean }) => r.success).length;
-        const failCount = result.results.length - successCount;
-
-        if (failCount === 0) {
-          showToast('success', `批量生成完成: ${successCount} 个成功`);
-        } else {
-          showToast('info', `批量生成完成: ${successCount} 个成功, ${failCount} 个失败`);
-        }
       }
     } catch (error) {
       console.error('Batch generation failed:', error);
+      showToast('error', '批量生成请求失败');
       // Reset status on error
       setProject((prev) => {
         if (!prev) return prev;
@@ -1223,12 +1230,10 @@ function App() {
           ),
         };
       });
-      showToast('error', '批量生成失败');
     }
 
-    setGenerationProgress({ current: shotIds.length, total: shotIds.length, type: batchModalType });
-    setIsGenerating(false);
-    setGenerationProgress(null);
+    // Close batch modal
+    setBatchModalOpen(false);
   };
 
   // ========== Save Prompt Prefixes ==========
@@ -1632,14 +1637,63 @@ function App() {
 
       {/* Status Bar - only show when in project */}
       {currentPage !== 'projects' && (
-        <StatusBar
-          isDirty={isDirty}
-          autoSaveInterval={60}
-          onSave={handleSaveProject}
-          version={appVersion}
-          onCheckUpdate={handleCheckUpdate}
-          isCheckingUpdate={isCheckingUpdate}
-          hasUpdate={hasUpdate}
+        <div className="h-6 bg-slate-800 border-t border-slate-700 px-4 flex items-center justify-between text-xs text-slate-500 flex-shrink-0">
+          {/* Left: Version */}
+          <div className="flex items-center gap-4">
+            <button
+              onClick={handleCheckUpdate}
+              disabled={isCheckingUpdate}
+              className={`flex items-center gap-1 transition-colors disabled:cursor-wait ${
+                hasUpdate 
+                  ? 'text-amber-400 hover:text-amber-300 animate-pulse' 
+                  : 'text-slate-500 hover:text-slate-300'
+              }`}
+              title={hasUpdate ? '有新版本可用，点击查看' : '点击检查更新'}
+            >
+              {isCheckingUpdate && (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              )}
+              <span>v{appVersion}{hasUpdate ? ' (有更新)' : ''}</span>
+            </button>
+          </div>
+
+          {/* Center: Task Status + Save Status */}
+          <div className="flex items-center gap-4">
+            {taskSummary && (
+              <TaskStatusBar
+                summary={taskSummary}
+                onClick={() => setTaskPanelOpen(true)}
+              />
+            )}
+            {isDirty ? (
+              <div className="flex items-center gap-1.5">
+                <Clock className="w-3 h-3 text-amber-400" />
+                <span className="text-slate-400">未保存</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5">
+                <Check className="w-3 h-3 text-emerald-400" />
+                <span className="text-slate-400">已保存</span>
+              </div>
+            )}
+          </div>
+
+          {/* Right: Shortcuts */}
+          <div className="flex items-center gap-4">
+            <span className="text-slate-500">
+              保存 <kbd className="px-1.5 py-0.5 bg-slate-700 rounded text-slate-400 font-mono text-[10px]">{typeof navigator !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0 ? '⌘S' : 'Ctrl+S'}</kbd>
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Task Panel */}
+      {taskSummary && (
+        <TaskPanel
+          isOpen={taskPanelOpen}
+          onClose={() => setTaskPanelOpen(false)}
+          summary={taskSummary}
+          onRefresh={refreshTaskSummary}
         />
       )}
 

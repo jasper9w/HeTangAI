@@ -1,0 +1,122 @@
+"""
+视频生成执行器
+"""
+
+import asyncio
+from pathlib import Path
+from typing import Optional, Tuple, Any, List
+
+from loguru import logger
+
+from .base import BaseExecutor
+from services.generator import GenerationClient, download_file
+
+
+class VideoExecutor(BaseExecutor):
+    """视频生成执行器"""
+    
+    task_type = 'video'
+    
+    def __init__(
+        self,
+        db_path: str,
+        api_url: str,
+        api_key: str,
+        model: str,
+        worker_id: str = None,
+        heartbeat_interval: int = 30,
+        lock_timeout: int = 120  # 视频生成通常更慢
+    ):
+        """
+        初始化视频执行器
+        
+        Args:
+            db_path: 数据库路径
+            api_url: API 地址
+            api_key: API 密钥
+            model: 模型名称
+            worker_id: 执行器ID
+            heartbeat_interval: 心跳间隔
+            lock_timeout: 锁超时
+        """
+        super().__init__(db_path, worker_id, heartbeat_interval, lock_timeout)
+        self._client = GenerationClient(api_url, api_key, model)
+    
+    def execute(self, task: Any) -> Tuple[Optional[str], Optional[str]]:
+        """
+        执行视频生成任务
+        
+        Args:
+            task: VideoTask 对象
+        
+        Returns:
+            (result_url, result_local_path)
+        """
+        logger.info(f"Executing video task: {task.id}, subtype={task.subtype}")
+        
+        # 准备参考图（根据 subtype 处理）
+        image_paths: Optional[List[str]] = None
+        
+        if task.reference_images:
+            image_paths = []
+            for img_path in task.reference_images.split(','):
+                img_path = img_path.strip()
+                if img_path and Path(img_path).exists():
+                    image_paths.append(img_path)
+                    logger.debug(f"Added reference image: {img_path}")
+            
+            if not image_paths:
+                image_paths = None
+        
+        # 根据 subtype 验证参数
+        if task.subtype == 'frames2video':
+            if not image_paths or len(image_paths) < 1:
+                raise ValueError("frames2video requires at least 1 frame image")
+            logger.info(f"Using {len(image_paths)} frame(s) for frames2video")
+        elif task.subtype == 'reference2video':
+            if not image_paths:
+                raise ValueError("reference2video requires reference images")
+            logger.info(f"Using {len(image_paths)} reference image(s)")
+        elif task.subtype == 'text2video':
+            image_paths = None  # 纯文生视频不需要图片
+            logger.info("Using text2video mode (no images)")
+        
+        # 调用生成 API
+        result_url = asyncio.run(
+            self._client.generate_video(
+                prompt=task.prompt,
+                image_paths=image_paths
+            )
+        )
+        
+        if not result_url:
+            raise RuntimeError("No video URL returned from API")
+        
+        result_local_path = None
+        
+        # 如果指定了输出目录，下载到本地
+        if task.output_dir:
+            output_dir = Path(task.output_dir)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            
+            # 生成文件名
+            ext = self._get_extension_from_url(result_url) or '.mp4'
+            filename = f"{task.id}{ext}"
+            local_path = output_dir / filename
+            
+            # 下载文件
+            asyncio.run(download_file(result_url, local_path))
+            result_local_path = str(local_path)
+            logger.info(f"Downloaded video to: {result_local_path}")
+        
+        return result_url, result_local_path
+    
+    def _get_extension_from_url(self, url: str) -> str:
+        """从 URL 提取文件扩展名"""
+        from urllib.parse import urlparse
+        path = urlparse(url).path
+        if '.' in path:
+            ext = '.' + path.rsplit('.', 1)[-1].lower()
+            if ext in ['.mp4', '.webm', '.mov', '.avi']:
+                return ext
+        return '.mp4'

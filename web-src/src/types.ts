@@ -6,6 +6,87 @@
 
 export type PageType = 'projects' | 'home' | 'projectSettings' | 'storyboard' | 'characters' | 'scenes' | 'shots' | 'dubbing' | 'settings';
 
+// ========== Task Types (moved to top for forward reference) ==========
+
+export type TaskType = 'image' | 'video' | 'audio';
+
+export type TaskStatus = 'pending' | 'paused' | 'running' | 'success' | 'failed' | 'cancelled';
+
+export interface TaskBase {
+  id: string;
+  task_type: TaskType;
+  subtype: string;
+  status: TaskStatus;
+  priority: number;
+  depends_on: string | null;
+  result_url: string | null;
+  result_local_path: string | null;
+  error: string | null;
+  max_retries: number;
+  retry_count: number;
+  timeout_seconds: number;
+  expire_at: string | null;
+  locked_by: string | null;
+  locked_at: string | null;
+  started_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  completed_at: string | null;
+}
+
+export interface ImageTask extends TaskBase {
+  task_type: 'image';
+  prompt: string;
+  aspect_ratio: string;
+  resolution: string | null;
+  reference_images: string | null;
+  provider: string;
+  output_dir: string | null;
+  shot_id: string | null;
+  shot_sequence: number | null;
+  slot: number | null;
+  processed: number;
+}
+
+export interface VideoTask extends TaskBase {
+  task_type: 'video';
+  prompt: string;
+  aspect_ratio: string;
+  resolution: string | null;
+  reference_images: string | null;
+  duration: number;
+  provider: string;
+  output_dir: string | null;
+  shot_id: string | null;
+  shot_sequence: number | null;
+  processed: number;
+}
+
+export interface AudioTask extends TaskBase {
+  task_type: 'audio';
+  text: string;
+  voice_ref: string | null;
+  emotion: string | null;
+  emotion_intensity: string | null;
+  speed: number;
+  provider: string;
+  output_dir: string | null;
+  result_duration_ms: number | null;
+  shot_id: string | null;
+  shot_sequence: number | null;
+  dialogue_index: number | null;
+  processed: number;
+}
+
+export type Task = ImageTask | VideoTask | AudioTask;
+
+export interface TaskSummary {
+  image: Record<TaskStatus, number>;
+  video: Record<TaskStatus, number>;
+  audio: Record<TaskStatus, number>;
+  total: Record<TaskStatus, number>;
+}
+
 // ========== Shot Types ==========
 
 export type ShotStatus =
@@ -199,11 +280,10 @@ export interface GenerateResult {
 
 export interface BatchGenerateResult {
   success: boolean;
-  results: Array<{
-    shot_id: string;
-    success: boolean;
-    error?: string;
-  }>;
+  task_ids?: string[];
+  errors?: string[];
+  message?: string;
+  error?: string;
 }
 
 // ========== PyWebView API Interface ==========
@@ -339,6 +419,54 @@ export interface PyWebViewApi {
     releaseUrl?: string;
   }>;
   open_download_page: (url: string) => Promise<ApiResponse>;
+  reveal_in_file_manager: (filepath: string) => Promise<ApiResponse>;
+
+  // Task Management
+  get_task_summary: () => Promise<ApiResponse<TaskSummary>>;
+  list_tasks: (taskType?: string, status?: string, offset?: number, limit?: number) => Promise<ApiResponse<Task[]>>;
+  get_task: (taskType: string, taskId: string) => Promise<ApiResponse<Task>>;
+  poll_tasks: (taskRefs: string[]) => Promise<ApiResponse<Record<string, Task>>>;
+  pause_task: (taskType: string, taskId: string) => Promise<ApiResponse>;
+  resume_task: (taskType: string, taskId: string) => Promise<ApiResponse>;
+  cancel_task: (taskType: string, taskId: string) => Promise<ApiResponse>;
+  retry_task: (taskType: string, taskId: string) => Promise<ApiResponse>;
+  pause_all_tasks: (taskType?: string) => Promise<ApiResponse & { count?: number }>;
+  resume_all_tasks: (taskType?: string) => Promise<ApiResponse & { count?: number }>;
+  cancel_all_pending_tasks: (taskType?: string) => Promise<ApiResponse & { count?: number }>;
+  create_image_task: (
+    subtype: string,
+    prompt: string,
+    aspectRatio: string,
+    provider: string,
+    resolution?: string,
+    referenceImages?: string,
+    outputDir?: string,
+    priority?: number,
+    dependsOn?: string
+  ) => Promise<ApiResponse & { taskId?: string }>;
+  create_video_task: (
+    subtype: string,
+    prompt: string,
+    aspectRatio: string,
+    provider: string,
+    resolution?: string,
+    referenceImages?: string,
+    duration?: number,
+    outputDir?: string,
+    priority?: number,
+    dependsOn?: string
+  ) => Promise<ApiResponse & { taskId?: string }>;
+  create_audio_task: (
+    text: string,
+    provider: string,
+    voiceRef?: string,
+    emotion?: string,
+    emotionIntensity?: string,
+    speed?: number,
+    outputDir?: string,
+    priority?: number,
+    dependsOn?: string
+  ) => Promise<ApiResponse & { taskId?: string }>;
 }
 
 // ========== Style Types ==========
