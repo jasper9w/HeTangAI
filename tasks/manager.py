@@ -61,38 +61,34 @@ class TaskManager:
         
         logger.info(f"TaskManager initialized with database: {self.db_path}")
     
-    def _recover_stale_tasks(self, stale_timeout: int = 120):
+    def _recover_stale_tasks(self):
         """
-        恢复僵死的 running 任务（程序异常退出时遗留的）
+        恢复所有 running 状态的任务（程序启动时遗留的）
         
-        Args:
-            stale_timeout: 判定为僵死的超时时间（秒），默认2分钟
+        程序重启后，之前的执行器线程都已不存在，所有 running 任务都应该被恢复。
         """
         now = datetime.now()
-        cutoff = now - timedelta(seconds=stale_timeout)
         
         for task_type, model in TASK_MODELS.items():
-            # 找到所有 running 状态但锁已超时的任务
-            stale_tasks = (
+            # 找到所有 running 状态的任务
+            running_tasks = (
                 model.select()
-                .where(
-                    (model.status == TaskStatus.RUNNING.value) &
-                    (model.locked_at < cutoff)
-                )
+                .where(model.status == TaskStatus.RUNNING.value)
             )
             
-            for task in stale_tasks:
+            for task in running_tasks:
                 if task.retry_count < task.max_retries:
                     # 还有重试次数，重置为 pending
                     model.update(
                         status=TaskStatus.PENDING.value,
                         locked_by=None,
                         locked_at=None,
+                        started_at=None,
                         retry_count=model.retry_count + 1,
                         updated_at=now,
-                        error=f"Task recovered after stale (was running by {task.locked_by})"
+                        error=f"Task recovered after restart (was running by {task.locked_by})"
                     ).where(model.id == task.id).execute()
-                    logger.warning(f"Recovered stale task: {task_type}:{task.id} -> pending (retry {task.retry_count + 1}/{task.max_retries})")
+                    logger.warning(f"Recovered running task: {task_type}:{task.id} -> pending (retry {task.retry_count + 1}/{task.max_retries})")
                 else:
                     # 没有重试次数了，标记为失败
                     model.update(
@@ -101,9 +97,9 @@ class TaskManager:
                         locked_at=None,
                         updated_at=now,
                         completed_at=now,
-                        error=f"Task failed after max retries (was running by {task.locked_by})"
+                        error=f"Task failed after restart - max retries reached (was running by {task.locked_by})"
                     ).where(model.id == task.id).execute()
-                    logger.warning(f"Failed stale task: {task_type}:{task.id} -> failed (max retries reached)")
+                    logger.warning(f"Failed running task: {task_type}:{task.id} -> failed (max retries reached)")
     
     def close(self):
         """关闭数据库连接"""

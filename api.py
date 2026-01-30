@@ -6663,6 +6663,62 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             logger.error(f"Failed to cancel all tasks: {e}")
             return {"success": False, "error": str(e)}
 
+    def get_executor_status(self) -> dict:
+        """Get status of all task executors
+        
+        Returns:
+            dict with:
+            - data: list of executor status objects
+            - summary: counts by type (total/busy)
+        """
+        executors = []
+        summary = {
+            'image': {'total': 0, 'busy': 0},
+            'video': {'total': 0, 'busy': 0},
+            'audio': {'total': 0, 'busy': 0}
+        }
+        
+        for i, executor in enumerate(self._task_executors):
+            task_type = executor.task_type
+            is_busy = executor._current_task_id is not None
+            
+            # Get thread status
+            thread_alive = False
+            if i < len(self._task_executor_threads):
+                thread_alive = self._task_executor_threads[i].is_alive()
+            
+            # Get current task info if busy
+            current_task = None
+            if is_busy and self._task_manager:
+                try:
+                    result = self._task_manager.get_task(task_type, executor._current_task_id)
+                    if result.get('success'):
+                        current_task = result.get('data')
+                except Exception:
+                    pass
+            
+            executors.append({
+                'worker_id': executor.worker_id,
+                'task_type': task_type,
+                'running': executor._running,
+                'current_task_id': executor._current_task_id,
+                'current_task': current_task,
+                'thread_alive': thread_alive,
+                'heartbeat_interval': getattr(executor, 'heartbeat_interval', 10),
+                'lock_timeout': getattr(executor, 'lock_timeout', 60),
+            })
+            
+            # Update summary
+            summary[task_type]['total'] += 1
+            if is_busy:
+                summary[task_type]['busy'] += 1
+        
+        return {
+            'success': True,
+            'data': executors,
+            'summary': summary
+        }
+
     def create_image_task(
         self,
         subtype: str,

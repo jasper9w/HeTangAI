@@ -87,6 +87,30 @@ export interface TaskSummary {
   total: Record<TaskStatus, number>;
 }
 
+// ========== Executor Types ==========
+
+export interface ExecutorStatus {
+  worker_id: string;
+  task_type: TaskType;
+  running: boolean;
+  current_task_id: string | null;
+  current_task: Task | null;
+  thread_alive: boolean;
+  heartbeat_interval: number;
+  lock_timeout: number;
+}
+
+export interface ExecutorSummary {
+  total: number;
+  busy: number;
+}
+
+export interface ExecutorStatusResponse {
+  success: boolean;
+  data: ExecutorStatus[];
+  summary: Record<TaskType, ExecutorSummary>;
+}
+
 // ========== Shot Types ==========
 
 export type ShotStatus =
@@ -433,6 +457,7 @@ export interface PyWebViewApi {
   pause_all_tasks: (taskType?: string) => Promise<ApiResponse & { count?: number }>;
   resume_all_tasks: (taskType?: string) => Promise<ApiResponse & { count?: number }>;
   cancel_all_pending_tasks: (taskType?: string) => Promise<ApiResponse & { count?: number }>;
+  get_executor_status: () => Promise<ExecutorStatusResponse>;
   create_image_task: (
     subtype: string,
     prompt: string,

@@ -18,10 +18,13 @@ import {
   Clock,
   PauseCircle,
   AlertCircle,
+  Cpu,
+  Activity,
+  CircleDot,
 } from 'lucide-react';
 import { ImagePreviewModal } from '../ui/ImagePreviewModal';
 import { VideoModal } from '../ui/VideoModal';
-import type { Task, TaskType, TaskStatus, TaskSummary } from '../../types';
+import type { Task, TaskType, TaskStatus, TaskSummary, ExecutorStatus, ExecutorSummary } from '../../types';
 
 interface TaskPanelProps {
   isOpen: boolean;
@@ -81,12 +84,18 @@ const TYPE_CONFIG: Record<TaskType, { icon: React.ReactNode; label: string }> = 
   audio: { icon: <Music className="w-4 h-4" />, label: '音频' },
 };
 
+type PanelTab = 'tasks' | 'executors';
+
 export const TaskPanel: React.FC<TaskPanelProps> = ({
   isOpen,
   onClose,
   summary,
   onRefresh,
 }) => {
+  // Main tab state
+  const [activeTab, setActiveTab] = useState<PanelTab>('tasks');
+  
+  // Task list state
   const [filterType, setFilterType] = useState<FilterType>('all');
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -98,6 +107,17 @@ export const TaskPanel: React.FC<TaskPanelProps> = ({
   const [detailTab, setDetailTab] = useState<'overview' | 'metadata'>('overview');
   const [mediaInfo, setMediaInfo] = useState<Record<string, { width: number; height: number; duration?: number; size?: number }>>({});
   const pageSize = 100;
+  
+  // Executor state
+  const [executors, setExecutors] = useState<ExecutorStatus[]>([]);
+  const [executorSummary, setExecutorSummary] = useState<Record<TaskType, ExecutorSummary>>({
+    image: { total: 0, busy: 0 },
+    video: { total: 0, busy: 0 },
+    audio: { total: 0, busy: 0 },
+  });
+  const [executorLoading, setExecutorLoading] = useState(false);
+  const [selectedExecutor, setSelectedExecutor] = useState<ExecutorStatus | null>(null);
+  const [executorFilterType, setExecutorFilterType] = useState<TaskType>('image');
 
   // Helper to format file size
   const formatFileSize = (bytes: number): string => {
@@ -161,6 +181,28 @@ export const TaskPanel: React.FC<TaskPanelProps> = ({
     }
   }, [filterType, filterStatus, page]);
 
+  // Fetch executor status
+  const fetchExecutors = useCallback(async () => {
+    if (!window.pywebview?.api) return;
+
+    setExecutorLoading(true);
+    try {
+      const result = await window.pywebview.api.get_executor_status();
+      if (result.success) {
+        setExecutors(result.data || []);
+        setExecutorSummary(result.summary || {
+          image: { total: 0, busy: 0 },
+          video: { total: 0, busy: 0 },
+          audio: { total: 0, busy: 0 },
+        });
+      }
+    } catch (e) {
+      console.error('Failed to fetch executor status:', e);
+    } finally {
+      setExecutorLoading(false);
+    }
+  }, []);
+
   // Reset page when filter changes
   useEffect(() => {
     setPage(0);
@@ -168,16 +210,23 @@ export const TaskPanel: React.FC<TaskPanelProps> = ({
 
   // Fetch tasks on filter/page change
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && activeTab === 'tasks') {
       fetchTasks();
     }
-  }, [isOpen, filterType, filterStatus, page, fetchTasks]);
+  }, [isOpen, activeTab, filterType, filterStatus, page, fetchTasks]);
+
+  // Fetch executors when executor tab is active
+  useEffect(() => {
+    if (isOpen && activeTab === 'executors') {
+      fetchExecutors();
+    }
+  }, [isOpen, activeTab, fetchExecutors]);
 
   // Handle ESC key to close modals in order (innermost first)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && isOpen) {
-        // Close in order: preview image -> preview video -> task detail -> panel
+        // Close in order: preview image -> preview video -> task detail -> executor detail -> panel
         // Use stopImmediatePropagation to prevent other ESC handlers from firing
         if (previewImage) {
           e.stopImmediatePropagation();
@@ -188,6 +237,9 @@ export const TaskPanel: React.FC<TaskPanelProps> = ({
         } else if (selectedTask) {
           e.stopImmediatePropagation();
           setSelectedTask(null);
+        } else if (selectedExecutor) {
+          e.stopImmediatePropagation();
+          setSelectedExecutor(null);
         } else {
           onClose();
         }
@@ -832,30 +884,66 @@ export const TaskPanel: React.FC<TaskPanelProps> = ({
       <div className="bg-gradient-to-b from-slate-800 to-slate-900 w-full max-w-4xl max-h-[85vh] rounded-2xl shadow-2xl flex flex-col border border-slate-700/50">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-700/50">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-teal-500 to-emerald-600 flex items-center justify-center">
-              <Loader2 className="w-5 h-5 text-white" />
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-teal-500 to-emerald-600 flex items-center justify-center">
+                <Loader2 className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-white">任务队列</h2>
+                <p className="text-sm text-slate-400">
+                  {activeTab === 'tasks' ? `共 ${tasks.length} 个任务` : `共 ${executors.length} 个执行器`}
+                </p>
+              </div>
             </div>
-            <div>
-              <h2 className="text-xl font-bold text-white">任务队列</h2>
-              <p className="text-sm text-slate-400">
-                共 {tasks.length} 个任务
-              </p>
+            
+            {/* Main Tab Switch */}
+            <div className="flex items-center gap-1 bg-slate-900/50 rounded-xl p-1 ml-4">
+              <button
+                onClick={() => setActiveTab('tasks')}
+                className={`
+                  flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium transition-all
+                  ${activeTab === 'tasks'
+                    ? 'bg-teal-500/20 text-teal-400 shadow-sm'
+                    : 'text-slate-400 hover:text-slate-300 hover:bg-slate-700/50'
+                  }
+                `}
+              >
+                <Clock className="w-3.5 h-3.5" />
+                任务列表
+              </button>
+              <button
+                onClick={() => setActiveTab('executors')}
+                className={`
+                  flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium transition-all
+                  ${activeTab === 'executors'
+                    ? 'bg-teal-500/20 text-teal-400 shadow-sm'
+                    : 'text-slate-400 hover:text-slate-300 hover:bg-slate-700/50'
+                  }
+                `}
+              >
+                <Cpu className="w-3.5 h-3.5" />
+                执行器
+              </button>
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <button
-              onClick={pauseAll}
-              className="px-4 py-2 text-sm font-medium bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 rounded-xl transition-all border border-amber-500/20"
-            >
-              全部暂停
-            </button>
-            <button
-              onClick={resumeAll}
-              className="px-4 py-2 text-sm font-medium bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded-xl transition-all border border-emerald-500/20"
-            >
-              全部恢复
-            </button>
+            {activeTab === 'tasks' && (
+              <>
+                <button
+                  onClick={pauseAll}
+                  className="px-4 py-2 text-sm font-medium bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 rounded-xl transition-all border border-amber-500/20"
+                >
+                  全部暂停
+                </button>
+                <button
+                  onClick={resumeAll}
+                  className="px-4 py-2 text-sm font-medium bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded-xl transition-all border border-emerald-500/20"
+                >
+                  全部恢复
+                </button>
+              </>
+            )}
             <button
               onClick={onClose}
               className="p-2 hover:bg-slate-700 rounded-xl transition-colors"
@@ -865,154 +953,337 @@ export const TaskPanel: React.FC<TaskPanelProps> = ({
           </div>
         </div>
 
-        {/* Type Tabs + Filters */}
-        <div className="border-b border-slate-700/50 bg-slate-800/50">
-          {/* Type Tabs */}
-          <div className="flex items-center px-6 pt-2">
-            <div className="flex items-center gap-1 bg-slate-900/50 rounded-xl p-1">
-              {[
-                { value: 'all', label: '全部', icon: null },
-                { value: 'image', label: '图片', icon: <Image className="w-3.5 h-3.5" /> },
-                { value: 'video', label: '视频', icon: <Video className="w-3.5 h-3.5" /> },
-                { value: 'audio', label: '音频', icon: <Music className="w-3.5 h-3.5" /> },
-              ].map((tab) => (
-                <button
-                  key={tab.value}
-                  onClick={() => setFilterType(tab.value as FilterType)}
-                  className={`
-                    flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium transition-all
-                    ${filterType === tab.value
-                      ? 'bg-teal-500/20 text-teal-400 shadow-sm'
-                      : 'text-slate-400 hover:text-slate-300 hover:bg-slate-700/50'
-                    }
-                  `}
-                >
-                  {tab.icon}
-                  {tab.label}
-                </button>
-              ))}
-            </div>
+        {/* Task List View */}
+        {activeTab === 'tasks' && (
+          <>
+            {/* Type Tabs + Filters */}
+            <div className="border-b border-slate-700/50 bg-slate-800/50">
+              {/* Type Tabs */}
+              <div className="flex items-center px-6 pt-2">
+                <div className="flex items-center gap-1 bg-slate-900/50 rounded-xl p-1">
+                  {[
+                    { value: 'all', label: '全部', icon: null },
+                    { value: 'image', label: '图片', icon: <Image className="w-3.5 h-3.5" /> },
+                    { value: 'video', label: '视频', icon: <Video className="w-3.5 h-3.5" /> },
+                    { value: 'audio', label: '音频', icon: <Music className="w-3.5 h-3.5" /> },
+                  ].map((tab) => (
+                    <button
+                      key={tab.value}
+                      onClick={() => setFilterType(tab.value as FilterType)}
+                      className={`
+                        flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium transition-all
+                        ${filterType === tab.value
+                          ? 'bg-teal-500/20 text-teal-400 shadow-sm'
+                          : 'text-slate-400 hover:text-slate-300 hover:bg-slate-700/50'
+                        }
+                      `}
+                    >
+                      {tab.icon}
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
 
-            <div className="ml-auto flex items-center gap-4">
-              {/* Status Filter */}
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-slate-500">状态</span>
-                <select
-                  value={filterStatus}
-                  onChange={(e) => setFilterStatus(e.target.value as FilterStatus)}
-                  className="text-sm bg-slate-700/50 border border-slate-600 rounded-lg px-2 py-1 text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500/50 focus:border-teal-500"
-                >
-                  <option value="all">全部</option>
-                  <option value="pending">等待中</option>
-                  <option value="paused">已暂停</option>
-                  <option value="running">执行中</option>
-                  <option value="success">已完成</option>
-                  <option value="failed">失败</option>
-                  <option value="cancelled">已取消</option>
-                </select>
+                <div className="ml-auto flex items-center gap-4">
+                  {/* Status Filter */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-slate-500">状态</span>
+                    <select
+                      value={filterStatus}
+                      onChange={(e) => setFilterStatus(e.target.value as FilterStatus)}
+                      className="text-sm bg-slate-700/50 border border-slate-600 rounded-lg px-2 py-1 text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500/50 focus:border-teal-500"
+                    >
+                      <option value="all">全部</option>
+                      <option value="pending">等待中</option>
+                      <option value="paused">已暂停</option>
+                      <option value="running">执行中</option>
+                      <option value="success">已完成</option>
+                      <option value="failed">失败</option>
+                      <option value="cancelled">已取消</option>
+                    </select>
+                  </div>
+
+                  {/* Refresh */}
+                  <button
+                    onClick={fetchTasks}
+                    className="p-1.5 hover:bg-slate-700 rounded-lg transition-colors"
+                    title="刷新"
+                  >
+                    <RefreshCw className={`w-4 h-4 text-slate-400 ${loading ? 'animate-spin' : ''}`} />
+                  </button>
+                </div>
               </div>
 
-              {/* Refresh */}
-              <button
-                onClick={fetchTasks}
-                className="p-1.5 hover:bg-slate-700 rounded-lg transition-colors"
-                title="刷新"
-              >
-                <RefreshCw className={`w-4 h-4 text-slate-400 ${loading ? 'animate-spin' : ''}`} />
-              </button>
+              {/* Spacer */}
+              <div className="h-2" />
             </div>
-          </div>
 
-          {/* Spacer */}
-          <div className="h-2" />
-        </div>
-
-        {/* Task table */}
-        <div className="h-[520px] overflow-auto">
-          {loading && tasks.length === 0 ? (
-            <div className="flex items-center justify-center py-16">
-              <Loader2 className="w-8 h-8 animate-spin text-teal-500" />
+            {/* Task table */}
+            <div className="h-[520px] overflow-auto">
+              {loading && tasks.length === 0 ? (
+                <div className="flex items-center justify-center py-16">
+                  <Loader2 className="w-8 h-8 animate-spin text-teal-500" />
+                </div>
+              ) : tasks.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 text-slate-500">
+                  <div className="w-16 h-16 rounded-full bg-slate-800 flex items-center justify-center mb-4">
+                    <CheckCircle className="w-8 h-8 text-slate-600" />
+                  </div>
+                  <p className="text-lg font-medium">暂无任务</p>
+                  <p className="text-sm text-slate-600 mt-1">任务队列为空</p>
+                </div>
+              ) : (
+                <table className="w-full">
+                  <thead className="sticky top-0 bg-slate-800/95 backdrop-blur-sm">
+                    <tr className="text-xs text-slate-500 uppercase tracking-wider border-b border-slate-700/50">
+                      <th className="px-4 py-3 text-left font-semibold w-24">类型</th>
+                      <th className="px-4 py-3 text-left font-semibold w-28">状态</th>
+                      <th className="px-4 py-3 text-left font-semibold w-32">关联</th>
+                      <th className="px-4 py-3 text-left font-semibold">内容</th>
+                      <th className="px-4 py-3 text-right font-semibold w-20">创建</th>
+                      <th className="px-4 py-3 text-right font-semibold w-20">耗时</th>
+                      <th className="px-4 py-3 text-center font-semibold w-16">重试</th>
+                      <th className="px-4 py-3 text-right font-semibold w-24">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sortedTasks.map((task, index) => renderTaskRow(task, index))}
+                  </tbody>
+                </table>
+              )}
             </div>
-          ) : tasks.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-slate-500">
-              <div className="w-16 h-16 rounded-full bg-slate-800 flex items-center justify-center mb-4">
-                <CheckCircle className="w-8 h-8 text-slate-600" />
+
+            {/* Pagination & Summary footer */}
+            <div className="px-6 py-3 border-t border-slate-700/50 bg-slate-800/50">
+              <div className="flex items-center justify-between text-sm">
+                {/* Pagination */}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setPage(p => Math.max(0, p - 1))}
+                    disabled={page === 0}
+                    className="px-3 py-1 text-xs rounded bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    上一页
+                  </button>
+                  <span className="text-slate-400 px-2">第 {page + 1} 页</span>
+                  <button
+                    onClick={() => setPage(p => p + 1)}
+                    disabled={tasks.length < pageSize}
+                    className="px-3 py-1 text-xs rounded bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    下一页
+                  </button>
+                </div>
+                
+                {/* Task counts */}
+                <div className="flex items-center gap-6">
+                  <div className="flex items-center gap-2">
+                    <Image className="w-4 h-4 text-slate-500" />
+                    <span className="text-slate-400">
+                      <span className="text-teal-400 font-medium">{summary.image.running}</span> 执行
+                      <span className="text-slate-600 mx-1">/</span>
+                      <span className="text-slate-300">{summary.image.pending}</span> 等待
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Video className="w-4 h-4 text-slate-500" />
+                    <span className="text-slate-400">
+                      <span className="text-teal-400 font-medium">{summary.video.running}</span> 执行
+                      <span className="text-slate-600 mx-1">/</span>
+                      <span className="text-slate-300">{summary.video.pending}</span> 等待
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Music className="w-4 h-4 text-slate-500" />
+                    <span className="text-slate-400">
+                      <span className="text-teal-400 font-medium">{summary.audio.running}</span> 执行
+                      <span className="text-slate-600 mx-1">/</span>
+                      <span className="text-slate-300">{summary.audio.pending}</span> 等待
+                    </span>
+                  </div>
+                </div>
               </div>
-              <p className="text-lg font-medium">暂无任务</p>
-              <p className="text-sm text-slate-600 mt-1">任务队列为空</p>
             </div>
-          ) : (
-            <table className="w-full">
-              <thead className="sticky top-0 bg-slate-800/95 backdrop-blur-sm">
-                <tr className="text-xs text-slate-500 uppercase tracking-wider border-b border-slate-700/50">
-                  <th className="px-4 py-3 text-left font-semibold w-24">类型</th>
-                  <th className="px-4 py-3 text-left font-semibold w-28">状态</th>
-                  <th className="px-4 py-3 text-left font-semibold w-32">关联</th>
-                  <th className="px-4 py-3 text-left font-semibold">内容</th>
-                  <th className="px-4 py-3 text-right font-semibold w-20">创建</th>
-                  <th className="px-4 py-3 text-right font-semibold w-20">耗时</th>
-                  <th className="px-4 py-3 text-center font-semibold w-16">重试</th>
-                  <th className="px-4 py-3 text-right font-semibold w-24">操作</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sortedTasks.map((task, index) => renderTaskRow(task, index))}
-              </tbody>
-            </table>
-          )}
-        </div>
+          </>
+        )}
 
-        {/* Pagination & Summary footer */}
-        <div className="px-6 py-3 border-t border-slate-700/50 bg-slate-800/50">
-          <div className="flex items-center justify-between text-sm">
-            {/* Pagination */}
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setPage(p => Math.max(0, p - 1))}
-                disabled={page === 0}
-                className="px-3 py-1 text-xs rounded bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                上一页
-              </button>
-              <span className="text-slate-400 px-2">第 {page + 1} 页</span>
-              <button
-                onClick={() => setPage(p => p + 1)}
-                disabled={tasks.length < pageSize}
-                className="px-3 py-1 text-xs rounded bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                下一页
-              </button>
+        {/* Executor View */}
+        {activeTab === 'executors' && (
+          <>
+            {/* Type Tabs + Refresh */}
+            <div className="border-b border-slate-700/50 bg-slate-800/50">
+              <div className="flex items-center px-6 pt-2">
+                <div className="flex items-center gap-1 bg-slate-900/50 rounded-xl p-1">
+                  {[
+                    { value: 'image' as TaskType, label: '图片', icon: <Image className="w-3.5 h-3.5" /> },
+                    { value: 'video' as TaskType, label: '视频', icon: <Video className="w-3.5 h-3.5" /> },
+                    { value: 'audio' as TaskType, label: '音频', icon: <Music className="w-3.5 h-3.5" /> },
+                  ].map((tab) => {
+                    const summary = executorSummary[tab.value];
+                    return (
+                      <button
+                        key={tab.value}
+                        onClick={() => setExecutorFilterType(tab.value)}
+                        className={`
+                          flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium transition-all
+                          ${executorFilterType === tab.value
+                            ? 'bg-teal-500/20 text-teal-400 shadow-sm'
+                            : 'text-slate-400 hover:text-slate-300 hover:bg-slate-700/50'
+                          }
+                        `}
+                      >
+                        {tab.icon}
+                        {tab.label}
+                        <span className={`ml-1 text-xs ${executorFilterType === tab.value ? 'text-teal-300' : 'text-slate-500'}`}>
+                          {summary.busy}/{summary.total}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="ml-auto flex items-center gap-4">
+                  <button
+                    onClick={fetchExecutors}
+                    className="p-1.5 hover:bg-slate-700 rounded-lg transition-colors"
+                    title="刷新"
+                  >
+                    <RefreshCw className={`w-4 h-4 text-slate-400 ${executorLoading ? 'animate-spin' : ''}`} />
+                  </button>
+                </div>
+              </div>
+              <div className="h-2" />
             </div>
-            
-            {/* Task counts */}
-            <div className="flex items-center gap-6">
-              <div className="flex items-center gap-2">
-                <Image className="w-4 h-4 text-slate-500" />
-                <span className="text-slate-400">
-                  <span className="text-teal-400 font-medium">{summary.image.running}</span> 执行
-                  <span className="text-slate-600 mx-1">/</span>
-                  <span className="text-slate-300">{summary.image.pending}</span> 等待
+
+            {/* Executor table */}
+            <div className="h-[520px] overflow-auto">
+              {(() => {
+                const filteredExecutors = executors.filter(e => e.task_type === executorFilterType);
+                
+                if (executorLoading && executors.length === 0) {
+                  return (
+                    <div className="flex items-center justify-center py-16">
+                      <Loader2 className="w-8 h-8 animate-spin text-teal-500" />
+                    </div>
+                  );
+                }
+                
+                if (filteredExecutors.length === 0) {
+                  return (
+                    <div className="flex flex-col items-center justify-center py-16 text-slate-500">
+                      <div className="w-16 h-16 rounded-full bg-slate-800 flex items-center justify-center mb-4">
+                        <Cpu className="w-8 h-8 text-slate-600" />
+                      </div>
+                      <p className="text-lg font-medium">暂无{TYPE_CONFIG[executorFilterType].label}执行器</p>
+                      <p className="text-sm text-slate-600 mt-1">该类型执行器尚未启动</p>
+                    </div>
+                  );
+                }
+                
+                return (
+                  <table className="w-full">
+                    <thead className="sticky top-0 bg-slate-800/95 backdrop-blur-sm z-10">
+                      <tr className="text-xs text-slate-500 uppercase tracking-wider border-b border-slate-700/50">
+                        <th className="px-4 py-3 text-left font-semibold w-40">执行器ID</th>
+                        <th className="px-4 py-3 text-left font-semibold w-24">状态</th>
+                        <th className="px-4 py-3 text-left font-semibold">当前任务</th>
+                        <th className="px-4 py-3 text-center font-semibold w-24">线程</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredExecutors.map((executor, index) => {
+                        const isBusy = executor.current_task_id !== null;
+                        const taskLocation = executor.current_task ? getTaskLocation(executor.current_task) : null;
+                        const taskContent = executor.current_task ? getTaskContent(executor.current_task) : null;
+                        
+                        return (
+                          <tr
+                            key={executor.worker_id}
+                            onClick={() => setSelectedExecutor(executor)}
+                            className={`
+                              border-b border-slate-700/50 last:border-b-0 transition-colors cursor-pointer
+                              ${index % 2 === 0 ? 'bg-slate-800/30' : 'bg-slate-800/60'}
+                              hover:bg-slate-700/50
+                            `}
+                          >
+                            {/* Worker ID */}
+                            <td className="px-4 py-3">
+                              <span className="font-mono text-sm text-slate-300">{executor.worker_id}</span>
+                            </td>
+
+                            {/* Status */}
+                            <td className="px-4 py-3">
+                              <span className={`
+                                inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium
+                                ${isBusy 
+                                  ? 'text-teal-400 bg-teal-500/20' 
+                                  : 'text-slate-400 bg-slate-500/20'
+                                }
+                              `}>
+                                {isBusy ? (
+                                  <>
+                                    <Activity className="w-3 h-3 animate-pulse" />
+                                    执行中
+                                  </>
+                                ) : (
+                                  <>
+                                    <CircleDot className="w-3 h-3" />
+                                    空闲
+                                  </>
+                                )}
+                              </span>
+                            </td>
+
+                            {/* Current Task */}
+                            <td className="px-4 py-3 max-w-[280px]">
+                              {isBusy && executor.current_task ? (
+                                <div className="flex flex-col gap-0.5">
+                                  <span className="text-sm text-slate-300">
+                                    {taskLocation || <span className="font-mono text-xs">{executor.current_task_id?.slice(0, 8)}</span>}
+                                  </span>
+                                  {taskContent && (
+                                    <span className="text-xs text-slate-500 truncate" title={taskContent}>
+                                      {taskContent}
+                                    </span>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-slate-600">-</span>
+                              )}
+                            </td>
+
+                            {/* Thread Status */}
+                            <td className="px-4 py-3 text-center">
+                              <span className={`
+                                inline-flex items-center gap-1 text-xs font-medium
+                                ${executor.thread_alive ? 'text-emerald-400' : 'text-red-400'}
+                              `}>
+                                <span className={`w-2 h-2 rounded-full ${executor.thread_alive ? 'bg-emerald-400' : 'bg-red-400'}`}></span>
+                                {executor.thread_alive ? '正常' : '异常'}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                );
+              })()}
+            </div>
+
+            {/* Executor footer */}
+            <div className="px-6 py-3 border-t border-slate-700/50 bg-slate-800/50">
+              <div className="flex items-center justify-between text-sm text-slate-400">
+                <span>
+                  执行器是独立的任务处理线程，每个执行器同时只能处理一个任务
+                </span>
+                <span className="text-xs text-slate-500">
+                  {TYPE_CONFIG[executorFilterType].label}: {executors.filter(e => e.task_type === executorFilterType && e.current_task_id).length} 忙碌 / {executors.filter(e => e.task_type === executorFilterType).length} 总数
                 </span>
               </div>
-              <div className="flex items-center gap-2">
-                <Video className="w-4 h-4 text-slate-500" />
-                <span className="text-slate-400">
-                  <span className="text-teal-400 font-medium">{summary.video.running}</span> 执行
-                  <span className="text-slate-600 mx-1">/</span>
-                  <span className="text-slate-300">{summary.video.pending}</span> 等待
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Music className="w-4 h-4 text-slate-500" />
-                <span className="text-slate-400">
-                  <span className="text-teal-400 font-medium">{summary.audio.running}</span> 执行
-                  <span className="text-slate-600 mx-1">/</span>
-                  <span className="text-slate-300">{summary.audio.pending}</span> 等待
-                </span>
-              </div>
             </div>
-          </div>
-        </div>
+          </>
+        )}
       </div>
 
       {/* Task detail modal */}
@@ -1034,6 +1305,139 @@ export const TaskPanel: React.FC<TaskPanelProps> = ({
           title={previewVideo.title}
           onClose={() => setPreviewVideo(null)}
         />
+      )}
+
+      {/* Executor detail modal */}
+      {selectedExecutor && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+          <div className="bg-gradient-to-b from-slate-800 to-slate-900 w-full max-w-lg rounded-2xl shadow-2xl border border-slate-700/50">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-700/50">
+              <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                  selectedExecutor.current_task_id 
+                    ? 'bg-gradient-to-br from-teal-500 to-emerald-600' 
+                    : 'bg-slate-700'
+                }`}>
+                  <Cpu className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-white">执行器详情</h3>
+                  <p className="text-sm text-slate-400 font-mono">{selectedExecutor.worker_id}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedExecutor(null)}
+                className="p-2 hover:bg-slate-700 rounded-xl transition-colors"
+              >
+                <X className="w-5 h-5 text-slate-400" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 space-y-6">
+              {/* Basic Info */}
+              <div>
+                <h4 className="text-sm font-medium text-slate-400 mb-3">基本信息</h4>
+                <div className="bg-slate-900/50 rounded-xl p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-slate-500">任务类型</span>
+                    <span className="text-sm text-slate-200 flex items-center gap-2">
+                      {TYPE_CONFIG[selectedExecutor.task_type].icon}
+                      {TYPE_CONFIG[selectedExecutor.task_type].label}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-slate-500">运行状态</span>
+                    <span className={`text-sm ${selectedExecutor.running ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {selectedExecutor.running ? '运行中' : '已停止'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-slate-500">线程状态</span>
+                    <span className={`text-sm flex items-center gap-1.5 ${selectedExecutor.thread_alive ? 'text-emerald-400' : 'text-red-400'}`}>
+                      <span className={`w-2 h-2 rounded-full ${selectedExecutor.thread_alive ? 'bg-emerald-400' : 'bg-red-400'}`}></span>
+                      {selectedExecutor.thread_alive ? '正常' : '异常'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-slate-500">工作状态</span>
+                    <span className={`text-sm ${selectedExecutor.current_task_id ? 'text-teal-400' : 'text-slate-400'}`}>
+                      {selectedExecutor.current_task_id ? '执行中' : '空闲'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Config Info */}
+              <div>
+                <h4 className="text-sm font-medium text-slate-400 mb-3">配置信息</h4>
+                <div className="bg-slate-900/50 rounded-xl p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-slate-500">心跳间隔</span>
+                    <span className="text-sm text-slate-200">{selectedExecutor.heartbeat_interval} 秒</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-slate-500">锁超时时间</span>
+                    <span className="text-sm text-slate-200">{selectedExecutor.lock_timeout} 秒</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Current Task Info */}
+              {selectedExecutor.current_task && (
+                <div>
+                  <h4 className="text-sm font-medium text-slate-400 mb-3">当前任务</h4>
+                  <div className="bg-slate-900/50 rounded-xl p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-slate-500">任务ID</span>
+                      <span className="text-sm text-slate-200 font-mono">{selectedExecutor.current_task.id.slice(0, 12)}...</span>
+                    </div>
+                    {selectedExecutor.current_task.shot_sequence !== null && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-slate-500">关联镜头</span>
+                        <span className="text-sm text-slate-200">镜头 {selectedExecutor.current_task.shot_sequence}</span>
+                      </div>
+                    )}
+                    {('prompt' in selectedExecutor.current_task && selectedExecutor.current_task.prompt) && (
+                      <div>
+                        <span className="text-sm text-slate-500 block mb-1">提示词</span>
+                        <p className="text-sm text-slate-300 bg-slate-800/50 rounded-lg p-2 max-h-20 overflow-auto">
+                          {selectedExecutor.current_task.prompt}
+                        </p>
+                      </div>
+                    )}
+                    {('text' in selectedExecutor.current_task && selectedExecutor.current_task.text) && (
+                      <div>
+                        <span className="text-sm text-slate-500 block mb-1">文本内容</span>
+                        <p className="text-sm text-slate-300 bg-slate-800/50 rounded-lg p-2 max-h-20 overflow-auto">
+                          {selectedExecutor.current_task.text}
+                        </p>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-slate-500">开始时间</span>
+                      <span className="text-sm text-slate-200">
+                        {selectedExecutor.current_task.started_at 
+                          ? new Date(selectedExecutor.current_task.started_at).toLocaleString('zh-CN')
+                          : '-'
+                        }
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* No current task */}
+              {!selectedExecutor.current_task && (
+                <div className="text-center py-4 text-slate-500">
+                  <CircleDot className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">执行器当前空闲，等待任务分配</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
