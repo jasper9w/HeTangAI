@@ -1153,19 +1153,40 @@ export function ReferenceAudioModal({
           {/* Custom Audio Content */}
           {mainTab === 'custom' && (
             <>
-              {/* Search */}
-              <div className="p-3 border-b border-slate-700">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="搜索音频文件..."
-                    className="w-full pl-10 pr-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
-                  />
+              {/* Directory selector + Search bar */}
+              {referenceDir && (
+                <div className="p-3 border-b border-slate-700 space-y-2">
+                  {/* Current directory display */}
+                  <div className="flex items-center gap-2">
+                    <FolderOpen className="w-4 h-4 text-slate-500 flex-shrink-0" />
+                    <span className="text-xs text-slate-400 truncate flex-1" title={referenceDir}>
+                      {referenceDir}
+                    </span>
+                    <button
+                      onClick={handleSelectReferenceDir}
+                      disabled={isSelectingDir}
+                      className="px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded text-xs text-slate-300 transition-colors flex-shrink-0 disabled:opacity-50"
+                    >
+                      {isSelectingDir ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : (
+                        '更换目录'
+                      )}
+                    </button>
+                  </div>
+                  {/* Search */}
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="搜索音频文件..."
+                      className="w-full pl-10 pr-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                    />
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Custom Audio List */}
               <div className="flex-1 overflow-y-auto p-4">
@@ -1175,9 +1196,21 @@ export function ReferenceAudioModal({
                   </div>
                 ) : !referenceDir ? (
                   <div className="text-center py-12">
-                    <FolderOpen className="w-12 h-12 text-slate-600 mx-auto mb-4" />
-                    <p className="text-slate-400 mb-2">未设置参考音频目录</p>
-                    <p className="text-slate-500 text-sm">请在设置页面中配置参考音频目录</p>
+                    <FolderOpen className="w-16 h-16 text-slate-600 mx-auto mb-4" />
+                    <p className="text-slate-300 mb-2">选择参考音频目录</p>
+                    <p className="text-slate-500 text-sm mb-6">请选择存放自定义参考音频的目录</p>
+                    <button
+                      onClick={handleSelectReferenceDir}
+                      disabled={isSelectingDir}
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-teal-600 hover:bg-teal-500 rounded-lg text-sm text-white transition-colors disabled:opacity-50"
+                    >
+                      {isSelectingDir ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <FolderOpen className="w-4 h-4" />
+                      )}
+                      选择目录
+                    </button>
                   </div>
                 ) : filteredCustomAudios.length === 0 ? (
                   <div className="text-center py-12 text-slate-500">
