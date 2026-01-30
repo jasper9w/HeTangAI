@@ -21,4 +21,5 @@ dependencies = [
     "numpy>=2.4.1",
     "ffmpeg-python>=0.2.0",
     "peewee>=3.19.0",
+    "curl-cffi>=0.14.0",
 ]
