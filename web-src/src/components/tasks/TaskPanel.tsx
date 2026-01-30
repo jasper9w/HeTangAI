@@ -249,7 +249,7 @@ export const TaskPanel: React.FC<TaskPanelProps> = ({
     // Use capture phase to handle before child components
     document.addEventListener('keydown', handleKeyDown, true);
     return () => document.removeEventListener('keydown', handleKeyDown, true);
-  }, [isOpen, onClose, previewImage, previewVideo, selectedTask]);
+  }, [isOpen, onClose, previewImage, previewVideo, selectedTask, selectedExecutor]);
 
   // Task actions
   const pauseTask = async (taskType: string, taskId: string) => {
@@ -1185,7 +1185,7 @@ export const TaskPanel: React.FC<TaskPanelProps> = ({
                     <thead className="sticky top-0 bg-slate-800/95 backdrop-blur-sm z-10">
                       <tr className="text-xs text-slate-500 uppercase tracking-wider border-b border-slate-700/50">
                         <th className="px-4 py-3 text-left font-semibold w-40">执行器ID</th>
-                        <th className="px-4 py-3 text-left font-semibold w-24">状态</th>
+                        <th className="px-4 py-3 text-left font-semibold w-32">状态</th>
                         <th className="px-4 py-3 text-left font-semibold">当前任务</th>
                         <th className="px-4 py-3 text-center font-semibold w-24">线程</th>
                       </tr>
@@ -1214,7 +1214,7 @@ export const TaskPanel: React.FC<TaskPanelProps> = ({
                             {/* Status */}
                             <td className="px-4 py-3">
                               <span className={`
-                                inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium
+                                inline-flex items-center justify-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium min-w-[4.5rem]
                                 ${isBusy 
                                   ? 'text-teal-400 bg-teal-500/20' 
                                   : 'text-slate-400 bg-slate-500/20'
