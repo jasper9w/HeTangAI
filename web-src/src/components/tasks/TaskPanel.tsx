@@ -1369,9 +1369,46 @@ export const TaskPanel: React.FC<TaskPanelProps> = ({
                 </div>
               </div>
 
-              {/* Config Info */}
+              {/* API Config Info */}
+              {selectedExecutor.config && (
+                <div>
+                  <h4 className="text-sm font-medium text-slate-400 mb-3">接口配置 (实时读取)</h4>
+                  <div className="bg-slate-900/50 rounded-xl p-4 space-y-3">
+                    {selectedExecutor.config.error ? (
+                      <div className="text-sm text-red-400">配置读取失败: {selectedExecutor.config.error}</div>
+                    ) : (
+                      <>
+                        <div>
+                          <span className="text-sm text-slate-500 block mb-1">接口地址</span>
+                          <p className="text-sm text-slate-200 bg-slate-800/50 rounded-lg p-2 font-mono break-all select-text cursor-text">
+                            {selectedExecutor.config.api_url || <span className="text-slate-500 italic">未配置</span>}
+                          </p>
+                        </div>
+                        <div>
+                          <span className="text-sm text-slate-500 block mb-1">API Key</span>
+                          <p className="text-sm text-slate-200 bg-slate-800/50 rounded-lg p-2 font-mono break-all select-text cursor-text">
+                            {selectedExecutor.config.api_key || <span className="text-slate-500 italic">未配置</span>}
+                          </p>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-slate-500">模型</span>
+                          <span className="text-sm text-slate-200 font-mono">
+                            {selectedExecutor.config.model || <span className="text-slate-500 italic">未配置</span>}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-slate-500">配置键</span>
+                          <span className="text-sm text-slate-200 font-mono">{selectedExecutor.config.config_key}</span>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Runtime Config */}
               <div>
-                <h4 className="text-sm font-medium text-slate-400 mb-3">配置信息</h4>
+                <h4 className="text-sm font-medium text-slate-400 mb-3">运行参数</h4>
                 <div className="bg-slate-900/50 rounded-xl p-4 space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-slate-500">心跳间隔</span>

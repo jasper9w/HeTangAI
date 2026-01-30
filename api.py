@@ -150,15 +150,17 @@ class Api:
         ttv_concurrency = ttv_config.get("concurrency", 1)
         tts_concurrency = tts_config.get("concurrency", 1)
 
+        # Settings file path for dynamic config loading
+        settings_file = str(self._settings_file)
+
         # Start image executors
         if tti_config.get("apiUrl") and tti_config.get("apiKey"):
             for i in range(tti_concurrency):
                 executor = ImageExecutor(
                     db_path=db_path,
-                    api_url=tti_config["apiUrl"],
-                    api_key=tti_config["apiKey"],
-                    model=tti_config.get("model", ""),
-                    worker_id=f"image-{i}"
+                    worker_id=f"image-{i}",
+                    settings_file=settings_file,
+                    config_key='tti'
                 )
                 thread = threading.Thread(
                     target=executor.run_loop,
@@ -175,10 +177,9 @@ class Api:
             for i in range(ttv_concurrency):
                 executor = VideoExecutor(
                     db_path=db_path,
-                    api_url=ttv_config["apiUrl"],
-                    api_key=ttv_config["apiKey"],
-                    model=ttv_config.get("model", ""),
-                    worker_id=f"video-{i}"
+                    worker_id=f"video-{i}",
+                    settings_file=settings_file,
+                    config_key='ttv'
                 )
                 thread = threading.Thread(
                     target=executor.run_loop,
@@ -195,10 +196,9 @@ class Api:
             for i in range(tts_concurrency):
                 executor = AudioExecutor(
                     db_path=db_path,
-                    api_url=tts_config["apiUrl"],
-                    api_key=tts_config.get("apiKey", ""),
-                    model=tts_config.get("model", ""),
-                    worker_id=f"audio-{i}"
+                    worker_id=f"audio-{i}",
+                    settings_file=settings_file,
+                    config_key='tts'
                 )
                 thread = threading.Thread(
                     target=executor.run_loop,
@@ -410,19 +410,24 @@ class Api:
         
         # 检查 API 配置
         api_url = config.get("apiUrl", "")
-        api_key = config.get("apiKey", "")
         
         if not api_url:
             logger.warning(f"Cannot add {task_type} executor: apiUrl not configured")
             return
         
-        # 创建执行器
+        # 配置键名映射
+        config_key_map = {
+            'image': 'tti',
+            'video': 'ttv',
+            'audio': 'tts'
+        }
+        
+        # 创建执行器（使用动态配置加载）
         executor = executor_class(
             db_path=db_path,
-            api_url=api_url,
-            api_key=api_key,
-            model=config.get("model", ""),
-            worker_id=f"{task_type}-{next_id}"
+            worker_id=f"{task_type}-{next_id}",
+            settings_file=str(self._settings_file),
+            config_key=config_key_map.get(task_type, task_type)
         )
         
         # 启动线程
@@ -6769,6 +6774,21 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 except Exception:
                     pass
             
+            # Get current config (dynamically loaded)
+            config_info = {}
+            if hasattr(executor, '_load_config'):
+                try:
+                    api_url, api_key, model = executor._load_config()
+                    config_info = {
+                        'api_url': api_url or '',
+                        'api_key': api_key or '',
+                        'model': model or '',
+                        'settings_file': getattr(executor, '_settings_file', ''),
+                        'config_key': getattr(executor, '_config_key', ''),
+                    }
+                except Exception as e:
+                    config_info = {'error': str(e)}
+            
             executors.append({
                 'worker_id': executor.worker_id,
                 'task_type': task_type,
@@ -6778,6 +6798,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 'thread_alive': thread_alive,
                 'heartbeat_interval': getattr(executor, 'heartbeat_interval', 10),
                 'lock_timeout': getattr(executor, 'lock_timeout', 60),
+                'config': config_info,
             })
             
             # Update summary

@@ -89,6 +89,15 @@ export interface TaskSummary {
 
 // ========== Executor Types ==========
 
+export interface ExecutorConfig {
+  api_url: string;
+  api_key: string;
+  model: string;
+  settings_file: string;
+  config_key: string;
+  error?: string;
+}
+
 export interface ExecutorStatus {
   worker_id: string;
   task_type: TaskType;
@@ -98,6 +107,7 @@ export interface ExecutorStatus {
   thread_alive: boolean;
   heartbeat_interval: number;
   lock_timeout: number;
+  config?: ExecutorConfig;
 }
 
 export interface ExecutorSummary {

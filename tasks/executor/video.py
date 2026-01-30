@@ -3,6 +3,7 @@
 """
 
 import asyncio
+import json
 from pathlib import Path
 from typing import Optional, Tuple, Any, List
 
@@ -20,27 +21,62 @@ class VideoExecutor(BaseExecutor):
     def __init__(
         self,
         db_path: str,
-        api_url: str,
-        api_key: str,
-        model: str,
+        api_url: str = None,
+        api_key: str = None,
+        model: str = None,
         worker_id: str = None,
         heartbeat_interval: int = 30,
-        lock_timeout: int = 120  # 视频生成通常更慢
+        lock_timeout: int = 120,  # 视频生成通常更慢
+        settings_file: str = None,
+        config_key: str = 'ttv'
     ):
         """
         初始化视频执行器
         
         Args:
             db_path: 数据库路径
-            api_url: API 地址
-            api_key: API 密钥
-            model: 模型名称
+            api_url: API 地址（已弃用，优先使用 settings_file）
+            api_key: API 密钥（已弃用，优先使用 settings_file）
+            model: 模型名称（已弃用，优先使用 settings_file）
             worker_id: 执行器ID
             heartbeat_interval: 心跳间隔
             lock_timeout: 锁超时
+            settings_file: 设置文件路径，每次执行时动态读取配置
+            config_key: 配置键名（如 'ttv'）
         """
         super().__init__(db_path, worker_id, heartbeat_interval, lock_timeout)
-        self._client = GenerationClient(api_url, api_key, model)
+        self._settings_file = settings_file
+        self._config_key = config_key
+        # 保留旧参数作为后备
+        self._fallback_api_url = api_url
+        self._fallback_api_key = api_key
+        self._fallback_model = model
+    
+    def _load_config(self) -> tuple:
+        """动态加载最新配置"""
+        if self._settings_file and Path(self._settings_file).exists():
+            try:
+                with open(self._settings_file, 'r', encoding='utf-8') as f:
+                    settings = json.load(f)
+                config = settings.get(self._config_key, {})
+                api_url = config.get('apiUrl', '')
+                api_key = config.get('apiKey', '')
+                model = config.get('model', '')
+                if api_url:
+                    logger.debug(f"Loaded config from settings: api_url={api_url[:30]}...")
+                    return api_url, api_key, model
+            except Exception as e:
+                logger.warning(f"Failed to load settings file: {e}")
+        
+        # 使用后备配置
+        return self._fallback_api_url, self._fallback_api_key, self._fallback_model
+    
+    def _get_client(self) -> GenerationClient:
+        """获取使用最新配置的客户端"""
+        api_url, api_key, model = self._load_config()
+        if not api_url:
+            raise ValueError("Video API URL not configured")
+        return GenerationClient(api_url, api_key, model)
     
     def execute(self, task: Any) -> Tuple[Optional[str], Optional[str]]:
         """
@@ -81,9 +117,12 @@ class VideoExecutor(BaseExecutor):
             image_paths = None  # 纯文生视频不需要图片
             logger.info("Using text2video mode (no images)")
         
+        # 每次执行时获取最新配置的客户端
+        client = self._get_client()
+        
         # 调用生成 API
         result_url = asyncio.run(
-            self._client.generate_video(
+            client.generate_video(
                 prompt=task.prompt,
                 image_paths=image_paths
             )
