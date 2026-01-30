@@ -33,7 +33,7 @@ import { UpdateModal } from './components/ui/UpdateModal';
 import { ExportProgressModal, type ExportProgress } from './components/ui/ExportProgressModal';
 import { TaskStatusBar, TaskPanel } from './components/tasks';
 import { useTaskPolling } from './hooks/useTaskPolling';
-import type { ProjectData, Shot, PageType, ImportedCharacter } from './types';
+import type { ProjectData, Shot, PageType, ImportedCharacter, Character, Scene } from './types';
 
 function App() {
   const { api, ready } = useApi();
@@ -284,6 +284,39 @@ function App() {
       }
     };
 
+    // Listen for character updates from task system
+    const handleCharacterUpdate = (event: CustomEvent<{ characterId: string; character: Character }>) => {
+      const { characterId, character } = event.detail;
+      setProject((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          characters: prev.characters.map((c) =>
+            c.id === characterId ? character : c
+          ),
+        };
+      });
+      setIsDirty(true);
+    };
+
+    // Listen for scene updates from task system
+    const handleSceneUpdate = (event: CustomEvent<{ sceneId: string; scene: Scene }>) => {
+      const { sceneId, scene } = event.detail;
+      setProject((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          scenes: (prev.scenes || []).map((s) =>
+            s.id === sceneId ? scene : s
+          ),
+        };
+      });
+      setIsDirty(true);
+    };
+
+    window.addEventListener('characterUpdate', handleCharacterUpdate as EventListener);
+    window.addEventListener('sceneUpdate', handleSceneUpdate as EventListener);
+
     return () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       delete (window as any).onShotStatusChange;
@@ -291,6 +324,8 @@ function App() {
       delete (window as any).onProgressIncrement;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       delete (window as any).onExportProgress;
+      window.removeEventListener('characterUpdate', handleCharacterUpdate as EventListener);
+      window.removeEventListener('sceneUpdate', handleSceneUpdate as EventListener);
     };
   }, []);
 
@@ -413,18 +448,20 @@ function App() {
 
     const result = await api.generate_character_image(id);
 
-    if (result.success && result.character) {
+    if (result.success && result.task_id) {
+      // Task created successfully - update character with task_id
+      // The actual result will come via characterUpdate event
       setProject((prev) => {
         if (!prev) return prev;
         return {
           ...prev,
           characters: prev.characters.map((c) =>
-            c.id === id ? result.character! : c
+            c.id === id ? { ...c, status: 'generating' as const, imageTaskId: result.task_id } : c
           ),
         };
       });
       setIsDirty(true);
-      showToast('success', '角色图片生成成功');
+      showToast('info', '角色图片生成任务已创建');
     } else {
       // Revert status on error
       setProject((prev) => {
@@ -436,7 +473,7 @@ function App() {
           ),
         };
       });
-      showToast('error', `角色图片生成失败: ${result.error || '未知错误'}`);
+      showToast('error', `创建角色图片生成任务失败: ${result.error || '未知错误'}`);
     }
   };
 
@@ -563,18 +600,20 @@ function App() {
     });
 
     const result = await api.generate_scene_image(id);
-    if (result.success && result.scene) {
+    if (result.success && result.task_id) {
+      // Task created successfully - update scene with task_id
+      // The actual result will come via sceneUpdate event
       setProject((prev) => {
         if (!prev) return prev;
         return {
           ...prev,
           scenes: (prev.scenes || []).map((s) =>
-            s.id === id ? result.scene! : s
+            s.id === id ? { ...s, status: 'generating' as const, imageTaskId: result.task_id } : s
           ),
         };
       });
       setIsDirty(true);
-      showToast('success', '场景图片生成成功');
+      showToast('info', '场景图片生成任务已创建');
     } else {
       setProject((prev) => {
         if (!prev) return prev;
@@ -585,7 +624,7 @@ function App() {
           ),
         };
       });
-      showToast('error', `场景图片生成失败: ${result.error || '未知错误'}`);
+      showToast('error', `创建场景图片生成任务失败: ${result.error || '未知错误'}`);
     }
   };
 

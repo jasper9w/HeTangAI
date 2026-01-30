@@ -59,20 +59,44 @@ export function StyleSelectorModal({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
+  // Listen for style preview updates from task system
+  useEffect(() => {
+    const handleProjectUpdate = (event: CustomEvent<{ type: string; data: Record<string, unknown> }>) => {
+      const { type, data } = event.detail;
+      if (type === 'style' && data.styleConfig) {
+        const styleConfig = data.styleConfig as { previewImageUrl?: string };
+        if (styleConfig.previewImageUrl) {
+          setCustomPreviewUrl(styleConfig.previewImageUrl);
+          setIsGeneratingPreview(false);
+        }
+      } else if (type === 'style_error') {
+        setIsGeneratingPreview(false);
+        console.error('Style preview generation failed:', data.error);
+      }
+    };
+
+    window.addEventListener('projectUpdate', handleProjectUpdate as EventListener);
+    return () => window.removeEventListener('projectUpdate', handleProjectUpdate as EventListener);
+  }, []);
+
   const handleGeneratePreview = async () => {
     if (!api || !customPrompt.trim() || isGeneratingPreview) return;
 
     setIsGeneratingPreview(true);
     try {
       const result = await api.generate_style_preview(customPrompt.trim());
-      if (result.success && result.imageUrl) {
-        setCustomPreviewUrl(result.imageUrl);
+      if (result.success && result.task_id) {
+        // Task created, will receive update via projectUpdate event
+        console.log('Style preview task created:', result.task_id);
+      } else {
+        setIsGeneratingPreview(false);
+        console.error('Failed to create style preview task:', result.error);
       }
     } catch (error) {
       console.error('Failed to generate style preview:', error);
-    } finally {
       setIsGeneratingPreview(false);
     }
+    // Note: isGeneratingPreview will be reset when projectUpdate event is received
   };
 
   if (!isOpen) return null;

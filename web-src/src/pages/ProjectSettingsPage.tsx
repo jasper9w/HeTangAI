@@ -148,6 +148,29 @@ export function ProjectSettingsPage({ projectName, showToast, onSettingsChange }
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [aiChatModalOpen]);
 
+  // Listen for project updates (cover image completion from task system)
+  useEffect(() => {
+    const handleProjectUpdate = (event: CustomEvent<{ type: string; data: Record<string, unknown> }>) => {
+      const { type, data } = event.detail;
+      if (type === 'cover' && data.coverUrl) {
+        // Cover generation completed
+        updateWorkInfo({ coverImage: data.coverUrl as string });
+        setIsGeneratingCover(false);
+        showToast('success', '封面已生成');
+      } else if (type === 'cover_error') {
+        setIsGeneratingCover(false);
+        showToast('error', (data.error as string) || '生成封面失败');
+      } else if (type === 'style' && data.styleConfig) {
+        // Style preview completed - handled in StyleSelectorModal
+      } else if (type === 'style_error') {
+        showToast('error', (data.error as string) || '生成风格预览失败');
+      }
+    };
+
+    window.addEventListener('projectUpdate', handleProjectUpdate as EventListener);
+    return () => window.removeEventListener('projectUpdate', handleProjectUpdate as EventListener);
+  }, [showToast]);
+
   // Auto-save settings
   const scheduleSaveSettings = () => {
     if (!api || !projectName) return;
@@ -255,18 +278,19 @@ export function ProjectSettingsPage({ projectName, showToast, onSettingsChange }
     setIsGeneratingCover(true);
     try {
       const result = await api.generate_cover_image();
-      if (result.success && result.imageUrl) {
-        updateWorkInfo({ coverImage: result.imageUrl });
-        showToast('success', '封面已生成');
+      if (result.success && result.task_id) {
+        // Task created, will receive update via projectUpdate event
+        showToast('info', '封面生成任务已创建');
       } else {
-        showToast('error', result.error || '生成封面失败');
+        setIsGeneratingCover(false);
+        showToast('error', result.error || '创建封面生成任务失败');
       }
     } catch (error) {
       console.error('Failed to generate cover:', error);
-      showToast('error', '生成封面失败');
-    } finally {
       setIsGeneratingCover(false);
+      showToast('error', '创建封面生成任务失败');
     }
+    // Note: isGeneratingCover will be reset when projectUpdate event is received
   };
 
   const handleExportCover = async () => {

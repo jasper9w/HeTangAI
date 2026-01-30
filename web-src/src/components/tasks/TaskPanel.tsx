@@ -617,7 +617,7 @@ export const TaskPanel: React.FC<TaskPanelProps> = ({
                         <h5 className="text-xs font-medium text-slate-500 mb-1.5">
                           {task.task_type === 'audio' ? '文本内容' : '提示词'}
                         </h5>
-                        <div className="bg-slate-900/50 rounded-lg p-3 text-sm text-slate-300 whitespace-pre-wrap max-h-[200px] overflow-auto">
+                        <div className="bg-slate-900/50 rounded-lg p-3 text-sm text-slate-300 whitespace-pre-wrap max-h-[200px] overflow-auto select-text cursor-text">
                           {('prompt' in task ? task.prompt : '') || ('text' in task ? task.text : '') || '-'}
                         </div>
                       </div>
@@ -856,7 +856,7 @@ export const TaskPanel: React.FC<TaskPanelProps> = ({
                 {metadataRows.map((row, idx) => (
                   <div key={idx} className="flex items-start gap-4 py-2 border-b border-slate-700/30 last:border-0">
                     <span className="text-sm text-slate-500 w-28 flex-shrink-0">{row.label}</span>
-                    <span className="text-sm text-slate-300 break-all font-mono">{row.value}</span>
+                    <span className="text-sm text-slate-300 break-all font-mono select-text cursor-text">{row.value}</span>
                   </div>
                 ))}
               </div>
@@ -1402,7 +1402,7 @@ export const TaskPanel: React.FC<TaskPanelProps> = ({
                     {('prompt' in selectedExecutor.current_task && selectedExecutor.current_task.prompt) && (
                       <div>
                         <span className="text-sm text-slate-500 block mb-1">提示词</span>
-                        <p className="text-sm text-slate-300 bg-slate-800/50 rounded-lg p-2 max-h-20 overflow-auto">
+                        <p className="text-sm text-slate-300 bg-slate-800/50 rounded-lg p-2 max-h-20 overflow-auto select-text cursor-text">
                           {selectedExecutor.current_task.prompt}
                         </p>
                       </div>
@@ -1410,7 +1410,7 @@ export const TaskPanel: React.FC<TaskPanelProps> = ({
                     {('text' in selectedExecutor.current_task && selectedExecutor.current_task.text) && (
                       <div>
                         <span className="text-sm text-slate-500 block mb-1">文本内容</span>
-                        <p className="text-sm text-slate-300 bg-slate-800/50 rounded-lg p-2 max-h-20 overflow-auto">
+                        <p className="text-sm text-slate-300 bg-slate-800/50 rounded-lg p-2 max-h-20 overflow-auto select-text cursor-text">
                           {selectedExecutor.current_task.text}
                         </p>
                       </div>

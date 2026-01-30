@@ -269,7 +269,8 @@ class Api:
                         shot_id = task_data.get('shot_id')
                         
                         if not shot_id:
-                            # 标记为已处理（没有关联 shot）
+                            # 没有关联 shot，尝试处理非镜头任务（封面、风格图、角色图、场景图）
+                            self._handle_non_shot_task_completion(task_data)
                             self._task_manager.mark_task_processed(task_type, task_id)
                             continue
                         
@@ -314,7 +315,8 @@ class Api:
                         logger.info(f"Processing failed task: {task_type}:{task_id}, shot_id={shot_id}")
                         
                         if not shot_id:
-                            logger.info(f"No shot_id for task {task_id}, marking as processed")
+                            # 没有关联 shot，尝试处理非镜头任务的失败
+                            self._handle_non_shot_task_failure(task_data)
                             self._task_manager.mark_task_processed(task_type, task_id)
                             continue
                         
@@ -532,6 +534,134 @@ class Api:
             
         except Exception as e:
             logger.error(f"Failed to combine audio for shot {shot_id}: {e}")
+
+    def _handle_non_shot_task_completion(self, task_data: dict):
+        """处理非镜头任务完成（封面、风格图、角色图、场景图）"""
+        task_id = task_data.get('id')
+        task_type = task_data.get('task_type')
+        result_local_path = task_data.get('result_local_path')
+        result_url = task_data.get('result_url')
+        
+        if task_type != 'image':
+            return
+        
+        if not result_local_path or not Path(result_local_path).exists():
+            logger.warning(f"Non-shot task result not found: {result_local_path}")
+            return
+        
+        import time
+        timestamp = int(time.time() * 1000)
+        image_url = f"{self._path_to_url(result_local_path)}?t={timestamp}"
+        
+        # 检查是否为封面任务
+        if self.project_data.get('coverTaskId') == task_id:
+            self.project_data['coverUrl'] = image_url
+            self.project_data['coverTaskId'] = None  # 清除任务ID
+            logger.info(f"Updated cover image from task {task_id}")
+            # 通知前端
+            self._notify_project_update('cover', {'coverUrl': image_url})
+            return
+        
+        # 检查是否为风格图任务
+        if self.project_data.get('styleTaskId') == task_id:
+            style_config = self.project_data.get('styleConfig', {})
+            style_config['previewImageUrl'] = image_url
+            self.project_data['styleConfig'] = style_config
+            self.project_data['styleTaskId'] = None
+            logger.info(f"Updated style preview from task {task_id}")
+            self._notify_project_update('style', {'styleConfig': style_config})
+            return
+        
+        # 检查是否为角色图任务
+        for char in self.project_data.get('characters', []):
+            if char.get('imageTaskId') == task_id:
+                char['imageUrl'] = image_url
+                char['imageSourceUrl'] = result_url or ''
+                char['status'] = 'ready'
+                char['imageTaskId'] = None
+                logger.info(f"Updated character {char['id']} image from task {task_id}")
+                self._notify_character_update(char['id'], char)
+                return
+        
+        # 检查是否为场景图任务
+        for scene in self.project_data.get('scenes', []):
+            if scene.get('imageTaskId') == task_id:
+                scene['imageUrl'] = image_url
+                scene['imageSourceUrl'] = result_url or ''
+                scene['status'] = 'ready'
+                scene['imageTaskId'] = None
+                logger.info(f"Updated scene {scene['id']} image from task {task_id}")
+                self._notify_scene_update(scene['id'], scene)
+                return
+        
+        logger.debug(f"Non-shot task {task_id} not matched to any business object")
+
+    def _handle_non_shot_task_failure(self, task_data: dict):
+        """处理非镜头任务失败"""
+        task_id = task_data.get('id')
+        task_type = task_data.get('task_type')
+        error_msg = task_data.get('error', 'Unknown error')
+        
+        if task_type != 'image':
+            return
+        
+        # 检查是否为封面任务
+        if self.project_data.get('coverTaskId') == task_id:
+            self.project_data['coverTaskId'] = None
+            logger.warning(f"Cover generation failed: {error_msg}")
+            self._notify_project_update('cover_error', {'error': error_msg})
+            return
+        
+        # 检查是否为风格图任务
+        if self.project_data.get('styleTaskId') == task_id:
+            self.project_data['styleTaskId'] = None
+            logger.warning(f"Style preview generation failed: {error_msg}")
+            self._notify_project_update('style_error', {'error': error_msg})
+            return
+        
+        # 检查是否为角色图任务
+        for char in self.project_data.get('characters', []):
+            if char.get('imageTaskId') == task_id:
+                char['status'] = 'error'
+                char['errorMessage'] = error_msg
+                char['imageTaskId'] = None
+                logger.warning(f"Character {char['id']} image generation failed: {error_msg}")
+                self._notify_character_update(char['id'], char)
+                return
+        
+        # 检查是否为场景图任务
+        for scene in self.project_data.get('scenes', []):
+            if scene.get('imageTaskId') == task_id:
+                scene['status'] = 'error'
+                scene['errorMessage'] = error_msg
+                scene['imageTaskId'] = None
+                logger.warning(f"Scene {scene['id']} image generation failed: {error_msg}")
+                self._notify_scene_update(scene['id'], scene)
+                return
+
+    def _notify_project_update(self, update_type: str, data: dict):
+        """通知前端项目数据更新"""
+        if hasattr(self, '_window') and self._window:
+            try:
+                self._window.evaluate_js(f"window.dispatchEvent(new CustomEvent('projectUpdate', {{detail: {{type: '{update_type}', data: {json.dumps(data)}}}}}));")
+            except Exception as e:
+                logger.debug(f"Failed to notify project update: {e}")
+
+    def _notify_character_update(self, character_id: str, character: dict):
+        """通知前端角色数据更新"""
+        if hasattr(self, '_window') and self._window:
+            try:
+                self._window.evaluate_js(f"window.dispatchEvent(new CustomEvent('characterUpdate', {{detail: {{characterId: '{character_id}', character: {json.dumps(character)}}}}}));")
+            except Exception as e:
+                logger.debug(f"Failed to notify character update: {e}")
+
+    def _notify_scene_update(self, scene_id: str, scene: dict):
+        """通知前端场景数据更新"""
+        if hasattr(self, '_window') and self._window:
+            try:
+                self._window.evaluate_js(f"window.dispatchEvent(new CustomEvent('sceneUpdate', {{detail: {{sceneId: '{scene_id}', scene: {json.dumps(scene)}}}}}));")
+            except Exception as e:
+                logger.debug(f"Failed to notify scene update: {e}")
 
     def _generate_scene_id(self) -> str:
         """Generate a short random ID for scene"""
@@ -1333,18 +1463,16 @@ class Api:
         return {"success": False, "error": "Character not found"}
 
     def generate_character_image(self, character_id: str) -> dict:
-        """Generate 3-view character image"""
+        """Generate 3-view character image (async via task system)"""
         if not self.project_data:
             return {"success": False, "error": "No project data"}
+
+        if not self._task_manager:
+            return {"success": False, "error": "Task system not initialized"}
 
         for char in self.project_data["characters"]:
             if char["id"] == character_id:
                 try:
-                    import asyncio
-                    import time
-
-                    char["status"] = "generating"
-
                     # Get settings
                     settings = self._load_settings()
                     tti_config = settings.get("tti", {})
@@ -1390,88 +1518,54 @@ class Api:
                     style_requirement = f"画面风格：{style_text}" if style_text else "默认：写实真人风格，亚洲面孔，主角级精致外貌（除非另有说明）"
                     prompt = prompt_template.format(character_desc=base_desc, style_requirement=style_requirement)
 
-                    # Get image path
+                    # Get output dir for character images
                     image_path = self._project_manager.get_character_image_path(
                         self.project_name, character_id
                     )
+                    output_dir = str(image_path.parent)
 
-                    if provider == "whisk":
-                        # Whisk mode
-                        from services.whisk import Whisk
+                    # Create image task
+                    task_id = self._task_manager.create_image_task(
+                        subtype='text2image',
+                        prompt=prompt,
+                        aspect_ratio='16:9',
+                        provider=provider,
+                        output_dir=output_dir,
+                    )
 
-                        if not tti_config.get("whiskToken") or not tti_config.get("whiskWorkflowId"):
-                            raise ValueError("Whisk Token and Workflow ID not configured in settings")
+                    # Update character state
+                    char["status"] = "generating"
+                    char["imageTaskId"] = task_id
 
-                        whisk = Whisk(
-                            token=tti_config["whiskToken"],
-                            workflow_id=tti_config["whiskWorkflowId"]
-                        )
-
-                        # Generate using Whisk - MEDIA_CATEGORY_SUBJECT for character
-                        whisk_image = whisk.generate_image(
-                            prompt=prompt,
-                            media_category="MEDIA_CATEGORY_SUBJECT",
-                            aspect_ratio="IMAGE_ASPECT_RATIO_LANDSCAPE"
-                        )
-
-                        # Save base64 image to file
-                        whisk_image.save(str(image_path))
-
-                        # Save media_generation_id for later use in scene generation
-                        char["imageMediaGenerationId"] = whisk_image.media_generation_id
-                        char["imageSourceUrl"] = ""  # Whisk doesn't return URL
-
-                        logger.info(f"Generated character image via Whisk, media_generation_id: {whisk_image.media_generation_id}")
-
-                    else:
-                        # OpenAI compatible mode
-                        from services.generator import GenerationClient, download_file
-
-                        if not tti_config.get("apiUrl") or not tti_config.get("apiKey"):
-                            raise ValueError("TTI API not configured in settings")
-
-                        model_name = tti_config.get("characterModel") or tti_config.get("model", "gemini-3.0-pro-image-landscape")
-                        client = GenerationClient(
-                            api_url=tti_config["apiUrl"],
-                            api_key=tti_config["apiKey"],
-                            model=model_name,
-                        )
-
-                        image_urls = asyncio.run(client.generate_image(prompt, count=1))
-
-                        if not image_urls:
-                            raise ValueError("No images generated")
-
-                        image_url = image_urls[0]
-
-                        # Download and save to project directory
-                        asyncio.run(download_file(image_url, image_path))
-                        char["imageSourceUrl"] = image_url
-                        char["imageMediaGenerationId"] = ""  # OpenAI mode doesn't have this
-
-                    # Convert to HTTP URL for frontend with cache-busting timestamp
-                    timestamp = int(time.time() * 1000)  # milliseconds timestamp
-                    char["imageUrl"] = f"{self._path_to_url(str(image_path))}?t={timestamp}"
-
-                    char["status"] = "ready"
-                    logger.info(f"Generated character image for {character_id}")
-                    return {"success": True, "imageUrl": char["imageUrl"], "character": char}
+                    logger.info(f"Created character image task for {character_id}: {task_id}")
+                    return {"success": True, "task_id": task_id, "character": char}
 
                 except Exception as e:
                     char["status"] = "error"
                     char["errorMessage"] = str(e)
-                    logger.error(f"Failed to generate character image: {e}")
+                    logger.error(f"Failed to create character image task: {e}")
                     return {"success": False, "error": str(e)}
 
         return {"success": False, "error": "Character not found"}
 
     def generate_characters_batch(self, character_ids: list) -> dict:
-        """Generate images for multiple characters"""
-        results = []
+        """Generate images for multiple characters (async via task system)"""
+        task_ids = []
+        errors = []
+        
         for char_id in character_ids:
             result = self.generate_character_image(char_id)
-            results.append({"character_id": char_id, **result})
-        return {"success": True, "results": results}
+            if result.get("success"):
+                task_ids.append(result.get("task_id"))
+            else:
+                errors.append({"character_id": char_id, "error": result.get("error")})
+        
+        return {
+            "success": True,
+            "task_ids": task_ids,
+            "errors": errors,
+            "message": f"Created {len(task_ids)} character image tasks"
+        }
 
     def upload_character_image(self, character_id: str) -> dict:
         """Upload character image from file"""
@@ -1574,18 +1668,16 @@ class Api:
         return {"success": False, "error": "Scene not found"}
 
     def generate_scene_image(self, scene_id: str) -> dict:
-        """Generate scene image"""
+        """Generate scene image (async via task system)"""
         if not self.project_data:
             return {"success": False, "error": "No project data"}
+
+        if not self._task_manager:
+            return {"success": False, "error": "Task system not initialized"}
 
         for scene in self.project_data.get("scenes", []):
             if scene["id"] == scene_id:
                 try:
-                    import asyncio
-                    import time
-
-                    scene["status"] = "generating"
-
                     settings = self._load_settings()
                     tti_config = settings.get("tti", {})
                     provider = tti_config.get("provider", "openai")
@@ -1604,67 +1696,33 @@ class Api:
                     else:
                         prompt = base_prompt
 
+                    # Get output dir for scene images
                     image_path = self._project_manager.get_scene_image_path(
                         self.project_name, scene_id
                     )
-                    image_path.parent.mkdir(parents=True, exist_ok=True)
+                    output_dir = str(image_path.parent)
+                    Path(output_dir).mkdir(parents=True, exist_ok=True)
 
-                    if provider == "whisk":
-                        from services.whisk import Whisk
+                    # Create image task
+                    task_id = self._task_manager.create_image_task(
+                        subtype='text2image',
+                        prompt=prompt,
+                        aspect_ratio='16:9',
+                        provider=provider,
+                        output_dir=output_dir,
+                    )
 
-                        if not tti_config.get("whiskToken") or not tti_config.get("whiskWorkflowId"):
-                            raise ValueError("Whisk Token and Workflow ID not configured in settings")
+                    # Update scene state
+                    scene["status"] = "generating"
+                    scene["imageTaskId"] = task_id
 
-                        whisk = Whisk(
-                            token=tti_config["whiskToken"],
-                            workflow_id=tti_config["whiskWorkflowId"]
-                        )
-
-                        whisk_image = whisk.generate_image(
-                            prompt=prompt,
-                            media_category="MEDIA_CATEGORY_SCENE",
-                            aspect_ratio="IMAGE_ASPECT_RATIO_LANDSCAPE"
-                        )
-
-                        whisk_image.save(str(image_path))
-                        scene["imageMediaGenerationId"] = whisk_image.media_generation_id
-                        scene["imageSourceUrl"] = ""
-                        logger.info(f"Generated scene image via Whisk, media_generation_id: {whisk_image.media_generation_id}")
-                    else:
-                        from services.generator import GenerationClient, download_file
-
-                        if not tti_config.get("apiUrl") or not tti_config.get("apiKey"):
-                            raise ValueError("TTI API not configured in settings")
-
-                        model_name = tti_config.get("sceneModel") or tti_config.get("model", "gemini-2.5-flash-image-landscape")
-                        client = GenerationClient(
-                            api_url=tti_config["apiUrl"],
-                            api_key=tti_config["apiKey"],
-                            model=model_name,
-                        )
-
-                        image_urls = asyncio.run(client.generate_image(prompt, count=1))
-                        if not image_urls:
-                            raise ValueError("No images returned from API")
-
-                        image_url = image_urls[0]
-                        if "?t=" in image_url:
-                            image_url = image_url.split("?t=")[0]
-
-                        asyncio.run(download_file(image_url, image_path))
-                        scene["imageSourceUrl"] = image_url
-                        scene["imageMediaGenerationId"] = ""
-
-                    timestamp = int(time.time() * 1000)
-                    scene["imageUrl"] = f"{self._path_to_url(str(image_path))}?t={timestamp}"
-                    scene["status"] = "ready"
-                    logger.info(f"Generated scene image for {scene_id}")
-                    return {"success": True, "imageUrl": scene["imageUrl"], "scene": scene}
+                    logger.info(f"Created scene image task for {scene_id}: {task_id}")
+                    return {"success": True, "task_id": task_id, "scene": scene}
 
                 except Exception as e:
                     scene["status"] = "error"
                     scene["errorMessage"] = str(e)
-                    logger.error(f"Failed to generate scene image: {e}")
+                    logger.error(f"Failed to create scene image task: {e}")
                     return {"success": False, "error": str(e)}
 
         return {"success": False, "error": "Scene not found"}
@@ -6268,13 +6326,13 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             return {"success": False, "error": str(e)}
 
     def generate_cover_image(self) -> dict:
-        """Generate cover image for the project using AI"""
+        """Generate cover image for the project using AI (async via task system)"""
         try:
             if not self.project_data or not self.project_name:
                 return {"success": False, "error": "No project loaded"}
 
-            import asyncio
-            import time
+            if not self._task_manager:
+                return {"success": False, "error": "Task system not initialized"}
 
             # Build prompt from project data
             settings_data = self.project_data.get("settings", self._get_default_project_settings())
@@ -6318,69 +6376,31 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             tti_config = app_settings.get("tti", {})
             provider = tti_config.get("provider", "openai")
 
+            # Determine aspect ratio
+            aspect_ratio = creation_params.get("aspectRatio", "16:9")
+
             # Get output path
             work_dir = self._project_manager.work_dir
             project_dir = work_dir / self.project_name / "output"
             project_dir.mkdir(parents=True, exist_ok=True)
-            image_path = project_dir / "cover.png"
 
-            if provider == "whisk":
-                from services.whisk import Whisk
+            # Create image task
+            task_id = self._task_manager.create_image_task(
+                subtype='text2image',
+                prompt=prompt,
+                aspect_ratio=aspect_ratio,
+                provider=provider,
+                output_dir=str(project_dir),
+            )
 
-                if not tti_config.get("whiskToken") or not tti_config.get("whiskWorkflowId"):
-                    return {"success": False, "error": "Whisk Token and Workflow ID not configured"}
+            # Store task ID in project data
+            self.project_data['coverTaskId'] = task_id
 
-                whisk = Whisk(
-                    token=tti_config["whiskToken"],
-                    workflow_id=tti_config["whiskWorkflowId"]
-                )
-
-                # Determine aspect ratio
-                aspect_ratio = creation_params.get("aspectRatio", "16:9")
-                whisk_aspect = "IMAGE_ASPECT_RATIO_LANDSCAPE"
-                if aspect_ratio == "9:16":
-                    whisk_aspect = "IMAGE_ASPECT_RATIO_PORTRAIT"
-                elif aspect_ratio == "1:1":
-                    whisk_aspect = "IMAGE_ASPECT_RATIO_SQUARE"
-
-                whisk_image = whisk.generate_image(
-                    prompt=prompt,
-                    media_category="MEDIA_CATEGORY_SCENE",
-                    aspect_ratio=whisk_aspect
-                )
-                whisk_image.save(str(image_path))
-                logger.info(f"Generated cover image via Whisk")
-            else:
-                from services.generator import GenerationClient, download_file
-
-                if not tti_config.get("apiUrl") or not tti_config.get("apiKey"):
-                    return {"success": False, "error": "TTI API not configured"}
-
-                model_name = tti_config.get("sceneModel") or tti_config.get("model", "gemini-2.5-flash-image-landscape")
-                client = GenerationClient(
-                    api_url=tti_config["apiUrl"],
-                    api_key=tti_config["apiKey"],
-                    model=model_name,
-                )
-
-                image_urls = asyncio.run(client.generate_image(prompt, count=1))
-                if not image_urls:
-                    return {"success": False, "error": "No images returned from API"}
-
-                image_url = image_urls[0]
-                if "?t=" in image_url:
-                    image_url = image_url.split("?t=")[0]
-
-                asyncio.run(download_file(image_url, image_path))
-
-            timestamp = int(time.time() * 1000)
-            final_url = f"{self._path_to_url(str(image_path))}?t={timestamp}"
-
-            logger.info(f"Generated cover image: {image_path}")
-            return {"success": True, "imageUrl": final_url}
+            logger.info(f"Created cover image task: {task_id}")
+            return {"success": True, "task_id": task_id}
 
         except Exception as e:
-            logger.error(f"Failed to generate cover image: {e}")
+            logger.error(f"Failed to create cover image task: {e}")
             return {"success": False, "error": str(e)}
 
     def export_cover_image(self) -> dict:
@@ -6439,7 +6459,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             return {"success": False, "error": str(e)}
 
     def generate_style_preview(self, prompt: str) -> dict:
-        """Generate a preview image for custom style description"""
+        """Generate a preview image for custom style description (async via task system)"""
         try:
             if not prompt or not prompt.strip():
                 return {"success": False, "error": "Style description is required"}
@@ -6447,8 +6467,8 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             if not self.project_data or not self.project_name:
                 return {"success": False, "error": "No project loaded"}
 
-            import asyncio
-            import time
+            if not self._task_manager:
+                return {"success": False, "error": "Task system not initialized"}
 
             # Get TTI settings
             app_settings = self._load_settings()
@@ -6459,60 +6479,27 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             work_dir = self._project_manager.work_dir
             preview_dir = work_dir / self.project_name / "output" / "style_previews"
             preview_dir.mkdir(parents=True, exist_ok=True)
-            timestamp = int(time.time() * 1000)
-            image_path = preview_dir / f"preview_{timestamp}.png"
 
             # Build prompt for style preview
             full_prompt = f"Create a sample image demonstrating this visual style: {prompt.strip()}. Show a beautiful landscape or scene that captures the essence of this style."
 
-            if provider == "whisk":
-                from services.whisk import Whisk
+            # Create image task
+            task_id = self._task_manager.create_image_task(
+                subtype='text2image',
+                prompt=full_prompt,
+                aspect_ratio='16:9',
+                provider=provider,
+                output_dir=str(preview_dir),
+            )
 
-                if not tti_config.get("whiskToken") or not tti_config.get("whiskWorkflowId"):
-                    return {"success": False, "error": "Whisk Token and Workflow ID not configured"}
+            # Store task ID in project data
+            self.project_data['styleTaskId'] = task_id
 
-                whisk = Whisk(
-                    token=tti_config["whiskToken"],
-                    workflow_id=tti_config["whiskWorkflowId"]
-                )
-
-                whisk_image = whisk.generate_image(
-                    prompt=full_prompt,
-                    media_category="MEDIA_CATEGORY_SCENE",
-                    aspect_ratio="IMAGE_ASPECT_RATIO_LANDSCAPE"
-                )
-                whisk_image.save(str(image_path))
-                logger.info(f"Generated style preview via Whisk")
-            else:
-                from services.generator import GenerationClient, download_file
-
-                if not tti_config.get("apiUrl") or not tti_config.get("apiKey"):
-                    return {"success": False, "error": "TTI API not configured"}
-
-                model_name = tti_config.get("sceneModel") or tti_config.get("model", "gemini-2.5-flash-image-landscape")
-                client = GenerationClient(
-                    api_url=tti_config["apiUrl"],
-                    api_key=tti_config["apiKey"],
-                    model=model_name,
-                )
-
-                image_urls = asyncio.run(client.generate_image(full_prompt, count=1))
-                if not image_urls:
-                    return {"success": False, "error": "No images returned from API"}
-
-                image_url = image_urls[0]
-                if "?t=" in image_url:
-                    image_url = image_url.split("?t=")[0]
-
-                asyncio.run(download_file(image_url, image_path))
-
-            final_url = f"{self._path_to_url(str(image_path))}?t={timestamp}"
-
-            logger.info(f"Generated style preview: {image_path}")
-            return {"success": True, "imageUrl": final_url}
+            logger.info(f"Created style preview task: {task_id}")
+            return {"success": True, "task_id": task_id}
 
         except Exception as e:
-            logger.error(f"Failed to generate style preview: {e}")
+            logger.error(f"Failed to create style preview task: {e}")
             return {"success": False, "error": str(e)}
 
     # ========== Task Management API ==========

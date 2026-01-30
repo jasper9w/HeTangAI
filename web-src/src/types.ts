@@ -174,6 +174,7 @@ export interface Character {
   imageUrl: string;     // 3视图图片URL
   imageSourceUrl?: string; // 3视图图片原始URL
   imageMediaGenerationId?: string; // Whisk返回的media_generation_id
+  imageTaskId?: string; // 关联的图片生成任务ID
   referenceAudioPath?: string;  // 参考音文件路径
   referenceAudioName?: string;  // 参考音名称（用于显示）
   audioRecommendations?: AudioRecommendation[];  // 大模型推荐的参考音列表
@@ -195,6 +196,7 @@ export interface Scene {
   imageUrl: string;
   imageSourceUrl?: string;
   imageMediaGenerationId?: string;
+  imageTaskId?: string; // 关联的图片生成任务ID
   status: SceneStatus;
   errorMessage?: string;
 }
@@ -229,6 +231,13 @@ export interface ProjectData {
   characters: Character[];
   scenes: Scene[];
   shots: Shot[];
+  // 任务关联
+  coverTaskId?: string;  // 封面生成任务ID
+  coverUrl?: string;     // 封面图片URL
+  styleTaskId?: string;  // 风格预览生成任务ID
+  styleConfig?: {
+    previewImageUrl?: string;
+  };
 }
 
 // ========== API Response Types ==========
@@ -339,7 +348,7 @@ export interface PyWebViewApi {
   update_character: (characterId: string, name: string, description: string) => Promise<ApiResponse & { character?: Character }>;
   update_character_speed: (characterId: string, speed: number) => Promise<ApiResponse & { character?: Character }>;
   delete_character: (characterId: string) => Promise<ApiResponse>;
-  generate_character_image: (characterId: string) => Promise<ApiResponse & { imageUrl?: string; character?: Character }>;
+  generate_character_image: (characterId: string) => Promise<ApiResponse & { task_id?: string; character?: Character }>;
   generate_characters_batch: (characterIds: string[]) => Promise<BatchGenerateResult>;
   upload_character_image: (characterId: string) => Promise<ApiResponse & { imageUrl?: string; character?: Character }>;
   set_character_reference_audio: (characterId: string, audioPath: string) => Promise<ApiResponse & { character?: Character }>;
@@ -354,7 +363,7 @@ export interface PyWebViewApi {
   add_scene: (name: string, prompt?: string) => Promise<ApiResponse & { scene?: Scene }>;
   update_scene: (sceneId: string, name: string, prompt: string) => Promise<ApiResponse & { scene?: Scene }>;
   delete_scene: (sceneId: string) => Promise<ApiResponse>;
-  generate_scene_image: (sceneId: string) => Promise<ApiResponse & { imageUrl?: string; scene?: Scene }>;
+  generate_scene_image: (sceneId: string) => Promise<ApiResponse & { task_id?: string; scene?: Scene }>;
   upload_scene_image: (sceneId: string) => Promise<ApiResponse & { imageUrl?: string; scene?: Scene }>;
 
   // Shot management
@@ -429,9 +438,9 @@ export interface PyWebViewApi {
   generate_work_info: () => Promise<ApiResponse & { workInfo?: WorkInfo }>;
   chat_update_work_info: (message: string, history: ChatMessage[]) => Promise<ApiResponse & { reply?: string; workInfo?: WorkInfo }>;
   upload_cover_image: () => Promise<ApiResponse & { imageUrl?: string }>;
-  generate_cover_image: () => Promise<ApiResponse & { imageUrl?: string }>;
+  generate_cover_image: () => Promise<ApiResponse & { task_id?: string }>;
   export_cover_image: () => Promise<ApiResponse & { path?: string }>;
-  generate_style_preview: (prompt: string) => Promise<ApiResponse & { imageUrl?: string }>;
+  generate_style_preview: (prompt: string) => Promise<ApiResponse & { task_id?: string }>;
 
   // Update
   check_for_updates: () => Promise<ApiResponse & {
