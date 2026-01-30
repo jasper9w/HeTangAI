@@ -319,6 +319,20 @@ class GenerationClient:
                     chunk_count = 0
 
                     async for line in response.aiter_lines():
+                        # Check for error response (not in SSE format)
+                        if line and line.startswith('{"error"'):
+                            try:
+                                # Extract JSON part (may have "data: [DONE]" appended)
+                                json_end = line.find('}}')+2
+                                error_json = line[:json_end] if json_end > 2 else line
+                                error_data = json.loads(error_json)
+                                error_msg = error_data.get("error", {}).get("message", "Unknown API error")
+                                logger.error(f"API returned error: {error_msg}")
+                                raise ValueError(f"API error: {error_msg}")
+                            except json.JSONDecodeError:
+                                logger.error(f"API returned error (unparseable): {line[:200]}")
+                                raise ValueError(f"API error: {line[:200]}")
+                        
                         if not line.startswith("data: "):
                             continue
 
