@@ -346,10 +346,95 @@ class Api:
                     except Exception as e:
                         logger.error(f"Failed to process failed task: {e}")
                 
+                # 检查并调整执行器数量
+                self._check_executor_adjustment()
+                
             except Exception as e:
                 logger.error(f"Task monitor error: {e}")
             
             time.sleep(2)
+    
+    def _check_executor_adjustment(self):
+        """检查并调整执行器数量（在 monitor loop 中每2秒调用）"""
+        if not self._task_manager or not self.project_name:
+            return
+        
+        settings = self._load_settings()
+        
+        # 定义类型映射
+        type_config_map = [
+            ('image', 'tti', ImageExecutor),
+            ('video', 'ttv', VideoExecutor),
+            ('audio', 'tts', AudioExecutor),
+        ]
+        
+        for task_type, config_key, executor_class in type_config_map:
+            config = settings.get(config_key, {})
+            target_count = config.get("concurrency", 1)
+            
+            # 获取当前该类型的执行器
+            current_executors = [(i, e) for i, e in enumerate(self._task_executors) if e.task_type == task_type]
+            current_count = len(current_executors)
+            
+            if target_count > current_count:
+                # 需要增加执行器
+                diff = target_count - current_count
+                for _ in range(diff):
+                    self._add_executor(task_type, config, executor_class)
+                logger.info(f"Added {diff} {task_type} executor(s), now {target_count}")
+                
+            elif target_count < current_count:
+                # 需要减少执行器（每次只减少一个空闲的）
+                for idx, executor in reversed(current_executors):  # 从后往前找
+                    if executor._current_task_id is None:  # 空闲
+                        executor.stop()
+                        # 从列表中移除
+                        self._task_executors.pop(idx)
+                        self._task_executor_threads.pop(idx)
+                        logger.info(f"Removed idle {task_type} executor, now {current_count - 1}")
+                        break  # 每次循环只减少一个
+    
+    def _add_executor(self, task_type: str, config: dict, executor_class):
+        """添加单个执行器"""
+        # 获取 db_path
+        project_dir = self._project_manager.get_project_dir(self.project_name)
+        db_path = str(project_dir / "tasks.db")
+        
+        # 计算新的 worker_id（找到当前最大的序号+1）
+        existing_ids = [
+            int(e.worker_id.split('-')[1]) 
+            for e in self._task_executors 
+            if e.task_type == task_type and '-' in e.worker_id
+        ]
+        next_id = max(existing_ids, default=-1) + 1
+        
+        # 检查 API 配置
+        api_url = config.get("apiUrl", "")
+        api_key = config.get("apiKey", "")
+        
+        if not api_url:
+            logger.warning(f"Cannot add {task_type} executor: apiUrl not configured")
+            return
+        
+        # 创建执行器
+        executor = executor_class(
+            db_path=db_path,
+            api_url=api_url,
+            api_key=api_key,
+            model=config.get("model", ""),
+            worker_id=f"{task_type}-{next_id}"
+        )
+        
+        # 启动线程
+        thread = threading.Thread(
+            target=executor.run_loop,
+            daemon=True,
+            name=f"{executor_class.__name__}-{next_id}"
+        )
+        thread.start()
+        
+        self._task_executors.append(executor)
+        self._task_executor_threads.append(thread)
     
     def _handle_completed_image_task(self, task_data: dict, shot: dict):
         """处理已完成的图片任务，更新 shot 数据"""
