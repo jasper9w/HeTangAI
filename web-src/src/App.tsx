@@ -13,6 +13,7 @@ import {
   Type,
   Clock,
   Check,
+  Bug,
 } from 'lucide-react';
 import { useApi } from './hooks/useApi';
 import { Sidebar } from './components/layout/Sidebar';
@@ -1708,6 +1709,7 @@ function App() {
               <div className="flex items-center gap-1.5">
                 <Clock className="w-3 h-3 text-amber-400" />
                 <span className="text-slate-400">未保存</span>
+                <kbd className="px-1.5 py-0.5 bg-slate-700 rounded text-slate-500 font-mono text-[10px]">{typeof navigator !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0 ? '⌘S' : 'Ctrl+S'}</kbd>
               </div>
             ) : (
               <div className="flex items-center gap-1.5">
@@ -1717,11 +1719,16 @@ function App() {
             )}
           </div>
 
-          {/* Right: Shortcuts */}
+          {/* Right: Debug */}
           <div className="flex items-center gap-4">
-            <span className="text-slate-500">
-              保存 <kbd className="px-1.5 py-0.5 bg-slate-700 rounded text-slate-400 font-mono text-[10px]">{typeof navigator !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0 ? '⌘S' : 'Ctrl+S'}</kbd>
-            </span>
+            <button
+              onClick={() => api.open_logs_dir()}
+              className="flex items-center gap-1 text-slate-500 hover:text-slate-300 transition-colors"
+              title="打开调试日志目录"
+            >
+              <Bug className="w-3 h-3" />
+              <span>日志</span>
+            </button>
           </div>
         </div>
       )}

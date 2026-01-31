@@ -70,7 +70,8 @@ else:
     USER_DATA_DIR = BASE_DIR
 
 # Ensure directories exist
-LOGS_DIR = USER_DATA_DIR / "logs"
+# Logs directory is always in ~/.hetangai/logs (same as global settings)
+LOGS_DIR = Path.home() / ".hetangai" / "logs"
 OUTPUT_DIR = USER_DATA_DIR / "output"
 LOGS_DIR.mkdir(parents=True, exist_ok=True)
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)

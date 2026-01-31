@@ -1304,7 +1304,12 @@ class Api:
         if not result:
             return {"success": False, "error": "No file selected"}
 
-        file_path = Path(result)
+        # Handle cross-platform return value: Mac returns str, Windows returns tuple
+        save_path = result[0] if isinstance(result, (list, tuple)) else result
+        if not save_path or save_path == '/':
+            return {"success": False, "error": "No file selected"}
+
+        file_path = Path(save_path)
         if not file_path.suffix:
             file_path = file_path.with_suffix(".htai")
 
@@ -1408,13 +1413,18 @@ class Api:
         if not result:
             return {"success": False, "error": "No file selected"}
 
+        # Handle cross-platform return value: Mac returns str, Windows returns tuple
+        file_path = result[0] if isinstance(result, (list, tuple)) else result
+        if not file_path or file_path == '/':
+            return {"success": False, "error": "No file selected"}
+
         try:
             from services.jsonl_parser import JsonlParser
 
             parser = JsonlParser()
-            parser.export_template(Path(result))
-            logger.info(f"JSONL template exported to: {result}")
-            return {"success": True, "path": result}
+            parser.export_template(Path(file_path))
+            logger.info(f"JSONL template exported to: {file_path}")
+            return {"success": True, "path": str(file_path)}
         except Exception as e:
             logger.error(f"Failed to export JSONL template: {e}")
             return {"success": False, "error": str(e)}
@@ -1486,13 +1496,18 @@ class Api:
         if not result:
             return {"success": False, "error": "No file selected"}
 
+        # Handle cross-platform return value: Mac returns str, Windows returns tuple
+        file_path = result[0] if isinstance(result, (list, tuple)) else result
+        if not file_path or file_path == '/':
+            return {"success": False, "error": "No file selected"}
+
         try:
             from services.excel_parser import ExcelParser
 
             parser = ExcelParser()
-            parser.export_template(Path(result))
-            logger.info(f"Excel template exported to: {result}")
-            return {"success": True, "path": result}
+            parser.export_template(Path(file_path))
+            logger.info(f"Excel template exported to: {file_path}")
+            return {"success": True, "path": str(file_path)}
         except Exception as e:
             logger.error(f"Failed to export Excel template: {e}")
             return {"success": False, "error": str(e)}
@@ -2500,6 +2515,11 @@ class Api:
         if not result:
             return {"success": False, "error": "No file selected"}
 
+        # Handle cross-platform return value: Mac returns str, Windows returns tuple
+        file_path = result[0] if isinstance(result, (list, tuple)) else result
+        if not file_path or file_path == '/':
+            return {"success": False, "error": "No file selected"}
+
         try:
             import pandas as pd
 
@@ -2515,11 +2535,11 @@ class Api:
 
             df = pd.DataFrame(template_data)
             # Write with sheet name "角色"
-            with pd.ExcelWriter(result, engine="openpyxl") as writer:
+            with pd.ExcelWriter(file_path, engine="openpyxl") as writer:
                 df.to_excel(writer, sheet_name="角色", index=False)
 
-            logger.info(f"Character template exported to: {result}")
-            return {"success": True, "path": result}
+            logger.info(f"Character template exported to: {file_path}")
+            return {"success": True, "path": str(file_path)}
 
         except Exception as e:
             logger.error(f"Failed to export character template: {e}")
@@ -4061,6 +4081,26 @@ class Api:
             return {"success": True}
         except Exception as e:
             logger.error(f"Failed to open output dir: {e}")
+            return {"success": False, "error": str(e)}
+
+    def open_logs_dir(self) -> dict:
+        """Open logs directory in file explorer"""
+        import subprocess
+        import sys
+
+        logs_dir = Path.home() / ".hetangai" / "logs"
+        try:
+            if not logs_dir.exists():
+                logs_dir.mkdir(parents=True, exist_ok=True)
+            if sys.platform == "darwin":
+                subprocess.run(["open", str(logs_dir)])
+            elif sys.platform == "win32":
+                subprocess.run(["explorer", str(logs_dir)])
+            else:
+                subprocess.run(["xdg-open", str(logs_dir)])
+            return {"success": True}
+        except Exception as e:
+            logger.error(f"Failed to open logs dir: {e}")
             return {"success": False, "error": str(e)}
 
     def get_app_version(self) -> str:
@@ -6554,7 +6594,12 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             if not result:
                 return {"success": False, "error": "No file selected"}
 
-            dest_path = Path(result)
+            # Handle cross-platform return value: Mac returns str, Windows returns tuple
+            file_path = result[0] if isinstance(result, (list, tuple)) else result
+            if not file_path or file_path == '/':
+                return {"success": False, "error": "No file selected"}
+
+            dest_path = Path(file_path)
 
             # Copy file
             import shutil

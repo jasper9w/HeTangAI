@@ -31,3 +31,7 @@ main.py通过DEV=1环境变量区分开发模式（使用vite dev server）和�
 - 前端设计图标时一律使用lucide-react
 - python代码，任何时候都不适用emoji符号！！！
 - 对于使用pywebview方案的项目，严禁在js_api=Api()的那个API类里存放window对象，因为这将导致win操作系统假死
+- pywebview的create_file_dialog返回值存在跨平台差异：
+  - OPEN/FOLDER对话框：Mac和Windows都返回tuple，统一使用result[0]
+  - SAVE对话框：Mac返回str，Windows返回tuple，必须使用isinstance判断：
+    `file_path = result[0] if isinstance(result, (list, tuple)) else result`

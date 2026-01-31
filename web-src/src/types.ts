@@ -400,6 +400,7 @@ export interface PyWebViewApi {
 
   // Utilities
   open_output_dir: () => Promise<ApiResponse>;
+  open_logs_dir: () => Promise<ApiResponse>;
   get_app_version: () => Promise<string>;
   get_settings: () => Promise<ApiResponse & { settings?: AppSettings }>;
   save_settings: (settings: AppSettings) => Promise<ApiResponse>;

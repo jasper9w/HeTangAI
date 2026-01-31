@@ -1,8 +1,9 @@
 /**
  * StatusBar - Bottom status bar showing save status, version and shortcuts
  */
-import { Check, Clock, Loader2 } from 'lucide-react';
+import { Check, Clock, Loader2, Bug } from 'lucide-react';
 import { useEffect, useState, useRef } from 'react';
+import { pywebview } from '../../utils/pywebview';
 
 interface StatusBarProps {
   isDirty: boolean;
@@ -103,11 +104,19 @@ export function StatusBar({ isDirty, autoSaveInterval, onSave, version, onCheckU
         )}
       </div>
 
-      {/* 右侧：快捷键提示 */}
+      {/* 右侧：快捷键提示和调试日志 */}
       <div className="flex items-center gap-4">
         <span className="text-slate-500">
           保存 <kbd className="px-1.5 py-0.5 bg-slate-700 rounded text-slate-400 font-mono text-[10px]">{shortcutKey}</kbd>
         </span>
+        <button
+          onClick={() => pywebview.api.open_logs_dir()}
+          className="flex items-center gap-1 text-slate-500 hover:text-slate-300 transition-colors"
+          title="打开调试日志目录"
+        >
+          <Bug className="w-3 h-3" />
+          <span>日志</span>
+        </button>
       </div>
     </div>
   );
