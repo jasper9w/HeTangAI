@@ -216,33 +216,31 @@ export function CharacterImportModal({
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-slate-300 mb-2">
-                      粘贴角色数据（Tab/逗号分隔或JSONL）
+                      粘贴角色数据（Tab/竖线/逗号分隔或JSONL）
                     </label>
                     <textarea
                       value={pasteText}
                       onChange={(e) => setPasteText(e.target.value)}
-                      placeholder={`格式示例:\n\n2列 (姓名, 描述):\nAlice\t黑长直的年轻女性\nBob\t穿西装的中年男性\n\n3列 (姓名, 参考音频, 描述):\nAlice\t/path/to/audio.wav\t黑长直的年轻女性\nBob\t/path/to/audio2.wav\t穿西装的中年男性\n\nJSONL:\n{"name":"Alice","dna":"黑长直的年轻女性","tti":{"prompt":"young woman"}}`}
+                      placeholder="在此粘贴角色数据..."
                       rows={10}
                       className="w-full px-3 py-2 bg-slate-700 rounded-lg text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none font-mono text-sm"
                     />
                   </div>
 
-                  <div className="bg-slate-700/50 rounded-lg p-3">
-                    <h4 className="text-sm font-medium text-slate-300 mb-2">列格式</h4>
-                    <ul className="text-xs text-slate-400 space-y-1">
-                      <li>
-                        <span className="text-slate-300">2列:</span> 角色名, 描述
-                      </li>
-                      <li>
-                        <span className="text-slate-300">3列:</span> 角色名, 参考音频路径, 描述
-                      </li>
-                      <li>
-                        <span className="text-slate-300">JSONL:</span> 每行一个JSON对象
-                      </li>
-                      <li className="text-slate-500">
-                        支持Tab或逗号作为分隔符，自动检测。
-                      </li>
-                    </ul>
+                  <div className="bg-slate-700/50 rounded-lg p-3 space-y-3">
+                    <div>
+                      <h4 className="text-xs font-medium text-slate-400 mb-1">2列示例（注意是英文逗号）</h4>
+                      <pre className="text-xs text-slate-300 font-mono select-text cursor-text whitespace-pre-wrap bg-slate-800/50 p-2 rounded">{`爱丽丝,黑长直的年轻女性
+鲍勃,穿西装的中年男性`}</pre>
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-medium text-slate-400 mb-1">3列示例（注意是英文逗号）</h4>
+                      <pre className="text-xs text-slate-300 font-mono select-text cursor-text whitespace-pre-wrap bg-slate-800/50 p-2 rounded">{`爱丽丝,/audio/alice.wav,黑长直的年轻女性
+鲍勃,/audio/bob.wav,穿西装的中年男性`}</pre>
+                    </div>
+                    <p className="text-xs text-slate-500">
+                      支持Tab、竖线(|)或逗号分隔，自动检测
+                    </p>
                   </div>
                 </div>
               )}

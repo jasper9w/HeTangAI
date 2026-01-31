@@ -15,6 +15,7 @@ import {
   Wand2,
   Pause,
   Volume2,
+  ImageOff,
 } from 'lucide-react';
 import { ReferenceAudioModal } from '../components/character/ReferenceAudioModal';
 import { CharacterImportModal } from '../components/character/CharacterImportModal';
@@ -57,6 +58,7 @@ interface CharactersPageProps {
   onDeleteCharacter: (id: string) => void;
   onGenerateImage: (id: string) => void;
   onUploadImage: (id: string) => void;
+  onRemoveImage: (id: string) => void;
   onSetReferenceAudio: (id: string, audioPath: string) => void;
   onSmartAssign: (mode: 'empty_only' | 'all') => Promise<SmartAssignResult>;
   onImportFromText: (text: string) => Promise<{
@@ -92,6 +94,7 @@ export function CharactersPage({
   onDeleteCharacter,
   onGenerateImage,
   onUploadImage,
+  onRemoveImage,
   onSetReferenceAudio,
   onSmartAssign,
   onImportFromText,
@@ -110,6 +113,8 @@ export function CharactersPage({
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [characterToDelete, setCharacterToDelete] = useState<Character | null>(null);
+  const [removeImageConfirmOpen, setRemoveImageConfirmOpen] = useState(false);
+  const [characterToRemoveImage, setCharacterToRemoveImage] = useState<Character | null>(null);
   const [viewingImage, setViewingImage] = useState<{ url: string; name: string } | null>(null);
   const [editing, setEditing] = useState<{ id: string | null; name: string; description: string }>({
     id: null,
@@ -131,7 +136,10 @@ export function CharactersPage({
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (deleteConfirmOpen) {
+        if (removeImageConfirmOpen) {
+          setCharacterToRemoveImage(null);
+          setRemoveImageConfirmOpen(false);
+        } else if (deleteConfirmOpen) {
           setCharacterToDelete(null);
           setDeleteConfirmOpen(false);
         } else if (editModalOpen) {
@@ -145,7 +153,7 @@ export function CharactersPage({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [addModalOpen, editModalOpen, deleteConfirmOpen, onAddModalOpenChange]);
+  }, [addModalOpen, editModalOpen, deleteConfirmOpen, removeImageConfirmOpen, onAddModalOpenChange]);
 
   const handleOpenAudioModal = (characterId: string) => {
     setSelectedCharacterId(characterId);
@@ -376,9 +384,24 @@ export function CharactersPage({
                       </div>
                     </div>
 
-                    {/* Delete Button - Top Right (show on hover) - Only for non-narrator characters */}
+                    {/* Top Right Actions (show on hover) - Only for non-narrator characters */}
                     {!char.isNarrator && (
-                      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto">
+                      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto flex items-center gap-1">
+                        {/* Remove Image Button - Only show when has image */}
+                        {char.imageUrl && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setCharacterToRemoveImage(char);
+                              setRemoveImageConfirmOpen(true);
+                            }}
+                            className="p-1.5 bg-black/50 hover:bg-amber-600/70 rounded-full text-white hover:text-amber-100 transition-colors backdrop-blur-sm"
+                            title="移除图片"
+                          >
+                            <ImageOff className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        {/* Delete Button */}
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -828,6 +851,46 @@ export function CharactersPage({
                 className="px-4 py-2 bg-red-600 hover:bg-red-500 rounded-lg text-sm text-white transition-colors"
               >
                 删除
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Remove Image Confirmation Modal */}
+      {removeImageConfirmOpen && characterToRemoveImage && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-800 rounded-lg border border-slate-700 w-full max-w-md">
+            <div className="p-4 border-b border-slate-700">
+              <h3 className="text-lg font-medium text-slate-200">确认移除图片</h3>
+            </div>
+            <div className="p-4">
+              <p className="text-slate-300">
+                确定要移除角色 <span className="font-medium text-slate-100">"{characterToRemoveImage.name}"</span> 的图片吗？
+              </p>
+              <p className="text-sm text-slate-400 mt-2">
+                移除后角色状态将重置为"待生成"。
+              </p>
+            </div>
+            <div className="p-4 border-t border-slate-700 flex items-center justify-end gap-2">
+              <button
+                onClick={() => {
+                  setCharacterToRemoveImage(null);
+                  setRemoveImageConfirmOpen(false);
+                }}
+                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-300 transition-colors"
+              >
+                取消
+              </button>
+              <button
+                onClick={() => {
+                  onRemoveImage(characterToRemoveImage.id);
+                  setCharacterToRemoveImage(null);
+                  setRemoveImageConfirmOpen(false);
+                }}
+                className="px-4 py-2 bg-amber-600 hover:bg-amber-500 rounded-lg text-sm text-white transition-colors"
+              >
+                移除
               </button>
             </div>
           </div>

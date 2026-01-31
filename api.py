@@ -1738,6 +1738,21 @@ class Api:
             logger.error(f"Failed to upload character image: {e}")
             return {"success": False, "error": str(e)}
 
+    def remove_character_image(self, character_id: str) -> dict:
+        """Remove character image"""
+        if not self.project_data:
+            return {"success": False, "error": "No project data"}
+
+        for char in self.project_data.get("characters", []):
+            if char["id"] == character_id:
+                char["imageUrl"] = ""
+                char["imageSourceUrl"] = ""
+                char["status"] = "pending"
+                logger.info(f"Removed character image for {character_id}")
+                return {"success": True, "character": char}
+
+        return {"success": False, "error": "Character not found"}
+
     # ========== Scene Management ==========
 
     def add_scene(self, name: str, prompt: str = "") -> dict:
@@ -2138,7 +2153,7 @@ class Api:
         return {"success": False, "error": "Character not found"}
 
     def import_characters_from_text(self, text: str) -> dict:
-        """Import characters from pasted text (tab or comma separated)
+        """Import characters from pasted text (tab, pipe or comma separated)
 
         Supports two formats:
         - 2 columns: character_name, description
@@ -2169,9 +2184,11 @@ class Api:
             if not line:
                 continue
 
-            # Try tab separator first, then comma
+            # Try tab separator first, then pipe, then comma
             if "\t" in line:
                 parts = [p.strip() for p in line.split("\t")]
+            elif "|" in line:
+                parts = [p.strip() for p in line.split("|")]
             else:
                 parts = [p.strip() for p in line.split(",")]
 

@@ -14,6 +14,7 @@ import {
   Clock,
   Check,
   Bug,
+  ChevronDown,
 } from 'lucide-react';
 import { useApi } from './hooks/useApi';
 import { Sidebar } from './components/layout/Sidebar';
@@ -545,6 +546,24 @@ function App() {
       showToast('success', '角色图片上传成功');
     } else if (result.error && result.error !== 'No file selected') {
       showToast('error', `角色图片上传失败: ${result.error}`);
+    }
+  };
+
+  const handleRemoveCharacterImage = async (id: string) => {
+    if (!api || !project) return;
+
+    const result = await api.remove_character_image(id);
+    if (result.success && result.character) {
+      setProject({
+        ...project,
+        characters: project.characters.map((c) =>
+          c.id === id ? result.character! : c
+        ),
+      });
+      setIsDirty(true);
+      showToast('success', '已移除角色图片');
+    } else if (result.error) {
+      showToast('error', `移除失败: ${result.error}`);
     }
   };
 
@@ -1397,20 +1416,34 @@ function App() {
               <Type className="w-4 h-4" />
               角色前缀
             </button>
-            <button
-              onClick={() => setImportCharacterModalOpen(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-200 transition-colors"
-            >
-              <FileUp className="w-4 h-4" />
-              导入角色
-            </button>
-            <button
-              onClick={() => handleImportShotBuilder('characters')}
-              className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-200 transition-colors"
-            >
-              <FileUp className="w-4 h-4" />
-              一键导入
-            </button>
+            <div className="relative group">
+              <button className="flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-200 transition-colors">
+                <FileUp className="w-4 h-4" />
+                导入
+                <ChevronDown className="w-3 h-3" />
+              </button>
+              <div className="absolute left-0 top-full mt-1 w-36 bg-slate-800 border border-slate-700 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-150 z-50">
+                <div className="py-1">
+                  <button
+                    onClick={() => handleImportShotBuilder('characters')}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-200 hover:bg-slate-700 transition-colors"
+                  >
+                    <Sparkles className="w-4 h-4 text-teal-400" />
+                    一键导入
+                  </button>
+                </div>
+                <div className="border-t border-slate-700" />
+                <div className="py-1">
+                  <button
+                    onClick={() => setImportCharacterModalOpen(true)}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-200 hover:bg-slate-700 transition-colors"
+                  >
+                    <FileUp className="w-4 h-4 text-slate-400" />
+                    粘贴/文件
+                  </button>
+                </div>
+              </div>
+            </div>
             <button
               onClick={() => setAddCharacterModalOpen(true)}
               className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-200 transition-colors"
@@ -1541,6 +1574,7 @@ function App() {
             onDeleteCharacter={handleDeleteCharacter}
             onGenerateImage={handleGenerateCharacterImage}
             onUploadImage={handleUploadCharacterImage}
+            onRemoveImage={handleRemoveCharacterImage}
             onSetReferenceAudio={handleSetCharacterReferenceAudio}
             onSmartAssign={handleSmartAssignAudios}
             onImportFromText={handleImportCharactersFromText}
