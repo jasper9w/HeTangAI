@@ -28,11 +28,13 @@ import { ProjectSettingsPage } from './pages/ProjectSettingsPage';
 import { CharactersPage } from './pages/CharactersPage';
 import { ScenesPage } from './pages/ScenesPage';
 import { DubbingPage } from './pages/DubbingPage';
+import { DubbingViewPage } from './pages/DubbingViewPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { Toast, type ToastMessage } from './components/ui/Toast';
 import { ImportDropdown } from './components/ui/ImportDropdown';
 import { ExportDropdown } from './components/ui/ExportDropdown';
 import { GenerateDropdown } from './components/ui/GenerateDropdown';
+import { ViewDropdown } from './components/ui/ViewDropdown';
 import { UpdateModal } from './components/ui/UpdateModal';
 import { ExportProgressModal, type ExportProgress } from './components/ui/ExportProgressModal';
 import { TaskStatusBar, TaskPanel } from './components/tasks';
@@ -1638,6 +1640,13 @@ function App() {
             characters={project?.characters || []}
           />
         );
+      case 'dubbingView':
+        return (
+          <DubbingViewPage
+            shots={project?.shots || []}
+            characters={project?.characters || []}
+          />
+        );
       case 'settings':
         return <SettingsPage />;
       default:
@@ -1691,6 +1700,16 @@ function App() {
                   </p>
                 </div>
               </div>
+
+              {/* View Switcher - only show on shots/dubbingView pages */}
+              {(currentPage === 'shots' || currentPage === 'dubbingView') && (
+                <div className="ml-4 pl-4 border-l border-slate-600">
+                  <ViewDropdown
+                    currentView={currentPage as 'shots' | 'dubbingView'}
+                    onViewChange={(view) => setCurrentPage(view)}
+                  />
+                </div>
+              )}
             </div>
 
             {/* Right: Page actions */}

@@ -4,7 +4,7 @@
 
 // ========== Page Types ==========
 
-export type PageType = 'projects' | 'home' | 'projectSettings' | 'storyboard' | 'characters' | 'scenes' | 'shots' | 'dubbing' | 'settings';
+export type PageType = 'projects' | 'home' | 'projectSettings' | 'storyboard' | 'characters' | 'scenes' | 'shots' | 'dubbing' | 'dubbingView' | 'settings';
 
 // ========== Task Types (moved to top for forward reference) ==========
 
