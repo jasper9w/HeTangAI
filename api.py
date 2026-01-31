@@ -125,16 +125,23 @@ class Api:
         chars = string.ascii_lowercase + string.digits
         return ''.join(random.choices(chars, k=6))
 
+    def _get_project_id(self) -> str:
+        """Get current project ID (empty string if not available)"""
+        if self.project_data:
+            return self.project_data.get('id', '')
+        return ''
+
     # ========== Task System Methods ==========
 
-    def _start_task_executors(self, project_name: str):
-        """Start task executors for the current project"""
-        # Stop existing executors first
-        self._stop_task_executors()
+    def _start_task_executors(self):
+        """Start task executors (global shared database)"""
+        # If already running, skip
+        if self._task_manager is not None:
+            logger.debug("Task executors already running, skipping")
+            return
 
-        # Get project directory and create tasks.db path
-        project_dir = self._project_manager.get_project_dir(project_name)
-        db_path = str(project_dir / "tasks.db")
+        # Use global shared database path
+        db_path = str(Path.home() / ".hetangai" / "tasks.db")
 
         # Initialize TaskManager
         self._task_manager = TaskManager(db_path)
@@ -160,7 +167,8 @@ class Api:
                     db_path=db_path,
                     worker_id=f"image-{i}",
                     settings_file=settings_file,
-                    config_key='tti'
+                    config_key='tti',
+                    current_project_id_getter=self._get_project_id
                 )
                 thread = threading.Thread(
                     target=executor.run_loop,
@@ -179,7 +187,8 @@ class Api:
                     db_path=db_path,
                     worker_id=f"video-{i}",
                     settings_file=settings_file,
-                    config_key='ttv'
+                    config_key='ttv',
+                    current_project_id_getter=self._get_project_id
                 )
                 thread = threading.Thread(
                     target=executor.run_loop,
@@ -198,7 +207,8 @@ class Api:
                     db_path=db_path,
                     worker_id=f"audio-{i}",
                     settings_file=settings_file,
-                    config_key='tts'
+                    config_key='tts',
+                    current_project_id_getter=self._get_project_id
                 )
                 thread = threading.Thread(
                     target=executor.run_loop,
@@ -220,7 +230,7 @@ class Api:
         self._task_monitor_thread.start()
         logger.info("Task monitor started")
 
-        logger.info(f"Task executors started for project: {project_name}")
+        logger.info("Task executors started (global shared database)")
 
     def _stop_task_executors(self):
         """Stop all task executors"""
@@ -396,9 +406,8 @@ class Api:
     
     def _add_executor(self, task_type: str, config: dict, executor_class):
         """添加单个执行器"""
-        # 获取 db_path
-        project_dir = self._project_manager.get_project_dir(self.project_name)
-        db_path = str(project_dir / "tasks.db")
+        # 使用全局共享数据库路径
+        db_path = str(Path.home() / ".hetangai" / "tasks.db")
         
         # 计算新的 worker_id（找到当前最大的序号+1）
         existing_ids = [
@@ -422,12 +431,13 @@ class Api:
             'audio': 'tts'
         }
         
-        # 创建执行器（使用动态配置加载）
+        # 创建执行器（使用动态配置加载，传入当前项目ID回调）
         executor = executor_class(
             db_path=db_path,
             worker_id=f"{task_type}-{next_id}",
             settings_file=str(self._settings_file),
-            config_key=config_key_map.get(task_type, task_type)
+            config_key=config_key_map.get(task_type, task_type),
+            current_project_id_getter=self._get_project_id
         )
         
         # 启动线程
@@ -1005,8 +1015,11 @@ class Api:
 
     def new_project(self) -> dict:
         """Create a new empty project"""
+        import secrets
         logger.info("Creating new project")
+        project_id = secrets.token_hex(4)  # 8位十六进制字符
         self.project_data = {
+            "id": project_id,
             "version": "1.0",
             "name": "Untitled Project",
             "createdAt": datetime.now().isoformat(),
@@ -1132,9 +1145,9 @@ class Api:
                     else:
                         shot["audioUrl"] = ""
 
-                # Start task executors for this project
+                # Start task executors (global shared database, only starts once)
                 try:
-                    self._start_task_executors(project_name)
+                    self._start_task_executors()
                 except Exception as e:
                     logger.warning(f"Failed to start task executors: {e}")
 
@@ -1620,6 +1633,7 @@ class Api:
                         prompt=prompt,
                         aspect_ratio='16:9',
                         provider=provider,
+                        project_id=self._get_project_id(),
                         output_dir=output_dir,
                     )
 
@@ -1799,6 +1813,7 @@ class Api:
                         prompt=prompt,
                         aspect_ratio='16:9',
                         provider=provider,
+                        project_id=self._get_project_id(),
                         output_dir=output_dir,
                     )
 
@@ -3357,6 +3372,7 @@ class Api:
                     prompt=params["prompt"],
                     aspect_ratio=params["aspect_ratio"],
                     provider=params["provider"],
+                    project_id=self._get_project_id(),
                     reference_images=params["reference_images"],
                     output_dir=params["output_dir"],
                     shot_id=shot_id,
@@ -3666,6 +3682,7 @@ class Api:
                     prompt=params["prompt"],
                     aspect_ratio=params["aspect_ratio"],
                     provider=params["provider"],
+                    project_id=self._get_project_id(),
                     reference_images=params["reference_images"],
                     duration=params["duration"],
                     output_dir=params["output_dir"],
@@ -3993,6 +4010,7 @@ class Api:
                     task_id = self._task_manager.create_audio_task(
                         text=params["text"],
                         provider=params["provider"],
+                        project_id=self._get_project_id(),
                         voice_ref=params["voice_ref"],
                         emotion=params["emotion"] or None,
                         emotion_intensity=params["emotion_intensity"] or None,
@@ -6480,6 +6498,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 prompt=prompt,
                 aspect_ratio=aspect_ratio,
                 provider=provider,
+                project_id=self._get_project_id(),
                 output_dir=str(project_dir),
             )
 
@@ -6579,6 +6598,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 prompt=full_prompt,
                 aspect_ratio='16:9',
                 provider=provider,
+                project_id=self._get_project_id(),
                 output_dir=str(preview_dir),
             )
 
@@ -6838,6 +6858,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 prompt=prompt,
                 aspect_ratio=aspect_ratio,
                 provider=provider,
+                project_id=self._get_project_id(),
                 resolution=resolution,
                 reference_images=reference_images,
                 output_dir=output_dir,
@@ -6876,6 +6897,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 prompt=prompt,
                 aspect_ratio=aspect_ratio,
                 provider=provider,
+                project_id=self._get_project_id(),
                 resolution=resolution,
                 reference_images=reference_images,
                 duration=duration,
@@ -6912,6 +6934,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             task_id = self._task_manager.create_audio_task(
                 text=text,
                 provider=provider,
+                project_id=self._get_project_id(),
                 voice_ref=voice_ref,
                 emotion=emotion,
                 emotion_intensity=emotion_intensity,

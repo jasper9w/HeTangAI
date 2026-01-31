@@ -11,7 +11,7 @@ import time
 import uuid
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
-from typing import Optional, Tuple, Any
+from typing import Optional, Tuple, Any, Callable
 
 from loguru import logger
 
@@ -31,7 +31,8 @@ class BaseExecutor(ABC):
         db_path: str,
         worker_id: str = None,
         heartbeat_interval: int = 30,
-        lock_timeout: int = 60
+        lock_timeout: int = 60,
+        current_project_id_getter: Callable[[], str] = None
     ):
         """
         初始化执行器
@@ -41,6 +42,7 @@ class BaseExecutor(ABC):
             worker_id: 执行器ID，为 None 则自动生成
             heartbeat_interval: 心跳间隔（秒）
             lock_timeout: 锁超时时间（秒）
+            current_project_id_getter: 获取当前项目ID的回调函数（用于优先执行当前项目任务）
         """
         if self.task_type is None:
             raise ValueError("Subclass must define task_type")
@@ -49,6 +51,7 @@ class BaseExecutor(ABC):
         self.worker_id = worker_id or self._generate_worker_id()
         self.heartbeat_interval = heartbeat_interval
         self.lock_timeout = lock_timeout
+        self._current_project_id_getter = current_project_id_getter
         
         self._running = False
         self._current_task_id: Optional[str] = None
@@ -110,17 +113,48 @@ class BaseExecutor(ABC):
         now = datetime.now()
         lock_cutoff = now - timedelta(seconds=self.lock_timeout)
         
-        # 查询候选任务
+        # 获取当前项目 ID（如果有回调函数）
+        current_project_id = None
+        if self._current_project_id_getter:
+            current_project_id = self._current_project_id_getter()
+        
+        # 基础查询条件
+        base_conditions = (
+            (self._model.status == TaskStatus.PENDING.value) &
+            (self._model.expire_at > now) &
+            (
+                (self._model.locked_by.is_null()) |
+                (self._model.locked_at < lock_cutoff)
+            )
+        )
+        
+        # 如果有当前项目，先查当前项目的任务
+        if current_project_id:
+            task = self._try_claim_with_conditions(
+                base_conditions & (self._model.project_id == current_project_id),
+                now, lock_cutoff
+            )
+            if task:
+                return task
+        
+        # 查询所有其他项目的任务
+        if current_project_id:
+            # 排除当前项目（已经查过了）
+            task = self._try_claim_with_conditions(
+                base_conditions & (self._model.project_id != current_project_id),
+                now, lock_cutoff
+            )
+        else:
+            # 没有当前项目，查所有任务
+            task = self._try_claim_with_conditions(base_conditions, now, lock_cutoff)
+        
+        return task
+    
+    def _try_claim_with_conditions(self, conditions, now, lock_cutoff) -> Optional[Any]:
+        """尝试在给定条件下锁定任务"""
         candidates = (
             self._model.select()
-            .where(
-                (self._model.status == TaskStatus.PENDING.value) &
-                (self._model.expire_at > now) &
-                (
-                    (self._model.locked_by.is_null()) |
-                    (self._model.locked_at < lock_cutoff)
-                )
-            )
+            .where(conditions)
             .order_by(self._model.priority, self._model.created_at)
         )
         
@@ -135,7 +169,7 @@ class BaseExecutor(ABC):
                     status=TaskStatus.RUNNING.value,
                     locked_by=self.worker_id,
                     locked_at=now,
-                    started_at=now,  # 记录任务开始执行时间
+                    started_at=now,
                     updated_at=now
                 )
                 .where(
@@ -152,7 +186,7 @@ class BaseExecutor(ABC):
             if updated > 0:
                 # 锁定成功，重新获取最新数据
                 task = self._model.get_by_id(task.id)
-                logger.info(f"Claimed task: {self.task_type}:{task.id}")
+                logger.info(f"Claimed task: {self.task_type}:{task.id} (project: {task.project_id or 'none'})")
                 return task
         
         return None

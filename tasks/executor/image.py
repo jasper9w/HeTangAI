@@ -6,7 +6,7 @@ import asyncio
 import json
 import uuid
 from pathlib import Path
-from typing import Optional, Tuple, Any
+from typing import Optional, Tuple, Any, Callable
 
 from loguru import logger
 
@@ -31,7 +31,8 @@ class ImageExecutor(BaseExecutor):
         heartbeat_interval: int = 30,
         lock_timeout: int = 60,
         settings_file: str = None,
-        config_key: str = 'tti'
+        config_key: str = 'tti',
+        current_project_id_getter: Callable[[], str] = None
     ):
         """
         初始化图片执行器
@@ -46,8 +47,9 @@ class ImageExecutor(BaseExecutor):
             lock_timeout: 锁超时
             settings_file: 设置文件路径，每次执行时动态读取配置
             config_key: 配置键名（如 'tti'）
+            current_project_id_getter: 获取当前项目ID的回调函数
         """
-        super().__init__(db_path, worker_id, heartbeat_interval, lock_timeout)
+        super().__init__(db_path, worker_id, heartbeat_interval, lock_timeout, current_project_id_getter)
         self._settings_file = settings_file
         self._config_key = config_key
         # 保留旧参数作为后备

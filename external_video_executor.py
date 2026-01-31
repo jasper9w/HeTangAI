@@ -638,7 +638,8 @@ Examples:
     python external_video_executor.py --db /path/to/tasks.db --heartbeat 60 --lock-timeout 300
         """
     )
-    parser.add_argument('--db', required=True, help='Database file path')
+    default_db = str(Path.home() / ".hetangai" / "tasks.db")
+    parser.add_argument('--db', default=default_db, help=f'Database file path (default: {default_db})')
     parser.add_argument('--worker-id', help='Worker ID (auto-generated if not specified)')
     parser.add_argument('--heartbeat', type=int, default=30, help='Heartbeat interval in seconds (default: 30)')
     parser.add_argument('--lock-timeout', type=int, default=120, help='Lock timeout in seconds (default: 120)')

@@ -1,7 +1,7 @@
 """
 生成任务数据库模型
 
-使用 peewee + SQLite，每个项目独立数据库
+使用 peewee + SQLite，全局共享数据库
 """
 
 from datetime import datetime
@@ -30,6 +30,7 @@ class BaseTask(Model):
     
     # 基础字段
     id = CharField(primary_key=True, max_length=36)
+    project_id = CharField(max_length=20, index=True, default='')  # 关联的项目ID
     subtype = CharField(max_length=20)
     status = CharField(max_length=20, default=TaskStatus.PENDING.value)
     priority = IntegerField(default=100)
@@ -59,6 +60,7 @@ class BaseTask(Model):
         """转换为字典"""
         return {
             'id': self.id,
+            'project_id': self.project_id,
             'subtype': self.subtype,
             'status': self.status,
             'priority': self.priority,

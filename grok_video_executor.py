@@ -897,7 +897,8 @@ Examples:
     python grok_video_executor.py --db /path/to/tasks.db --cookie-file cookies.txt
         """
     )
-    parser.add_argument('--db', required=True, help='Database file path')
+    default_db = str(Path.home() / ".hetangai" / "tasks.db")
+    parser.add_argument('--db', default=default_db, help=f'Database file path (default: {default_db})')
     parser.add_argument('--cookie', help='Grok cookie string (or set GROK_COOKIE env var)')
     parser.add_argument('--cookie-file', help='File containing Grok cookie')
     parser.add_argument('--concurrency', type=int, default=1, help='Number of concurrent executors (default: 1)')

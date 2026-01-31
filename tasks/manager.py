@@ -116,6 +116,7 @@ class TaskManager:
         prompt: str,
         aspect_ratio: str,
         provider: str,
+        project_id: str = '',
         resolution: str = None,
         reference_images: str = None,
         output_dir: str = None,
@@ -136,6 +137,7 @@ class TaskManager:
             prompt: 生成提示词
             aspect_ratio: 宽高比 ('16:9', '1:1', '9:16')
             provider: 服务提供商
+            project_id: 关联的项目ID (可选)
             resolution: 分辨率 (可选)
             reference_images: 参考图路径，逗号分隔 (可选)
             output_dir: 输出目录 (可选)
@@ -156,6 +158,7 @@ class TaskManager:
         
         ImageTask.create(
             id=task_id,
+            project_id=project_id,
             subtype=subtype,
             prompt=prompt,
             aspect_ratio=aspect_ratio,
@@ -173,7 +176,7 @@ class TaskManager:
             slot=slot,
         )
         
-        logger.debug(f"Created image task: {task_id}, subtype={subtype}, shot_id={shot_id}")
+        logger.debug(f"Created image task: {task_id}, project_id={project_id}, subtype={subtype}, shot_id={shot_id}")
         return task_id
     
     def create_video_task(
@@ -182,6 +185,7 @@ class TaskManager:
         prompt: str,
         aspect_ratio: str,
         provider: str,
+        project_id: str = '',
         resolution: str = None,
         reference_images: str = None,
         duration: int = 5,
@@ -202,6 +206,7 @@ class TaskManager:
             prompt: 生成提示词
             aspect_ratio: 宽高比
             provider: 服务提供商
+            project_id: 关联的项目ID (可选)
             resolution: 分辨率 (可选)
             reference_images: 参考图路径 (可选)
             duration: 视频时长（秒）
@@ -222,6 +227,7 @@ class TaskManager:
         
         VideoTask.create(
             id=task_id,
+            project_id=project_id,
             subtype=subtype,
             prompt=prompt,
             aspect_ratio=aspect_ratio,
@@ -239,13 +245,14 @@ class TaskManager:
             shot_sequence=shot_sequence,
         )
         
-        logger.debug(f"Created video task: {task_id}, subtype={subtype}, shot_id={shot_id}")
+        logger.debug(f"Created video task: {task_id}, project_id={project_id}, subtype={subtype}, shot_id={shot_id}")
         return task_id
     
     def create_audio_task(
         self,
         text: str,
         provider: str,
+        project_id: str = '',
         voice_ref: str = None,
         emotion: str = None,
         emotion_intensity: str = None,
@@ -266,6 +273,7 @@ class TaskManager:
         Args:
             text: 要合成的文本
             provider: 服务提供商
+            project_id: 关联的项目ID (可选)
             voice_ref: 参考音频路径 (可选)
             emotion: 情感类型 (可选)
             emotion_intensity: 情感强度 (可选)
@@ -288,6 +296,7 @@ class TaskManager:
         
         AudioTask.create(
             id=task_id,
+            project_id=project_id,
             subtype='text2speech',
             text=text,
             voice_ref=voice_ref,
@@ -306,7 +315,7 @@ class TaskManager:
             dialogue_index=dialogue_index,
         )
         
-        logger.debug(f"Created audio task: {task_id}, shot_id={shot_id}, dialogue_index={dialogue_index}")
+        logger.debug(f"Created audio task: {task_id}, project_id={project_id}, shot_id={shot_id}, dialogue_index={dialogue_index}")
         return task_id
     
     # ========== 查询 ==========
