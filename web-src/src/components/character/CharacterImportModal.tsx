@@ -38,6 +38,7 @@ interface CharacterImportModalProps {
     error?: string;
   }>;
   onExportTemplate: () => Promise<void>;
+  mode?: 'paste' | 'file';
 }
 
 type TabType = 'paste' | 'file' | 'template';
@@ -49,8 +50,9 @@ export function CharacterImportModal({
   onImportFromFile,
   onConfirmImport,
   onExportTemplate,
+  mode = 'paste',
 }: CharacterImportModalProps) {
-  const [activeTab, setActiveTab] = useState<TabType>('paste');
+  const [activeTab, setActiveTab] = useState<TabType>(mode);
   const [pasteText, setPasteText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [parseErrors, setParseErrors] = useState<string[]>([]);
@@ -59,12 +61,17 @@ export function CharacterImportModal({
   const duplicateCharacters = parsedCharacters.filter((char) => !!char.existingId);
   const hasDuplicates = duplicateCharacters.length > 0;
 
+  // Sync activeTab with mode when mode changes
+  useEffect(() => {
+    setActiveTab(mode);
+  }, [mode]);
+
   const handleClose = () => {
     setPasteText('');
     setParseErrors([]);
     setParsedCharacters([]);
     setShowPreview(false);
-    setActiveTab('paste');
+    setActiveTab(mode);
     onClose();
   };
 
@@ -160,7 +167,7 @@ export function CharacterImportModal({
         {/* Header */}
         <div className="p-4 border-b border-slate-700 flex items-center justify-between">
           <h3 className="text-lg font-medium text-slate-200">
-            {showPreview ? '预览导入' : '导入角色'}
+            {showPreview ? '预览导入' : mode === 'paste' ? '粘贴导入' : '文件导入'}
           </h3>
           <button
             onClick={handleClose}
@@ -173,42 +180,6 @@ export function CharacterImportModal({
         {/* Content */}
         {!showPreview ? (
           <>
-            {/* Tabs */}
-            <div className="flex border-b border-slate-700">
-              <button
-                onClick={() => setActiveTab('paste')}
-                className={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors ${
-                  activeTab === 'paste'
-                    ? 'text-teal-400 border-b-2 border-teal-400'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <ClipboardPaste className="w-4 h-4" />
-                粘贴文本
-              </button>
-              <button
-                onClick={() => setActiveTab('file')}
-                className={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors ${
-                  activeTab === 'file'
-                    ? 'text-teal-400 border-b-2 border-teal-400'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <FileSpreadsheet className="w-4 h-4" />
-                CSV/Excel/JSONL文件
-              </button>
-              <button
-                onClick={() => setActiveTab('template')}
-                className={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors ${
-                  activeTab === 'template'
-                    ? 'text-teal-400 border-b-2 border-teal-400'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <Download className="w-4 h-4" />
-                导出模板
-              </button>
-            </div>
 
             {/* Tab Content */}
             <div className="p-4 flex-1 overflow-y-auto">

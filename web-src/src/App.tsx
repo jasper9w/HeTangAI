@@ -15,6 +15,8 @@ import {
   Check,
   Bug,
   ChevronDown,
+  ClipboardPaste,
+  Download,
 } from 'lucide-react';
 import { useApi } from './hooks/useApi';
 import { Sidebar } from './components/layout/Sidebar';
@@ -75,6 +77,7 @@ function App() {
   // Character modal state
   const [addCharacterModalOpen, setAddCharacterModalOpen] = useState(false);
   const [importCharacterModalOpen, setImportCharacterModalOpen] = useState(false);
+  const [importCharacterMode, setImportCharacterMode] = useState<'paste' | 'file'>('paste');
 
   // Scene modal state
   const [addSceneModalOpen, setAddSceneModalOpen] = useState(false);
@@ -1423,6 +1426,7 @@ function App() {
                 <ChevronDown className="w-3 h-3" />
               </button>
               <div className="absolute left-0 top-full mt-1 w-36 bg-slate-800 border border-slate-700 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-150 z-50">
+                {/* 一键导入 */}
                 <div className="py-1">
                   <button
                     onClick={() => handleImportShotBuilder('characters')}
@@ -1433,13 +1437,38 @@ function App() {
                   </button>
                 </div>
                 <div className="border-t border-slate-700" />
+                {/* 粘贴导入 */}
                 <div className="py-1">
                   <button
-                    onClick={() => setImportCharacterModalOpen(true)}
+                    onClick={() => {
+                      setImportCharacterMode('paste');
+                      setImportCharacterModalOpen(true);
+                    }}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-200 hover:bg-slate-700 transition-colors"
+                  >
+                    <ClipboardPaste className="w-4 h-4 text-slate-400" />
+                    粘贴导入
+                  </button>
+                </div>
+                <div className="border-t border-slate-700" />
+                {/* 文件导入/导出 */}
+                <div className="py-1">
+                  <button
+                    onClick={() => {
+                      setImportCharacterMode('file');
+                      setImportCharacterModalOpen(true);
+                    }}
                     className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-200 hover:bg-slate-700 transition-colors"
                   >
                     <FileUp className="w-4 h-4 text-slate-400" />
-                    粘贴/文件
+                    文件导入
+                  </button>
+                  <button
+                    onClick={handleExportCharacterTemplate}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-200 hover:bg-slate-700 transition-colors"
+                  >
+                    <Download className="w-4 h-4 text-slate-400" />
+                    导出模板
                   </button>
                 </div>
               </div>
@@ -1585,6 +1614,7 @@ function App() {
             onAddModalOpenChange={setAddCharacterModalOpen}
             importModalOpen={importCharacterModalOpen}
             onImportModalOpenChange={setImportCharacterModalOpen}
+            importMode={importCharacterMode}
           />
         );
       case 'scenes':

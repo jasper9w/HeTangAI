@@ -83,6 +83,7 @@ interface CharactersPageProps {
   onAddModalOpenChange: (open: boolean) => void;
   importModalOpen: boolean;
   onImportModalOpenChange: (open: boolean) => void;
+  importMode?: 'paste' | 'file';
 }
 
 export function CharactersPage({
@@ -105,6 +106,7 @@ export function CharactersPage({
   onAddModalOpenChange,
   importModalOpen,
   onImportModalOpenChange,
+  importMode = 'paste',
 }: CharactersPageProps) {
   const aspectClass = getAspectRatioClass(aspectRatio);
   const gridColsClass = getGridColsClass(aspectRatio);
@@ -713,6 +715,7 @@ export function CharactersPage({
         onImportFromFile={onImportFromFile}
         onConfirmImport={onConfirmImport}
         onExportTemplate={onExportTemplate}
+        mode={importMode}
       />
 
       {/* Add Character Modal */}
