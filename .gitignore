@@ -13,3 +13,4 @@ logs/
 .DS_Store
 web/
 logs/
+.cursor/debug.log
