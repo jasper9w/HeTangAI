@@ -128,7 +128,7 @@ def main():
         # Still try to start - might work if detection failed
     
     # Use default backend (WebKit on macOS, EdgeChromium on Windows, GTK WebKit2 on Linux)
-    webview.start(debug=True)
+    webview.start(debug=False)
 
     # Cleanup
     file_server.stop()
