@@ -10,7 +10,9 @@ export function useApi() {
 
   useEffect(() => {
     const checkApi = () => {
-      if (window.pywebview?.api) {
+      // Check both api existence and a known method to ensure full initialization
+      // Windows pywebview may have api object before methods are fully registered
+      if (window.pywebview?.api && typeof window.pywebview.api.get_app_version === 'function') {
         setApi(window.pywebview.api);
         setReady(true);
       } else {
