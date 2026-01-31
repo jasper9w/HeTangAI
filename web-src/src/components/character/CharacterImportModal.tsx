@@ -5,7 +5,6 @@ import { useState, useEffect } from 'react';
 import {
   X,
   FileSpreadsheet,
-  ClipboardPaste,
   Download,
   AlertCircle,
   Check,

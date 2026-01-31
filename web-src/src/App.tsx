@@ -1805,7 +1805,7 @@ function App() {
           {/* Right: Debug */}
           <div className="flex items-center gap-4">
             <button
-              onClick={() => api.open_logs_dir()}
+              onClick={() => api?.open_logs_dir()}
               className="flex items-center gap-1 text-slate-500 hover:text-slate-300 transition-colors"
               title="打开调试日志目录"
             >

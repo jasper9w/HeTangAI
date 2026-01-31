@@ -361,6 +361,7 @@ export interface PyWebViewApi {
   generate_character_image: (characterId: string) => Promise<ApiResponse & { task_id?: string; character?: Character }>;
   generate_characters_batch: (characterIds: string[]) => Promise<BatchGenerateResult>;
   upload_character_image: (characterId: string) => Promise<ApiResponse & { imageUrl?: string; character?: Character }>;
+  remove_character_image: (characterId: string) => Promise<ApiResponse & { character?: Character }>;
   set_character_reference_audio: (characterId: string, audioPath: string) => Promise<ApiResponse & { character?: Character }>;
 
   // Character import
