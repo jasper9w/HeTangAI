@@ -5,7 +5,7 @@ from pathlib import Path
 
 APP_NAME = "hetangai"
 GITHUB_REPO = "jasper9w/HeTangAI"
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 
 
 def get_version() -> str:
