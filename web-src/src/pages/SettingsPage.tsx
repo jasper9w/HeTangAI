@@ -10,7 +10,7 @@ type TabType = 'tts' | 'tti' | 'ttv' | 'shotBuilder';
 const defaultSettings: AppSettings = {
   apiMode: 'hosted',
   hostedService: {
-    baseUrl: 'https://api.hetangai.com',
+    baseUrl: '',
     token: '',
   },
   customApi: {
@@ -401,7 +401,7 @@ export function SettingsPage() {
                           ...settings,
                           hostedService: { ...settings.hostedService, baseUrl: e.target.value }
                         })}
-                        placeholder="https://api.hetangai.com"
+                        placeholder="请输入接入地址..."
                         className="w-full px-3 py-2 bg-slate-600 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
                       />
                     </div>

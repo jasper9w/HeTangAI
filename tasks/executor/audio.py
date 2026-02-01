@@ -64,7 +64,7 @@ class AudioExecutor(BaseExecutor):
                 # 检查是否是托管模式
                 if settings.get('apiMode') == 'hosted':
                     hosted = settings.get('hostedService', {})
-                    api_url = hosted.get('baseUrl', 'https://api.hetangai.com')
+                    api_url = hosted.get('baseUrl', '')
                     api_key = hosted.get('token', '')
                     model = f'hetang-{self._config_key}-v1'
                     if api_key:

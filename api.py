@@ -840,7 +840,7 @@ class Api:
             default_settings = {
                 "apiMode": "hosted",  # "hosted" | "custom"
                 "hostedService": {
-                    "baseUrl": "https://api.hetangai.com",
+                    "baseUrl": "",
                     "token": "",
                 },
                 "customApi": {
@@ -908,7 +908,7 @@ class Api:
         new_settings = {
             "apiMode": "custom",  # Old users have custom config, keep using it
             "hostedService": {
-                "baseUrl": "https://api.hetangai.com",
+                "baseUrl": "",
                 "token": "",
             },
             "customApi": {
@@ -947,12 +947,20 @@ class Api:
                 "ttv": 4,   # 视频
                 "tts": 10,  # 音频
             }
-            return {
-                "apiUrl": hosted.get("baseUrl", "https://api.hetangai.com"),
+            base_config = {
+                "apiUrl": hosted.get("baseUrl", ""),
                 "apiKey": hosted.get("token", ""),
                 "model": f"hetang-{config_key}-v1",
                 "concurrency": default_concurrency.get(config_key, 1),
             }
+            # 图片生成需要三种不同的模型
+            if config_key == "tti":
+                base_config.update({
+                    "characterModel": "hetang-tti-character-v1",  # 角色图
+                    "sceneModel": "hetang-tti-scene-v1",          # 场景图（有参考图）
+                    "shotModel": "hetang-tti-shot-v1",            # 分镜图（无参考图）
+                })
+            return base_config
         else:
             return settings.get("customApi", {}).get(config_key, {})
 

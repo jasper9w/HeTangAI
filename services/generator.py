@@ -142,6 +142,22 @@ class GenerationClient:
         self.model = model
         self.timeout = 300.0  # 5 minutes timeout
 
+    def _get_chat_completions_url(self) -> str:
+        """
+        构建 /v1/chat/completions 完整 URL
+        只提取用户输入的协议+主机部分，自动拼接标准路径
+        支持用户输入各种格式：
+        - https://example.com
+        - https://example.com/
+        - https://example.com/v1
+        - https://example.com/v1/chat/completions
+        - https://example.com/some/other/path
+        """
+        parsed = urlparse(self.api_url)
+        # 只保留协议和主机部分（scheme + netloc）
+        base_url = f"{parsed.scheme}://{parsed.netloc}"
+        return f"{base_url}/v1/chat/completions"
+
     async def generate_image(
         self,
         prompt: str,
@@ -184,14 +200,15 @@ class GenerationClient:
             "stream": True,
         }
 
-        logger.info(f"Generating {count} images with model: {self.model}")
+        url = self._get_chat_completions_url()
+        logger.info(f"Generating {count} images with model: {self.model}, url: {url}")
         if reference_images:
             logger.info(f"Using {len(reference_images)} reference images")
 
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 async with client.stream(
-                    "POST", self.api_url, headers=headers, json=payload
+                    "POST", url, headers=headers, json=payload
                 ) as response:
                     response.raise_for_status()
 
@@ -306,12 +323,13 @@ class GenerationClient:
             "stream": True,
         }
 
-        logger.info(f"Generating video with model: {self.model}")
+        url = self._get_chat_completions_url()
+        logger.info(f"Generating video with model: {self.model}, url: {url}")
 
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 async with client.stream(
-                    "POST", self.api_url, headers=headers, json=payload
+                    "POST", url, headers=headers, json=payload
                 ) as response:
                     response.raise_for_status()
 
@@ -462,13 +480,7 @@ class GenerationClient:
             "Authorization": f"Bearer {self.api_key}",
         }
 
-        # Build /v1/chat/completions endpoint URL
-        base = self.api_url.rstrip('/')
-        if base.endswith('/v1'):
-            url = f"{base}/chat/completions"
-        else:
-            url = f"{base}/v1/chat/completions"
-
+        url = self._get_chat_completions_url()
         logger.info(f"Calling hosted TTS API: {url}")
 
         try:
