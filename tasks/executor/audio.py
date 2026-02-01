@@ -55,18 +55,30 @@ class AudioExecutor(BaseExecutor):
         self._fallback_model = model
     
     def _load_config(self) -> tuple:
-        """动态加载最新配置"""
+        """动态加载最新配置，支持 hosted/custom 模式"""
         if self._settings_file and Path(self._settings_file).exists():
             try:
                 with open(self._settings_file, 'r', encoding='utf-8') as f:
                     settings = json.load(f)
-                config = settings.get(self._config_key, {})
-                api_url = config.get('apiUrl', '')
-                api_key = config.get('apiKey', '')
-                model = config.get('model', '')
-                if api_url:
-                    logger.debug(f"Loaded config from settings: api_url={api_url[:30]}...")
-                    return api_url, api_key, model
+                
+                # 检查是否是托管模式
+                if settings.get('apiMode') == 'hosted':
+                    hosted = settings.get('hostedService', {})
+                    api_url = hosted.get('baseUrl', 'https://api.hetangai.com')
+                    api_key = hosted.get('token', '')
+                    model = f'hetang-{self._config_key}-v1'
+                    if api_key:
+                        logger.debug(f"Using hosted mode: api_url={api_url[:30]}...")
+                        return api_url, api_key, model
+                else:
+                    # 自定义模式
+                    config = settings.get('customApi', {}).get(self._config_key, {})
+                    api_url = config.get('apiUrl', '')
+                    api_key = config.get('apiKey', '')
+                    model = config.get('model', '')
+                    if api_url:
+                        logger.debug(f"Using custom mode: api_url={api_url[:30]}...")
+                        return api_url, api_key, model
             except Exception as e:
                 logger.warning(f"Failed to load settings file: {e}")
         

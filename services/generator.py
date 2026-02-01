@@ -391,6 +391,7 @@ class GenerationClient:
         speed: float = 1.0,
         emotion: str = "",
         intensity: str = "",
+        reference_text: str = "",
     ) -> bytes:
         """
         Generate audio using TTS API with emotion control
@@ -402,6 +403,7 @@ class GenerationClient:
             speed: Speech speed multiplier (default 1.0)
             emotion: Emotion type (e.g., "happy", "sad", "angry")
             intensity: Emotion intensity (e.g., "weak", "medium", "strong")
+            reference_text: Optional text content of reference audio
         """
         if not reference_audio:
             raise ValueError("Reference audio is required for TTS generation")
@@ -411,18 +413,97 @@ class GenerationClient:
         # Read and encode reference audio
         try:
             with open(reference_audio, "rb") as f:
-                spk_audio_base64 = base64.b64encode(f.read()).decode("utf-8")
+                ref_audio_b64 = base64.b64encode(f.read()).decode("utf-8")
         except Exception as e:
             logger.error(f"Failed to read reference audio: {e}")
             raise ValueError(f"Failed to read reference audio: {e}")
 
+        # Check if using hosted mode (model starts with "hetang-")
+        if self.model and self.model.startswith("hetang-"):
+            return await self._generate_audio_hosted(
+                text, ref_audio_b64, speed, emotion, intensity, reference_text
+            )
+        else:
+            return await self._generate_audio_legacy(
+                text, ref_audio_b64, speed, emotion, intensity
+            )
+
+    async def _generate_audio_hosted(
+        self,
+        text: str,
+        ref_audio_b64: str,
+        speed: float,
+        emotion: str,
+        intensity: str,
+        reference_text: str,
+    ) -> bytes:
+        """Generate audio using hosted service (chat/completions protocol)"""
+        # Build chat/completions format request
+        payload = {
+            "model": self.model,
+            "messages": [{
+                "role": "user",
+                "content": {
+                    "type": "tts",
+                    "text": text,
+                    "reference_audio": ref_audio_b64,
+                    "reference_text": reference_text,
+                    "speed": speed,
+                    "format": "wav",
+                    "emotion": emotion,
+                    "emotion_intensity": intensity,
+                }
+            }],
+            "stream": False
+        }
+
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.api_key}",
+        }
+
+        # Build /v1/chat/completions endpoint URL
+        base = self.api_url.rstrip('/')
+        if base.endswith('/v1'):
+            url = f"{base}/chat/completions"
+        else:
+            url = f"{base}/v1/chat/completions"
+
+        logger.info(f"Calling hosted TTS API: {url}")
+
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.post(url, headers=headers, json=payload)
+                response.raise_for_status()
+
+                result = response.json()
+                audio_content = result["choices"][0]["message"]["content"]
+                audio_b64 = audio_content["audio"]
+
+                audio_bytes = base64.b64decode(audio_b64)
+                logger.info(f"Generated audio: {len(audio_bytes)} bytes")
+                return audio_bytes
+
+        except Exception as e:
+            logger.error(f"Failed to generate audio (hosted): {e}")
+            raise
+
+    async def _generate_audio_legacy(
+        self,
+        text: str,
+        ref_audio_b64: str,
+        speed: float,
+        emotion: str,
+        intensity: str,
+    ) -> bytes:
+        """Generate audio using legacy custom API format"""
         # Build emotion vector based on emotion and intensity
         emo_vec = self._build_emotion_vector(emotion, intensity)
 
-        # Build request payload
+        # Build request payload (legacy format)
         payload = {
             "text": text,
-            "spk_audio_base64": spk_audio_base64,
+            "spk_audio_base64": ref_audio_b64,
             "emo_control_method": 2,  # Use emotion vector
             "emo_weight": 1.0,
             "emo_random": False,
@@ -433,7 +514,7 @@ class GenerationClient:
             "Content-Type": "application/json",
         }
 
-        logger.info(f"Calling TTS API: {self.api_url}")
+        logger.info(f"Calling legacy TTS API: {self.api_url}")
         logger.info(f"Emotion vector: {emo_vec}")
 
         try:
@@ -448,7 +529,7 @@ class GenerationClient:
                 return audio_bytes
 
         except Exception as e:
-            logger.error(f"Failed to generate audio: {e}")
+            logger.error(f"Failed to generate audio (legacy): {e}")
             raise
 
     def _build_emotion_vector(self, emotion: str, intensity: str) -> list:

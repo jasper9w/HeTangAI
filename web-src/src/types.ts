@@ -622,47 +622,69 @@ export interface SmartAssignResult {
 
 // ========== Settings Types ==========
 
+export type ApiMode = 'hosted' | 'custom';
+
+export interface HostedServiceConfig {
+  baseUrl: string;  // 服务地址
+  token: string;    // 用户唯一需要填写的字段
+  concurrency?: number;  // 并发数（可选，默认3）
+}
+
+export interface TtsConfig {
+  apiUrl: string;
+  model: string;
+  apiKey: string;
+  concurrency: number;
+}
+
+export interface TtiConfig {
+  provider: 'openai' | 'whisk';  // 接口类型
+  // OpenAI 模式配置
+  apiUrl: string;
+  apiKey: string;
+  characterModel: string;
+  sceneModel: string;
+  shotModel: string;
+  // Whisk 模式配置
+  whiskToken: string;
+  whiskWorkflowId: string;
+  whiskCookie: string;
+  concurrency: number;
+}
+
+export interface TtvConfig {
+  provider: 'openai' | 'whisk';  // 接口类型
+  // OpenAI 模式配置
+  apiUrl: string;
+  apiKey: string;
+  model: string;
+  // Whisk 模式配置
+  whiskToken: string;
+  whiskWorkflowId: string;
+  concurrency: number;
+}
+
+export interface ShotBuilderConfig {
+  apiUrl: string;
+  apiKey: string;
+  model: string;
+}
+
+export interface CustomApiConfig {
+  tts: TtsConfig;
+  tti: TtiConfig;
+  ttv: TtvConfig;
+  shotBuilder: ShotBuilderConfig;
+}
+
 export interface AppSettings {
+  apiMode: ApiMode;
+  hostedService: HostedServiceConfig;
+  customApi: CustomApiConfig;
   workDir: string;
   jianyingDraftDir: string;
   referenceAudioDir: string;  // 参考音频目录
-  ffmpegPath: string;  // ffmpeg 可执行文件路径
-  tts: {
-    apiUrl: string;
-    model: string;
-    apiKey: string;
-    concurrency: number;
-  };
-  tti: {
-    provider: 'openai' | 'whisk';  // 接口类型
-    // OpenAI 模式配置
-    apiUrl: string;
-    apiKey: string;
-    characterModel: string;
-    sceneModel: string;
-    shotModel: string;
-    // Whisk 模式配置
-    whiskToken: string;
-    whiskWorkflowId: string;
-    whiskCookie: string;
-    concurrency: number;
-  };
-  ttv: {
-    provider: 'openai' | 'whisk';  // 接口类型
-    // OpenAI 模式配置
-    apiUrl: string;
-    apiKey: string;
-    model: string;
-    // Whisk 模式配置
-    whiskToken: string;
-    whiskWorkflowId: string;
-    concurrency: number;
-  };
-  shotBuilder: {
-    apiUrl: string;
-    apiKey: string;
-    model: string;
-  };
+  ffmpegPath?: string;  // ffmpeg 可执行文件路径（可选）
 }
 
 // ========== Window Extension ==========

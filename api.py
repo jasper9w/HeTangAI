@@ -86,9 +86,9 @@ class Api:
         self._project_manager = ProjectManager(work_dir)
 
         # Initialize unified thread pool with semaphores for concurrency control
-        tts_concurrency = settings.get("tts", {}).get("concurrency", 1)
-        tti_concurrency = settings.get("tti", {}).get("concurrency", 1)
-        ttv_concurrency = settings.get("ttv", {}).get("concurrency", 1)
+        tts_concurrency = self._get_api_config(settings, "tts").get("concurrency", 1)
+        tti_concurrency = self._get_api_config(settings, "tti").get("concurrency", 1)
+        ttv_concurrency = self._get_api_config(settings, "ttv").get("concurrency", 1)
         
         # Single thread pool with enough workers to handle all concurrent tasks
         total_max_workers = tts_concurrency + tti_concurrency + ttv_concurrency
@@ -148,9 +148,9 @@ class Api:
 
         # Get API configurations
         settings = self._load_settings()
-        tti_config = settings.get("tti", {})
-        ttv_config = settings.get("ttv", {})
-        tts_config = settings.get("tts", {})
+        tti_config = self._get_api_config(settings, "tti")
+        ttv_config = self._get_api_config(settings, "ttv")
+        tts_config = self._get_api_config(settings, "tts")
 
         # Get concurrency settings
         tti_concurrency = tti_config.get("concurrency", 1)
@@ -160,7 +160,7 @@ class Api:
         # Settings file path for dynamic config loading
         settings_file = str(self._settings_file)
 
-        # Start image executors
+        # Start image executors (hosted mode: needs token, custom mode: needs apiUrl+apiKey)
         if tti_config.get("apiUrl") and tti_config.get("apiKey"):
             for i in range(tti_concurrency):
                 executor = ImageExecutor(
@@ -201,7 +201,7 @@ class Api:
             logger.info(f"Started {ttv_concurrency} video executor(s)")
 
         # Start audio executors
-        if tts_config.get("apiUrl"):
+        if tts_config.get("apiUrl") and tts_config.get("apiKey"):
             for i in range(tts_concurrency):
                 executor = AudioExecutor(
                     db_path=db_path,
@@ -379,7 +379,8 @@ class Api:
         ]
         
         for task_type, config_key, executor_class in type_config_map:
-            config = settings.get(config_key, {})
+            # 使用统一的配置获取方法
+            config = self._get_api_config(settings, config_key)
             target_count = config.get("concurrency", 1)
             
             # 获取当前该类型的执行器
@@ -417,11 +418,12 @@ class Api:
         ]
         next_id = max(existing_ids, default=-1) + 1
         
-        # 检查 API 配置
+        # 检查 API 配置（托管模式检查 apiKey/token，自定义模式检查 apiUrl）
         api_url = config.get("apiUrl", "")
+        api_key = config.get("apiKey", "")
         
-        if not api_url:
-            logger.warning(f"Cannot add {task_type} executor: apiUrl not configured")
+        if not api_url or not api_key:
+            logger.warning(f"Cannot add {task_type} executor: API not configured (url={bool(api_url)}, key={bool(api_key)})")
             return
         
         # 配置键名映射
@@ -836,40 +838,47 @@ class Api:
             default_work_dir = str(desktop / "荷塘AI")
 
             default_settings = {
+                "apiMode": "hosted",  # "hosted" | "custom"
+                "hostedService": {
+                    "baseUrl": "https://api.hetangai.com",
+                    "token": "",
+                },
+                "customApi": {
+                    "tts": {
+                        "apiUrl": "",
+                        "model": "tts-1",
+                        "apiKey": "",
+                        "concurrency": 1,
+                    },
+                    "tti": {
+                        "provider": "openai",
+                        "apiUrl": "",
+                        "apiKey": "",
+                        "characterModel": "gemini-3.0-pro-image-landscape",
+                        "sceneModel": "gemini-2.5-flash-image-landscape",
+                        "shotModel": "gemini-2.5-flash-image-landscape",
+                        "whiskToken": "",
+                        "whiskWorkflowId": "",
+                        "concurrency": 1,
+                    },
+                    "ttv": {
+                        "provider": "openai",
+                        "apiUrl": "",
+                        "apiKey": "",
+                        "model": "veo_3_1_i2v_s_fast_fl_landscape",
+                        "whiskToken": "",
+                        "whiskWorkflowId": "",
+                        "concurrency": 1,
+                    },
+                    "shotBuilder": {
+                        "apiUrl": "",
+                        "apiKey": "",
+                        "model": "gemini-3-pro-preview",
+                    },
+                },
                 "workDir": default_work_dir,
                 "jianyingDraftDir": "",
                 "referenceAudioDir": "",
-                "tts": {
-                    "apiUrl": "",
-                    "model": "tts-1",
-                    "apiKey": "",
-                    "concurrency": 1,
-                },
-                "tti": {
-                    "provider": "openai",
-                    "apiUrl": "",
-                    "apiKey": "",
-                    "characterModel": "gemini-3.0-pro-image-landscape",
-                    "sceneModel": "gemini-2.5-flash-image-landscape",
-                    "shotModel": "gemini-2.5-flash-image-landscape",
-                    "whiskToken": "",
-                    "whiskWorkflowId": "",
-                    "concurrency": 1,
-                },
-                "ttv": {
-                    "provider": "openai",
-                    "apiUrl": "",
-                    "apiKey": "",
-                    "model": "veo_3_1_i2v_s_fast_fl_landscape",
-                    "whiskToken": "",
-                    "whiskWorkflowId": "",
-                    "concurrency": 1,
-                },
-                "shotBuilder": {
-                    "apiUrl": "",
-                    "apiKey": "",
-                    "model": "gemini-3-pro-preview",
-                },
             }
             self._settings_file.parent.mkdir(parents=True, exist_ok=True)
             with open(self._settings_file, "w", encoding="utf-8") as f:
@@ -877,14 +886,75 @@ class Api:
             logger.info(f"Created default settings file: {self._settings_file}")
 
     def _load_settings(self) -> dict:
-        """Load settings from file"""
+        """Load settings from file, migrating old format if needed"""
         if self._settings_file.exists():
             try:
                 with open(self._settings_file, "r", encoding="utf-8") as f:
-                    return json.load(f)
+                    settings = json.load(f)
+                
+                # Migrate old config format to new format
+                if "apiMode" not in settings and "tts" in settings:
+                    settings = self._migrate_settings(settings)
+                
+                return settings
             except Exception as e:
                 logger.error(f"Failed to load settings: {e}")
         return {}
+    
+    def _migrate_settings(self, old_settings: dict) -> dict:
+        """Migrate old settings format to new format with apiMode/hostedService/customApi"""
+        logger.info("Migrating old settings format to new format")
+        
+        new_settings = {
+            "apiMode": "custom",  # Old users have custom config, keep using it
+            "hostedService": {
+                "baseUrl": "https://api.hetangai.com",
+                "token": "",
+            },
+            "customApi": {
+                "tts": old_settings.get("tts", {}),
+                "tti": old_settings.get("tti", {}),
+                "ttv": old_settings.get("ttv", {}),
+                "shotBuilder": old_settings.get("shotBuilder", {}),
+            },
+            "workDir": old_settings.get("workDir", ""),
+            "jianyingDraftDir": old_settings.get("jianyingDraftDir", ""),
+            "referenceAudioDir": old_settings.get("referenceAudioDir", ""),
+        }
+        
+        # Save migrated settings
+        try:
+            with open(self._settings_file, "w", encoding="utf-8") as f:
+                json.dump(new_settings, f, indent=2, ensure_ascii=False)
+            logger.info("Settings migration completed")
+        except Exception as e:
+            logger.error(f"Failed to save migrated settings: {e}")
+        
+        return new_settings
+    
+    def _get_api_config(self, settings: dict, config_key: str) -> dict:
+        """Get API config for a specific service (tts/tti/ttv/shotBuilder)
+        
+        Returns the appropriate config based on apiMode:
+        - hosted: returns hostedService config with model name derived from config_key
+        - custom: returns customApi[config_key] config
+        """
+        if settings.get("apiMode") == "hosted":
+            hosted = settings.get("hostedService", {})
+            # 托管模式下各类型的默认并发数
+            default_concurrency = {
+                "tti": 8,   # 图片
+                "ttv": 4,   # 视频
+                "tts": 10,  # 音频
+            }
+            return {
+                "apiUrl": hosted.get("baseUrl", "https://api.hetangai.com"),
+                "apiKey": hosted.get("token", ""),
+                "model": f"hetang-{config_key}-v1",
+                "concurrency": default_concurrency.get(config_key, 1),
+            }
+        else:
+            return settings.get("customApi", {}).get(config_key, {})
 
     def _get_audio_preferences_file(self) -> Path:
         """Get path to audio preferences file"""
@@ -1593,7 +1663,7 @@ class Api:
                 try:
                     # Get settings
                     settings = self._load_settings()
-                    tti_config = settings.get("tti", {})
+                    tti_config = self._get_api_config(settings, "tti")
                     provider = tti_config.get("provider", "openai")
 
                     # Require project to be saved before generating images
@@ -3766,9 +3836,9 @@ class Api:
 
                     # Get settings
                     settings = self._load_settings()
-                    tts_config = settings.get("tts", {})
+                    tts_config = self._get_api_config(settings, "tts")
 
-                    if not tts_config.get("apiUrl"):
+                    if not tts_config.get("apiUrl") or not tts_config.get("apiKey"):
                         raise ValueError("TTS API not configured in settings")
 
                     # Require project to be saved before generating audio
@@ -3932,7 +4002,7 @@ class Api:
         """
         # 获取设置
         settings = self._load_settings()
-        tts_config = settings.get("tts", {})
+        tts_config = self._get_api_config(settings, "tts")
         
         # 获取对话
         dialogues = shot.get("dialogues", [])
@@ -4005,9 +4075,9 @@ class Api:
         
         # 获取设置
         settings = self._load_settings()
-        tts_config = settings.get("tts", {})
+        tts_config = self._get_api_config(settings, "tts")
         
-        if not tts_config.get("apiUrl"):
+        if not tts_config.get("apiUrl") or not tts_config.get("apiKey"):
             return {"success": False, "error": "TTS API not configured in settings"}
         
         task_ids = []
@@ -5050,9 +5120,9 @@ class Api:
 
     def _update_thread_pools(self, settings: dict):
         """Update thread pool and semaphores based on settings"""
-        tts_concurrency = settings.get("tts", {}).get("concurrency", 1)
-        tti_concurrency = settings.get("tti", {}).get("concurrency", 1)
-        ttv_concurrency = settings.get("ttv", {}).get("concurrency", 1)
+        tts_concurrency = self._get_api_config(settings, "tts").get("concurrency", 1)
+        tti_concurrency = self._get_api_config(settings, "tti").get("concurrency", 1)
+        ttv_concurrency = self._get_api_config(settings, "ttv").get("concurrency", 1)
 
         needs_pool_update = False
 

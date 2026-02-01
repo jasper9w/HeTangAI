@@ -2,31 +2,34 @@
  * SettingsPage - Application settings page
  */
 import { useState, useEffect, useCallback } from 'react';
-import { FolderOpen, Loader2, Mic, Image, Video, MessageSquare, Terminal } from 'lucide-react';
-import type { AppSettings } from '../types';
-
-interface SettingsPageProps {
-  // No props needed anymore
-}
+import { FolderOpen, Loader2, Mic, Image, Video, MessageSquare, Terminal, ChevronDown, ChevronRight } from 'lucide-react';
+import type { AppSettings, ApiMode } from '../types';
 
 type TabType = 'tts' | 'tti' | 'ttv' | 'shotBuilder';
 
 const defaultSettings: AppSettings = {
+  apiMode: 'hosted',
+  hostedService: {
+    baseUrl: 'https://api.hetangai.com',
+    token: '',
+  },
+  customApi: {
+    tts: { apiUrl: '', model: 'tts-1', apiKey: '', concurrency: 1 },
+    tti: { provider: 'openai', apiUrl: '', apiKey: '', characterModel: '', sceneModel: '', shotModel: '', whiskToken: '', whiskWorkflowId: '', whiskCookie: '', concurrency: 1 },
+    ttv: { provider: 'openai', apiUrl: '', apiKey: '', model: '', whiskToken: '', whiskWorkflowId: '', concurrency: 1 },
+    shotBuilder: { apiUrl: '', apiKey: '', model: '' },
+  },
   workDir: '',
   jianyingDraftDir: '',
   referenceAudioDir: '',
-  ffmpegPath: '',
-  tts: { apiUrl: 'https://9u7acouw9j7q8f5o-6006.container.x-gpu.com/tts_url', model: 'indextts2', apiKey: '', concurrency: 1 },
-  tti: { provider: 'openai', apiUrl: '', apiKey: '', characterModel: '', sceneModel: '', shotModel: '', whiskToken: '', whiskWorkflowId: '', whiskCookie: '', concurrency: 1 },
-  ttv: { provider: 'openai', apiUrl: '', apiKey: '', model: '', whiskToken: '', whiskWorkflowId: '', concurrency: 1 },
-  shotBuilder: { apiUrl: '', apiKey: '', model: '' },
 };
 
-export function SettingsPage({}: SettingsPageProps) {
+export function SettingsPage() {
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
   const [isLoading, setIsLoading] = useState(true);
   const [saveMessage, setSaveMessage] = useState('');
   const [activeTab, setActiveTab] = useState<TabType>('shotBuilder');
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   useEffect(() => {
     loadSettings();
@@ -39,40 +42,35 @@ export function SettingsPage({}: SettingsPageProps) {
     try {
       const result = await (window.pywebview.api as any).get_settings();
       if (result.success && result.settings) {
-        const legacyTtiModel = (result.settings as { tti?: { model?: string } })?.tti?.model || '';
+        const loaded = result.settings as AppSettings;
+        
+        // Merge with defaults
         const mergedSettings: AppSettings = {
           ...defaultSettings,
-          ...result.settings,
-          tts: {
-            ...defaultSettings.tts,
-            ...result.settings.tts,
+          ...loaded,
+          hostedService: {
+            ...defaultSettings.hostedService,
+            ...loaded.hostedService,
           },
-          tti: {
-            ...defaultSettings.tti,
-            ...result.settings.tti,
-          },
-          ttv: {
-            ...defaultSettings.ttv,
-            ...result.settings.ttv,
-          },
-          shotBuilder: {
-            ...defaultSettings.shotBuilder,
-            ...result.settings.shotBuilder,
+          customApi: {
+            tts: { ...defaultSettings.customApi.tts, ...loaded.customApi?.tts },
+            tti: { ...defaultSettings.customApi.tti, ...loaded.customApi?.tti },
+            ttv: { ...defaultSettings.customApi.ttv, ...loaded.customApi?.ttv },
+            shotBuilder: { ...defaultSettings.customApi.shotBuilder, ...loaded.customApi?.shotBuilder },
           },
         };
 
-        if (legacyTtiModel) {
-          if (!mergedSettings.tti.characterModel) mergedSettings.tti.characterModel = legacyTtiModel;
-          if (!mergedSettings.tti.sceneModel) mergedSettings.tti.sceneModel = legacyTtiModel;
-          if (!mergedSettings.tti.shotModel) mergedSettings.tti.shotModel = legacyTtiModel;
+        // Default provider to 'openai' if not set
+        if (!mergedSettings.customApi.tti.provider) {
+          mergedSettings.customApi.tti.provider = 'openai';
+        }
+        if (!mergedSettings.customApi.ttv.provider) {
+          mergedSettings.customApi.ttv.provider = 'openai';
         }
 
-        // Default provider to 'openai' if not set
-        if (!mergedSettings.tti.provider) {
-          mergedSettings.tti.provider = 'openai';
-        }
-        if (!mergedSettings.ttv.provider) {
-          mergedSettings.ttv.provider = 'openai';
+        // Auto-expand advanced settings if in custom mode
+        if (mergedSettings.apiMode === 'custom') {
+          setShowAdvanced(true);
         }
 
         setSettings(mergedSettings);
@@ -102,11 +100,11 @@ export function SettingsPage({}: SettingsPageProps) {
 
   // Auto-save when settings change
   useEffect(() => {
-    if (isLoading) return; // Don't auto-save during initial load
+    if (isLoading) return;
 
     const timeoutId = setTimeout(() => {
       autoSave(settings);
-    }, 500); // Debounce auto-save by 500ms
+    }, 500);
 
     return () => clearTimeout(timeoutId);
   }, [settings, isLoading, autoSave]);
@@ -117,10 +115,7 @@ export function SettingsPage({}: SettingsPageProps) {
     try {
       const result = await (window.pywebview.api as any).select_work_dir();
       if (result.success && result.path) {
-        setSettings({
-          ...settings,
-          workDir: result.path,
-        });
+        setSettings({ ...settings, workDir: result.path });
       }
     } catch (error) {
       console.error('Failed to select work directory:', error);
@@ -133,10 +128,7 @@ export function SettingsPage({}: SettingsPageProps) {
     try {
       const result = await (window.pywebview.api as any).select_jianying_draft_dir();
       if (result.success && result.path) {
-        setSettings({
-          ...settings,
-          jianyingDraftDir: result.path,
-        });
+        setSettings({ ...settings, jianyingDraftDir: result.path });
       }
     } catch (error) {
       console.error('Failed to select JianYing draft directory:', error);
@@ -149,22 +141,36 @@ export function SettingsPage({}: SettingsPageProps) {
     try {
       const result = await (window.pywebview.api as any).select_ffmpeg_path();
       if (result.success && result.path) {
-        setSettings({
-          ...settings,
-          ffmpegPath: result.path,
-        });
+        setSettings({ ...settings, ffmpegPath: result.path });
       }
     } catch (error) {
       console.error('Failed to select ffmpeg path:', error);
     }
   };
 
-  const updateSetting = (category: 'tts' | 'tti' | 'ttv' | 'shotBuilder', field: string, value: string | number) => {
+  const updateApiMode = (mode: ApiMode) => {
+    setSettings({ ...settings, apiMode: mode });
+    if (mode === 'custom') {
+      setShowAdvanced(true);
+    }
+  };
+
+  const updateHostedToken = (token: string) => {
     setSettings({
       ...settings,
-      [category]: {
-        ...settings[category],
-        [field]: value,
+      hostedService: { ...settings.hostedService, token },
+    });
+  };
+
+  const updateCustomSetting = (category: 'tts' | 'tti' | 'ttv' | 'shotBuilder', field: string, value: string | number) => {
+    setSettings({
+      ...settings,
+      customApi: {
+        ...settings.customApi,
+        [category]: {
+          ...settings.customApi[category],
+          [field]: value,
+        },
       },
     });
   };
@@ -176,375 +182,172 @@ export function SettingsPage({}: SettingsPageProps) {
     { id: 'tts' as TabType, label: '配音接口', icon: Mic, color: 'orange' },
   ];
 
-  const renderTabContent = () => {
-    const config = settings[activeTab];
+  const renderCustomTabContent = () => {
+    const config = settings.customApi[activeTab];
     const placeholders = {
-      tts: {
-        apiUrl: 'https://api.example.com/v1/audio/speech',
-        model: 'tts-1',
-      },
-      tti: {
-        apiUrl: 'https://api.example.com/v1/images/generations',
-        characterModel: 'gemini-3.0-pro-image-landscape',
-        sceneModel: 'gemini-2.5-flash-image-landscape',
-        shotModel: 'gemini-2.5-flash-image-landscape',
-      },
-      ttv: {
-        apiUrl: 'https://api.example.com/v1/video/generations',
-        model: 'video-1',
-      },
-      shotBuilder: {
-        apiUrl: 'https://api.example.com/v1/chat/completions',
-        model: 'gemini-3-pro-preview',
-      },
+      tts: { apiUrl: 'https://api.example.com/v1/audio/speech', model: 'tts-1' },
+      tti: { apiUrl: 'https://api.example.com/v1/images/generations', characterModel: 'gemini-3.0-pro-image-landscape', sceneModel: 'gemini-2.5-flash-image-landscape', shotModel: 'gemini-2.5-flash-image-landscape' },
+      ttv: { apiUrl: 'https://api.example.com/v1/video/generations', model: 'video-1' },
+      shotBuilder: { apiUrl: 'https://api.example.com/v1/chat/completions', model: 'gemini-3-pro-preview' },
     };
 
     return (
       <div className="space-y-4">
-        {activeTab === 'tts' && (
-          <div className="bg-blue-600/10 border border-blue-600/20 rounded-lg p-4">
-            <h4 className="font-medium text-blue-300 mb-2 flex items-center gap-2">
-              <Mic className="w-4 h-4" />
-              配音接口接入说明
-            </h4>
-            <p className="text-sm text-slate-300 mb-2">
-              本项目已为您配置好配音接口，您也可以根据需要自行更换。
-            </p>
-            <p className="text-sm text-slate-300">
-              如需获取更多接口信息，请访问：
-              <a
-                href="https://www.xiangongyun.com/image/detail/2b41d3b1-2674-420b-864e-d9eb44adf636"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-blue-400 hover:text-blue-300 underline ml-1"
-              >
-                https://www.xiangongyun.com/image/detail/2b41d3b1-2674-420b-864e-d9eb44adf636
-              </a>
-            </p>
-          </div>
-        )}
         {(activeTab === 'tts' || activeTab === 'shotBuilder') && (
           <div>
             <label className="block text-sm text-slate-400 mb-2">API 地址</label>
             <input
               type="text"
               value={config.apiUrl}
-              onChange={(e) => updateSetting(activeTab, 'apiUrl', e.target.value)}
+              onChange={(e) => updateCustomSetting(activeTab, 'apiUrl', e.target.value)}
               placeholder={placeholders[activeTab].apiUrl}
               className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
             />
           </div>
         )}
-        {activeTab === 'tti' ? (
+
+        {activeTab === 'tti' && (
           <div className="space-y-4">
-            {/* Provider Selection */}
             <div>
               <label className="block text-sm text-slate-400 mb-2">接口类型</label>
               <div className="flex gap-4">
                 <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="tti-provider"
-                    checked={settings.tti.provider === 'openai'}
-                    onChange={() => updateSetting('tti', 'provider', 'openai')}
-                    className="w-4 h-4 text-teal-600 bg-slate-700 border-slate-500 focus:ring-teal-500"
-                  />
+                  <input type="radio" name="tti-provider" checked={settings.customApi.tti.provider === 'openai'} onChange={() => updateCustomSetting('tti', 'provider', 'openai')} className="w-4 h-4 text-teal-600 bg-slate-700 border-slate-500" />
                   <span className="text-sm text-slate-300">OpenAI 兼容</span>
                 </label>
                 <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="tti-provider"
-                    checked={settings.tti.provider === 'whisk'}
-                    onChange={() => updateSetting('tti', 'provider', 'whisk')}
-                    className="w-4 h-4 text-teal-600 bg-slate-700 border-slate-500 focus:ring-teal-500"
-                  />
+                  <input type="radio" name="tti-provider" checked={settings.customApi.tti.provider === 'whisk'} onChange={() => updateCustomSetting('tti', 'provider', 'whisk')} className="w-4 h-4 text-teal-600 bg-slate-700 border-slate-500" />
                   <span className="text-sm text-slate-300">Whisk</span>
                 </label>
               </div>
             </div>
 
-            {settings.tti.provider === 'openai' ? (
+            {settings.customApi.tti.provider === 'openai' ? (
               <>
-                {/* OpenAI Mode Settings */}
                 <div>
                   <label className="block text-sm text-slate-400 mb-2">API 地址</label>
-                  <input
-                    type="text"
-                    value={settings.tti.apiUrl}
-                    onChange={(e) => updateSetting('tti', 'apiUrl', e.target.value)}
-                    placeholder={placeholders.tti.apiUrl}
-                    className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
-                  />
+                  <input type="text" value={settings.customApi.tti.apiUrl} onChange={(e) => updateCustomSetting('tti', 'apiUrl', e.target.value)} placeholder={placeholders.tti.apiUrl} className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500" />
                 </div>
                 <div>
                   <label className="block text-sm text-slate-400 mb-2">API 密钥</label>
-                  <input
-                    type="password"
-                    value={settings.tti.apiKey}
-                    onChange={(e) => updateSetting('tti', 'apiKey', e.target.value)}
-                    placeholder="sk-..."
-                    className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
-                  />
+                  <input type="password" value={settings.customApi.tti.apiKey} onChange={(e) => updateCustomSetting('tti', 'apiKey', e.target.value)} placeholder="sk-..." className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500" />
                 </div>
                 <div className="space-y-3">
                   <div>
                     <label className="block text-sm text-slate-400 mb-2">角色图片模型</label>
-                    <input
-                      type="text"
-                      value={settings.tti.characterModel}
-                      onChange={(e) => updateSetting('tti', 'characterModel', e.target.value)}
-                      placeholder={placeholders.tti.characterModel}
-                      className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
-                    />
+                    <input type="text" value={settings.customApi.tti.characterModel} onChange={(e) => updateCustomSetting('tti', 'characterModel', e.target.value)} placeholder={placeholders.tti.characterModel} className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500" />
                   </div>
                   <div>
                     <label className="block text-sm text-slate-400 mb-2">场景图片模型</label>
-                    <input
-                      type="text"
-                      value={settings.tti.sceneModel}
-                      onChange={(e) => updateSetting('tti', 'sceneModel', e.target.value)}
-                      placeholder={placeholders.tti.sceneModel}
-                      className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
-                    />
+                    <input type="text" value={settings.customApi.tti.sceneModel} onChange={(e) => updateCustomSetting('tti', 'sceneModel', e.target.value)} placeholder={placeholders.tti.sceneModel} className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500" />
                   </div>
                   <div>
                     <label className="block text-sm text-slate-400 mb-2">镜头图片模型</label>
-                    <input
-                      type="text"
-                      value={settings.tti.shotModel}
-                      onChange={(e) => updateSetting('tti', 'shotModel', e.target.value)}
-                      placeholder={placeholders.tti.shotModel}
-                      className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
-                    />
+                    <input type="text" value={settings.customApi.tti.shotModel} onChange={(e) => updateCustomSetting('tti', 'shotModel', e.target.value)} placeholder={placeholders.tti.shotModel} className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500" />
                   </div>
                 </div>
               </>
             ) : (
               <>
-                {/* Whisk Mode Settings */}
-                <div className="bg-teal-600/10 border border-teal-600/20 rounded-lg p-4">
-                  <h4 className="font-medium text-teal-300 mb-2 flex items-center gap-2">
-                    <Image className="w-4 h-4" />
-                    Whisk 接口说明
-                  </h4>
-                  <p className="text-sm text-slate-300">
-                    Whisk 是 Google Labs 的图片生成接口，支持角色/场景/风格组合生成。
-                  </p>
-                </div>
                 <div>
                   <label className="block text-sm text-slate-400 mb-2">Token</label>
-                  <input
-                    type="password"
-                    value={settings.tti.whiskToken}
-                    onChange={(e) => updateSetting('tti', 'whiskToken', e.target.value)}
-                    placeholder="ya29.xxx..."
-                    className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
-                  />
+                  <input type="password" value={settings.customApi.tti.whiskToken} onChange={(e) => updateCustomSetting('tti', 'whiskToken', e.target.value)} placeholder="ya29.xxx..." className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500" />
                 </div>
                 <div>
                   <label className="block text-sm text-slate-400 mb-2">Workflow ID</label>
-                  <input
-                    type="text"
-                    value={settings.tti.whiskWorkflowId}
-                    onChange={(e) => updateSetting('tti', 'whiskWorkflowId', e.target.value)}
-                    placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                    className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
-                  />
+                  <input type="text" value={settings.customApi.tti.whiskWorkflowId} onChange={(e) => updateCustomSetting('tti', 'whiskWorkflowId', e.target.value)} placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500" />
                 </div>
                 <div>
-                  <label className="block text-sm text-slate-400 mb-2">Cookie (用于上传风格图片)</label>
-                  <textarea
-                    value={settings.tti.whiskCookie || ''}
-                    onChange={(e) => updateSetting('tti', 'whiskCookie', e.target.value)}
-                    placeholder="从浏览器开发者工具复制 Cookie..."
-                    rows={3}
-                    className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500 resize-none"
-                  />
+                  <label className="block text-sm text-slate-400 mb-2">Cookie</label>
+                  <textarea value={settings.customApi.tti.whiskCookie || ''} onChange={(e) => updateCustomSetting('tti', 'whiskCookie', e.target.value)} placeholder="从浏览器开发者工具复制 Cookie..." rows={3} className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500 resize-none" />
                 </div>
               </>
             )}
-
             <div>
               <label className="block text-sm text-slate-400 mb-2">并发数</label>
-              <input
-                type="number"
-                min="1"
-                max="10"
-                value={settings.tti.concurrency}
-                onChange={(e) => updateSetting('tti', 'concurrency', parseInt(e.target.value) || 1)}
-                className="w-32 px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 focus:outline-none focus:ring-1 focus:ring-teal-500"
-              />
+              <input type="number" min="1" max="10" value={settings.customApi.tti.concurrency} onChange={(e) => updateCustomSetting('tti', 'concurrency', parseInt(e.target.value) || 1)} className="w-32 px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 focus:outline-none focus:ring-1 focus:ring-teal-500" />
             </div>
           </div>
-        ) : activeTab === 'ttv' ? (
+        )}
+
+        {activeTab === 'ttv' && (
           <div className="space-y-4">
-            {/* Provider Selection for TTV */}
             <div>
               <label className="block text-sm text-slate-400 mb-2">接口类型</label>
               <div className="flex gap-4">
                 <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="ttv-provider"
-                    checked={settings.ttv.provider === 'openai'}
-                    onChange={() => updateSetting('ttv', 'provider', 'openai')}
-                    className="w-4 h-4 text-emerald-600 bg-slate-700 border-slate-500 focus:ring-emerald-500"
-                  />
+                  <input type="radio" name="ttv-provider" checked={settings.customApi.ttv.provider === 'openai'} onChange={() => updateCustomSetting('ttv', 'provider', 'openai')} className="w-4 h-4 text-emerald-600 bg-slate-700 border-slate-500" />
                   <span className="text-sm text-slate-300">OpenAI 兼容</span>
                 </label>
                 <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="ttv-provider"
-                    checked={settings.ttv.provider === 'whisk'}
-                    onChange={() => updateSetting('ttv', 'provider', 'whisk')}
-                    className="w-4 h-4 text-emerald-600 bg-slate-700 border-slate-500 focus:ring-emerald-500"
-                  />
+                  <input type="radio" name="ttv-provider" checked={settings.customApi.ttv.provider === 'whisk'} onChange={() => updateCustomSetting('ttv', 'provider', 'whisk')} className="w-4 h-4 text-emerald-600 bg-slate-700 border-slate-500" />
                   <span className="text-sm text-slate-300">Whisk</span>
                 </label>
               </div>
             </div>
 
-            {settings.ttv.provider === 'openai' ? (
+            {settings.customApi.ttv.provider === 'openai' ? (
               <>
-                {/* OpenAI Mode Settings */}
                 <div>
                   <label className="block text-sm text-slate-400 mb-2">API 地址</label>
-                  <input
-                    type="text"
-                    value={settings.ttv.apiUrl}
-                    onChange={(e) => updateSetting('ttv', 'apiUrl', e.target.value)}
-                    placeholder={placeholders.ttv.apiUrl}
-                    className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                  />
+                  <input type="text" value={settings.customApi.ttv.apiUrl} onChange={(e) => updateCustomSetting('ttv', 'apiUrl', e.target.value)} placeholder={placeholders.ttv.apiUrl} className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500" />
                 </div>
                 <div>
                   <label className="block text-sm text-slate-400 mb-2">API 密钥</label>
-                  <input
-                    type="password"
-                    value={settings.ttv.apiKey}
-                    onChange={(e) => updateSetting('ttv', 'apiKey', e.target.value)}
-                    placeholder="sk-..."
-                    className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                  />
+                  <input type="password" value={settings.customApi.ttv.apiKey} onChange={(e) => updateCustomSetting('ttv', 'apiKey', e.target.value)} placeholder="sk-..." className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500" />
                 </div>
                 <div>
                   <label className="block text-sm text-slate-400 mb-2">模型名称</label>
-                  <input
-                    type="text"
-                    value={settings.ttv.model}
-                    onChange={(e) => updateSetting('ttv', 'model', e.target.value)}
-                    placeholder={placeholders.ttv.model}
-                    className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                  />
+                  <input type="text" value={settings.customApi.ttv.model} onChange={(e) => updateCustomSetting('ttv', 'model', e.target.value)} placeholder={placeholders.ttv.model} className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500" />
                 </div>
               </>
             ) : (
               <>
-                {/* Whisk Mode Settings */}
-                <div className="bg-emerald-600/10 border border-emerald-600/20 rounded-lg p-4">
-                  <h4 className="font-medium text-emerald-300 mb-2 flex items-center gap-2">
-                    <Video className="w-4 h-4" />
-                    Whisk 视频接口说明
-                  </h4>
-                  <p className="text-sm text-slate-300">
-                    Whisk 视频生成基于图片生成视频，支持 VEO 模型。
-                  </p>
-                </div>
                 <div>
                   <label className="block text-sm text-slate-400 mb-2">Token</label>
-                  <input
-                    type="password"
-                    value={settings.ttv.whiskToken}
-                    onChange={(e) => updateSetting('ttv', 'whiskToken', e.target.value)}
-                    placeholder="ya29.xxx..."
-                    className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                  />
+                  <input type="password" value={settings.customApi.ttv.whiskToken} onChange={(e) => updateCustomSetting('ttv', 'whiskToken', e.target.value)} placeholder="ya29.xxx..." className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500" />
                 </div>
                 <div>
                   <label className="block text-sm text-slate-400 mb-2">Workflow ID</label>
-                  <input
-                    type="text"
-                    value={settings.ttv.whiskWorkflowId}
-                    onChange={(e) => updateSetting('ttv', 'whiskWorkflowId', e.target.value)}
-                    placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                    className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                  />
+                  <input type="text" value={settings.customApi.ttv.whiskWorkflowId} onChange={(e) => updateCustomSetting('ttv', 'whiskWorkflowId', e.target.value)} placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500" />
                 </div>
               </>
             )}
-
             <div>
               <label className="block text-sm text-slate-400 mb-2">并发数</label>
-              <input
-                type="number"
-                min="1"
-                max="10"
-                value={settings.ttv.concurrency}
-                onChange={(e) => updateSetting('ttv', 'concurrency', parseInt(e.target.value) || 1)}
-                className="w-32 px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-              />
+              <input type="number" min="1" max="10" value={settings.customApi.ttv.concurrency} onChange={(e) => updateCustomSetting('ttv', 'concurrency', parseInt(e.target.value) || 1)} className="w-32 px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 focus:outline-none focus:ring-1 focus:ring-emerald-500" />
             </div>
           </div>
-        ) : activeTab === 'shotBuilder' ? (
+        )}
+
+        {activeTab === 'shotBuilder' && (
           <div className="space-y-4">
             <div>
               <label className="block text-sm text-slate-400 mb-2">API 密钥</label>
-              <input
-                type="password"
-                value={settings.shotBuilder.apiKey}
-                onChange={(e) => updateSetting('shotBuilder', 'apiKey', e.target.value)}
-                placeholder="sk-..."
-                className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
+              <input type="password" value={settings.customApi.shotBuilder.apiKey} onChange={(e) => updateCustomSetting('shotBuilder', 'apiKey', e.target.value)} placeholder="sk-..." className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
             </div>
             <div>
               <label className="block text-sm text-slate-400 mb-2">模型名称</label>
-              <input
-                type="text"
-                value={settings.shotBuilder.model}
-                onChange={(e) => updateSetting('shotBuilder', 'model', e.target.value)}
-                placeholder={placeholders.shotBuilder.model}
-                className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
+              <input type="text" value={settings.customApi.shotBuilder.model} onChange={(e) => updateCustomSetting('shotBuilder', 'model', e.target.value)} placeholder={placeholders.shotBuilder.model} className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
             </div>
           </div>
-        ) : (
-          <>
-            {/* TTS fields */}
+        )}
+
+        {activeTab === 'tts' && (
+          <div className="space-y-4">
             <div>
               <label className="block text-sm text-slate-400 mb-2">模型名称</label>
-              <input
-                type="text"
-                value={settings.tts.model}
-                onChange={(e) => updateSetting('tts', 'model', e.target.value)}
-                placeholder={placeholders.tts.model}
-                className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
-              />
+              <input type="text" value={settings.customApi.tts.model} onChange={(e) => updateCustomSetting('tts', 'model', e.target.value)} placeholder={placeholders.tts.model} className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-orange-500" />
             </div>
             <div>
               <label className="block text-sm text-slate-400 mb-2">API 密钥</label>
-              <input
-                type="password"
-                value={settings.tts.apiKey}
-                onChange={(e) => updateSetting('tts', 'apiKey', e.target.value)}
-                placeholder="sk-..."
-                className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
-              />
+              <input type="password" value={settings.customApi.tts.apiKey} onChange={(e) => updateCustomSetting('tts', 'apiKey', e.target.value)} placeholder="sk-..." className="w-full px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-orange-500" />
             </div>
             <div>
               <label className="block text-sm text-slate-400 mb-2">并发数</label>
-              <input
-                type="number"
-                min="1"
-                max="10"
-                value={settings.tts.concurrency}
-                onChange={(e) => updateSetting('tts', 'concurrency', parseInt(e.target.value) || 1)}
-                className="w-32 px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 focus:outline-none focus:ring-1 focus:ring-orange-500"
-              />
+              <input type="number" min="1" max="10" value={settings.customApi.tts.concurrency} onChange={(e) => updateCustomSetting('tts', 'concurrency', parseInt(e.target.value) || 1)} className="w-32 px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 focus:outline-none focus:ring-1 focus:ring-orange-500" />
             </div>
-          </>
+          </div>
         )}
       </div>
     );
@@ -561,31 +364,135 @@ export function SettingsPage({}: SettingsPageProps) {
   return (
     <div className="h-full p-6 overflow-y-auto">
       {saveMessage && (
-        <div className={`mb-4 px-4 py-2 rounded-lg text-sm ${
-          saveMessage.includes('失败')
-            ? 'bg-red-600/20 text-red-400'
-            : 'bg-emerald-600/20 text-emerald-400'
-        }`}>
+        <div className={`mb-4 px-4 py-2 rounded-lg text-sm ${saveMessage.includes('失败') ? 'bg-red-600/20 text-red-400' : 'bg-emerald-600/20 text-emerald-400'}`}>
           {saveMessage}
         </div>
       )}
 
       <div className="space-y-6 max-w-4xl">
+        {/* API Service Mode */}
+        <div className="bg-slate-800/80 backdrop-blur-sm rounded-lg p-6 border border-slate-700/50 shadow-lg shadow-black/20">
+          <h3 className="text-lg font-medium text-slate-100 mb-4">API 服务</h3>
+          
+          <div className="space-y-4">
+            {/* Hosted Mode */}
+            <label className="flex items-start gap-3 p-4 bg-slate-700/50 rounded-lg cursor-pointer hover:bg-slate-700/70 transition-colors border border-transparent has-[:checked]:border-teal-500">
+              <input
+                type="radio"
+                name="api-mode"
+                checked={settings.apiMode === 'hosted'}
+                onChange={() => updateApiMode('hosted')}
+                className="w-4 h-4 mt-1 text-teal-600 bg-slate-700 border-slate-500"
+              />
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-slate-200">荷塘AI 官方服务</span>
+                  <span className="px-2 py-0.5 text-xs bg-teal-600/20 text-teal-400 rounded">推荐</span>
+                </div>
+                <p className="text-sm text-slate-400 mt-1">使用官方托管服务，无需复杂配置</p>
+                {settings.apiMode === 'hosted' && (
+                  <div className="mt-3 space-y-3">
+                    <div>
+                      <label className="block text-sm text-slate-400 mb-2">接入地址</label>
+                      <input
+                        type="text"
+                        value={settings.hostedService.baseUrl}
+                        onChange={(e) => setSettings({
+                          ...settings,
+                          hostedService: { ...settings.hostedService, baseUrl: e.target.value }
+                        })}
+                        placeholder="https://api.hetangai.com"
+                        className="w-full px-3 py-2 bg-slate-600 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-slate-400 mb-2">Token</label>
+                      <input
+                        type="password"
+                        value={settings.hostedService.token}
+                        onChange={(e) => updateHostedToken(e.target.value)}
+                        placeholder="请输入您的 Token..."
+                        className="w-full px-3 py-2 bg-slate-600 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </label>
+
+            {/* Custom Mode */}
+            <label className="flex items-start gap-3 p-4 bg-slate-700/50 rounded-lg cursor-pointer hover:bg-slate-700/70 transition-colors border border-transparent has-[:checked]:border-teal-500">
+              <input
+                type="radio"
+                name="api-mode"
+                checked={settings.apiMode === 'custom'}
+                onChange={() => updateApiMode('custom')}
+                className="w-4 h-4 mt-1 text-teal-600 bg-slate-700 border-slate-500"
+              />
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-slate-200">自定义 API</span>
+                  <span className="px-2 py-0.5 text-xs bg-slate-600/50 text-slate-400 rounded">高级</span>
+                </div>
+                <p className="text-sm text-slate-400 mt-1">自行配置各项 API 接口</p>
+              </div>
+            </label>
+          </div>
+
+          {/* Advanced Settings (Custom Mode Detail) */}
+          {settings.apiMode === 'custom' && (
+            <div className="mt-4">
+              <button
+                onClick={() => setShowAdvanced(!showAdvanced)}
+                className="flex items-center gap-2 text-sm text-slate-400 hover:text-slate-300 transition-colors"
+              >
+                {showAdvanced ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                {showAdvanced ? '收起高级配置' : '展开高级配置'}
+              </button>
+
+              {showAdvanced && (
+                <div className="mt-4 pt-4 border-t border-slate-700">
+                  {/* Tab Navigation */}
+                  <div className="flex space-x-1 mb-6 bg-slate-700 p-1 rounded-lg">
+                    {tabs.map((tab) => {
+                      const Icon = tab.icon;
+                      const isActive = activeTab === tab.id;
+                      let activeClass = '';
+                      if (isActive) {
+                        switch (tab.color) {
+                          case 'orange': activeClass = 'bg-orange-600 text-white'; break;
+                          case 'teal': activeClass = 'bg-teal-600 text-white'; break;
+                          case 'emerald': activeClass = 'bg-emerald-600 text-white'; break;
+                          case 'blue': activeClass = 'bg-blue-600 text-white'; break;
+                        }
+                      }
+                      return (
+                        <button
+                          key={tab.id}
+                          onClick={() => setActiveTab(tab.id)}
+                          className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${isActive ? activeClass : 'text-slate-400 hover:text-slate-200 hover:bg-slate-600'}`}
+                        >
+                          <Icon className="w-4 h-4" />
+                          {tab.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Tab Content */}
+                  {renderCustomTabContent()}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
         {/* JianYing Draft Directory */}
         <div className="bg-slate-800/80 backdrop-blur-sm rounded-lg p-4 border border-slate-700/50 shadow-lg shadow-black/20">
           <h3 className="text-base font-medium text-slate-100 mb-3">剪映草稿目录</h3>
           <div className="flex gap-2">
-            <input
-              type="text"
-              value={settings.jianyingDraftDir}
-              readOnly
-              placeholder="~/Movies/JianyingPro Drafts"
-              className="flex-1 px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500"
-            />
-            <button
-              onClick={handleSelectJianyingDraftDir}
-              className="flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-200 transition-colors"
-            >
+            <input type="text" value={settings.jianyingDraftDir} readOnly placeholder="~/Movies/JianyingPro Drafts" className="flex-1 px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500" />
+            <button onClick={handleSelectJianyingDraftDir} className="flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-200 transition-colors">
               <FolderOpen className="w-4 h-4" />
               选择
             </button>
@@ -597,85 +504,20 @@ export function SettingsPage({}: SettingsPageProps) {
           <h3 className="text-base font-medium text-slate-100 mb-1">FFmpeg 路径</h3>
           <p className="text-xs text-slate-400 mb-3">用于导出成片功能，留空则使用系统默认路径</p>
           <div className="flex gap-2">
-            <input
-              type="text"
-              value={settings.ffmpegPath}
-              readOnly
-              placeholder="留空使用系统默认 (ffmpeg)"
-              className="flex-1 px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500"
-            />
-            <button
-              onClick={handleSelectFfmpegPath}
-              className="flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-200 transition-colors"
-            >
+            <input type="text" value={settings.ffmpegPath || ''} readOnly placeholder="留空使用系统默认 (ffmpeg)" className="flex-1 px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500" />
+            <button onClick={handleSelectFfmpegPath} className="flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-200 transition-colors">
               <Terminal className="w-4 h-4" />
               选择
             </button>
           </div>
         </div>
 
-        {/* API Settings Tabs */}
-        <div className="bg-slate-800/80 backdrop-blur-sm rounded-lg p-6 border border-slate-700/50 shadow-lg shadow-black/20">
-          <h3 className="text-lg font-medium text-slate-100 mb-4">API 接口配置</h3>
-
-          {/* Tab Navigation */}
-          <div className="flex space-x-1 mb-6 bg-slate-700 p-1 rounded-lg">
-            {tabs.map((tab) => {
-              const Icon = tab.icon;
-              const isActive = activeTab === tab.id;
-              let activeClass = '';
-              if (isActive) {
-                switch (tab.color) {
-                  case 'orange':
-                    activeClass = 'bg-orange-600 text-white';
-                    break;
-                  case 'teal':
-                    activeClass = 'bg-teal-600 text-white';
-                    break;
-                  case 'emerald':
-                    activeClass = 'bg-emerald-600 text-white';
-                    break;
-                  case 'blue':
-                    activeClass = 'bg-blue-600 text-white';
-                    break;
-                }
-              }
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                    isActive
-                      ? activeClass
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-600'
-                  }`}
-                >
-                  <Icon className="w-4 h-4" />
-                  {tab.label}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Tab Content */}
-          {renderTabContent()}
-        </div>
-
         {/* Work Directory */}
         <div className="bg-slate-800/80 backdrop-blur-sm rounded-lg p-4 border border-slate-700/50 shadow-lg shadow-black/20">
           <h3 className="text-base font-medium text-slate-100 mb-3">工作目录</h3>
           <div className="flex gap-2">
-            <input
-              type="text"
-              value={settings.workDir}
-              readOnly
-              placeholder="~/Desktop/荷塘AI"
-              className="flex-1 px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500"
-            />
-            <button
-              onClick={handleSelectWorkDir}
-              className="flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-200 transition-colors"
-            >
+            <input type="text" value={settings.workDir} readOnly placeholder="~/Desktop/荷塘AI" className="flex-1 px-3 py-2 bg-slate-700 rounded-lg text-sm text-slate-300 placeholder-slate-500" />
+            <button onClick={handleSelectWorkDir} className="flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-200 transition-colors">
               <FolderOpen className="w-4 h-4" />
               选择
             </button>
@@ -686,7 +528,6 @@ export function SettingsPage({}: SettingsPageProps) {
           <h3 className="text-sm font-medium text-slate-200 mb-2">关于</h3>
           <div className="space-y-1 text-xs text-slate-400">
             <p>荷塘AI - 视频创作工坊</p>
-            {/*<p>版本: 1.0.0</p>*/}
             <p className="text-slate-500 mt-2">配置文件位置: ~/.hetangai/settings.json</p>
           </div>
         </div>
